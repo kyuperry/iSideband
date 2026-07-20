@@ -11,6 +11,7 @@ struct DiscoveredDevice: Identifiable {
 
 @MainActor
 final class BluetoothManager: NSObject, ObservableObject {
+    private let packetDecoder = RNodePacketDecoder()
 
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
@@ -380,7 +381,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 receivedData.append(data)
                 packetsReceived += 1
                 lastPacketTime = Date()
-                let packet = RNodePacket(raw: data)
+                let packet = packetDecoder.decode(data)
 
                 let commandByte = packet.command.map {
                     String(format: "0x%02X", $0)
