@@ -391,7 +391,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 Length: \(packet.length) bytes
                 Starts with C0: \(packet.startsWithFrame)
                 Ends with C0: \(packet.endsWithFrame)
-                Command/type byte: \(commandByte)
+                Command: \(packet.commandType.description) (\(commandByte))
                 Raw: \(packet.hexString)
                 """)
 

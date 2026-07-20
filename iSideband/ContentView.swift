@@ -100,7 +100,13 @@ struct ContentView: View {
                             .background(.thinMaterial)
                             .clipShape(RoundedRectangle(cornerRadius: 16))
                         }
-                    
+                    .simultaneousGesture(
+                        TapGesture().onEnded {
+                            if bluetooth.connectedDeviceID != device.id {
+                                bluetooth.connect(to: device)
+                            }
+                        }
+                    )
 
                     Spacer()
 
