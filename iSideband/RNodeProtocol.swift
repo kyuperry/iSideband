@@ -27,7 +27,30 @@ struct RNodePacket {
         RNodeCommand(byte: command)
     }
     
+    var payload: [UInt8] {
+        guard bytes.count >= 3 else {
+            return []
+        }
 
+        let payloadStart = 2
+        let payloadEnd = endsWithFrame ? bytes.count - 1 : bytes.count
+
+        guard payloadStart < payloadEnd else {
+            return []
+        }
+
+        return Array(bytes[payloadStart..<payloadEnd])
+    }
+
+    var payloadHexString: String {
+        payload
+            .map { String(format: "%02X", $0) }
+            .joined(separator: " ")
+    }
+
+    var summary: String {
+        "\(commandType.description) | \(length) bytes | \(hexString)"
+    }
     var hexString: String {
         bytes
             .map { String(format: "%02X", $0) }
@@ -48,6 +71,7 @@ enum RNodeCommand: UInt8 {
 
         self = RNodeCommand(rawValue: byte) ?? .unknown
     }
+    
 
     var description: String {
         switch self {
