@@ -179,6 +179,14 @@ extension BluetoothManager: CBCentralManagerDelegate {
         rssi RSSI: NSNumber
     ) {
         Task { @MainActor in
+
+            let name = peripheral.name ?? ""
+
+            // Only show devices that advertise themselves as RNodes
+            guard name.localizedCaseInsensitiveContains("RNode") else {
+                return
+            }
+
             addOrUpdateDevice(
                 peripheral: peripheral,
                 advertisementData: advertisementData,
