@@ -22,6 +22,9 @@ final class BluetoothManager: NSObject, ObservableObject {
 
     @Published private(set) var serviceCount = 0
     @Published private(set) var receivedData = Data()
+    @Published var packetsReceived = 0
+    @Published var lastPacketTime: Date?
+    @Published var lastRSSI: Int?
 
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -186,6 +189,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
             guard name.localizedCaseInsensitiveContains("RNode") else {
                 return
             }
+            lastRSSI = RSSI.intValue
 
             addOrUpdateDevice(
                 peripheral: peripheral,
@@ -374,13 +378,23 @@ extension BluetoothManager: CBPeripheralDelegate {
             if characteristic.uuid ==
                 rnodeNotifyCharacteristic?.uuid {
                 receivedData.append(data)
+                packetsReceived += 1
+                lastPacketTime = Date()
+                let packet = RNodePacket(raw: data)
 
-                print(
-                    "Received \(data.count) byte(s) from RNode: " +
-                    data.map {
-                        String(format: "%02X", $0)
-                    }.joined(separator: " ")
-                )
+                let commandByte = packet.command.map {
+                    String(format: "0x%02X", $0)
+                } ?? "Unavailable"
+
+                print("""
+                RNode packet received
+                Length: \(packet.length) bytes
+                Starts with C0: \(packet.startsWithFrame)
+                Ends with C0: \(packet.endsWithFrame)
+                Command/type byte: \(commandByte)
+                Raw: \(packet.hexString)
+                """)
+
             } else if let text = String(
                 data: data,
                 encoding: .utf8

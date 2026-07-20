@@ -18,7 +18,7 @@ struct ContentView: View {
                 scanButton
             }
             .padding()
-            .navigationTitle("Discover RNode")
+            .navigationTitle("RNode (\(bluetooth.packetsReceived))")
         }
     }
 
@@ -29,6 +29,19 @@ struct ContentView: View {
                 .foregroundStyle(.blue)
 
             Text(bluetooth.connectionMessage)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Packets Received: \(bluetooth.packetsReceived)")
+                    .font(.caption)
+
+                Text("BLE RSSI: \(bluetooth.lastRSSI ?? 0) dBm")
+                    .font(.caption)
+
+                if let lastPacket = bluetooth.lastPacketTime {
+                    Text("Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))")
+                        .font(.caption)
+                }
+            }
+            .padding(.top, 8)
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
@@ -52,12 +65,8 @@ struct ContentView: View {
 
     private var deviceList: some View {
         List(bluetooth.devices) { device in
-            Button {
-                if bluetooth.connectedDeviceID == device.id {
-                    bluetooth.disconnect()
-                } else {
-                    bluetooth.connect(to: device)
-                }
+            NavigationLink {
+                RNodeDetailView(bluetooth: bluetooth)
             } label: {
                 HStack {
                     VStack(alignment: .leading, spacing: 4) {
@@ -68,7 +77,30 @@ struct ContentView: View {
                         Text("\(device.rssi) dBm")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                    }
+                        
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label("RNode Status", systemImage: "antenna.radiowaves.left.and.right")
+
+                                Divider()
+
+                                Label("Connected", systemImage: "checkmark.circle.fill")
+
+                                Label("Packets: \(bluetooth.packetsReceived)", systemImage: "shippingbox.fill")
+
+                                Label("RSSI: \(bluetooth.lastRSSI ?? 0) dBm", systemImage: "dot.radiowaves.left.and.right")
+
+                                if let lastPacket = bluetooth.lastPacketTime {
+                                    Label(
+                                        "Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))",
+                                        systemImage: "clock"
+                                    )
+                                }
+                            }
+                            .padding()
+                            .background(.thinMaterial)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
+                        }
+                    
 
                     Spacer()
 
