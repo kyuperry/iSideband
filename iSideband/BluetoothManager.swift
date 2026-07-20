@@ -12,12 +12,14 @@ struct DiscoveredDevice: Identifiable {
 @MainActor
 final class BluetoothManager: NSObject, ObservableObject {
     private let packetDecoder = RNodePacketDecoder()
+    private let frameAssembler = RNodeFrameAssembler()
 
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
     @Published private(set) var bluetoothState: CBManagerState = .unknown
 
     @Published private(set) var connectedDeviceID: UUID?
+    @Published private(set) var connectedDeviceName: String?
     @Published private(set) var connectingDeviceID: UUID?
     @Published private(set) var connectionMessage = "Not connected"
 
@@ -208,6 +210,8 @@ extension BluetoothManager: CBCentralManagerDelegate {
             connectedPeripheral = peripheral
             connectingDeviceID = nil
             connectedDeviceID = peripheral.identifier
+            connectedDeviceName =
+                peripheral.name ?? "RNode"
 
             connectionMessage =
                 "Connected to \(peripheral.name ?? "RNode")"
@@ -379,22 +383,28 @@ extension BluetoothManager: CBPeripheralDelegate {
             if characteristic.uuid ==
                 rnodeNotifyCharacteristic?.uuid {
                 receivedData.append(data)
-                packetsReceived += 1
-                lastPacketTime = Date()
-                let packet = packetDecoder.decode(data)
 
-                let commandByte = packet.command.map {
-                    String(format: "0x%02X", $0)
-                } ?? "Unavailable"
+                let frames = frameAssembler.append(data)
 
-                print("""
-                RNode packet received
-                Length: \(packet.length) bytes
-                Starts with C0: \(packet.startsWithFrame)
-                Ends with C0: \(packet.endsWithFrame)
-                Command: \(packet.commandType.description) (\(commandByte))
-                Raw: \(packet.hexString)
-                """)
+                for frame in frames {
+                    packetsReceived += 1
+                    lastPacketTime = Date()
+
+                    let packet = packetDecoder.decode(frame)
+
+                    let commandByte = packet.command.map {
+                        String(format: "0x%02X", $0)
+                    } ?? "Unavailable"
+
+                    print("""
+                    Complete RNode frame received
+                    Length: \(packet.length) bytes
+                    Starts with C0: \(packet.startsWithFrame)
+                    Ends with C0: \(packet.endsWithFrame)
+                    Command: \(packet.commandType.description) (\(commandByte))
+                    Raw: \(packet.hexString)
+                    """)
+                }
 
             } else if let text = String(
                 data: data,

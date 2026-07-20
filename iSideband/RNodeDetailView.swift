@@ -40,6 +40,6 @@ struct RNodeDetailView: View {
                 Text("Battery: Loading…")
             }
         }
-        .navigationTitle("RNode")
+        .navigationTitle(bluetooth.connectedDeviceName ?? "RNode")
     }
 }
