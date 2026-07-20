@@ -59,25 +59,66 @@ struct RNodePacket {
 }
 
 enum RNodeCommand: UInt8 {
-    case interfaceStatus = 0x25
-
-    case unknown
-
+    case data = 0x00
+    case radioState = 0x06
+    
+    case receivedBytes = 0x21
+    case transmittedBytes = 0x22
+    case rssi = 0x23
+    case snr = 0x24
+    case channelTime = 0x25
+    case physicalParameters = 0x26
+    case batteryState = 0x27
+    case temperature = 0x29
+    
+    case firmwareVersion = 0x50
+    case unknown = 0xFE
+    
     init(byte: UInt8?) {
         guard let byte else {
             self = .unknown
             return
         }
-
+        
         self = RNodeCommand(rawValue: byte) ?? .unknown
     }
     
-
+    
     var description: String {
         switch self {
-        case .interfaceStatus:
-            return "Interface Status"
-
+        case .data:
+            return "Radio Data"
+            
+        case .radioState:
+            return "Radio State"
+            
+        case .receivedBytes:
+            return "Received Bytes"
+            
+        case .transmittedBytes:
+            return "Transmitted Bytes"
+            
+        case .rssi:
+            return "RSSI"
+            
+        case .snr:
+            return "SNR"
+            
+        case .channelTime:
+            return "Channel Time"
+            
+        case .physicalParameters:
+            return "Physical Parameters"
+            
+        case .batteryState:
+            return "Battery State"
+            
+        case .temperature:
+            return "Temperature"
+            
+        case .firmwareVersion:
+            return "Firmware Version"
+            
         case .unknown:
             return "Unknown"
         }
