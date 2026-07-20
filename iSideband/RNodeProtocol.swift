@@ -124,3 +124,9 @@ enum RNodeCommand: UInt8 {
         }
     }
 }
+final class RNodePacketDecoder {
+    func decode(_ data: Data) -> RNodePacket {
+
+        return RNodePacket(raw: data)
+    }
+}
