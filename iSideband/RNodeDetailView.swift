@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RNodeDetailView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @State private var showDisconnectConfirmation = false
 
     private var isConnected: Bool {
         bluetooth.connectedDeviceID != nil
@@ -81,22 +82,39 @@ struct RNodeDetailView: View {
                     systemImage: batteryIcon
                 )
             }
-        }
-        Section {
-            Button(role: .destructive) {
-                bluetooth.disconnect()
-            } label: {
-                Label(
-                    "Disconnect RNode",
-                    systemImage: "xmark.circle"
-                )
+
+            Section {
+                Button(role: .destructive) {
+                    showDisconnectConfirmation = true
+                } label: {
+                    Label(
+                        "Disconnect RNode",
+                        systemImage: "xmark.circle"
+                    )
+                }
+                .disabled(!isConnected)
             }
-            .disabled(!isConnected)
         }
         .navigationTitle(
             bluetooth.connectedDeviceName ?? "RNode Details"
         )
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "Disconnect from RNode?",
+            isPresented: $showDisconnectConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect", role: .destructive) {
+                bluetooth.disconnect()
+            }
+
+            Button("Cancel", role: .cancel) {
+            }
+        } message: {
+            Text(
+                "This will end the Bluetooth connection without restarting the RNode."
+            )
+        }
     }
 
     private var batteryIcon: String {
