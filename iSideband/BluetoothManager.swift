@@ -475,7 +475,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             } else if characteristic.uuid == CBUUID(string: "2A26") {
                 if let text = String(data: data, encoding: .utf8) {
-                    firmwareVersion = text
+                    print("BLE Firmware Revision: \(text)")
                 }
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {

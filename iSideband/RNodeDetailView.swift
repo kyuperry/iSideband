@@ -40,28 +40,32 @@ struct RNodeDetailView: View {
             }
 
             Section("Activity") {
-                Label(
-                    "Packets Received: \(bluetooth.packetsReceived)",
-                    systemImage: "shippingbox.fill"
-                )
-
-                if let lastPacket = bluetooth.lastPacketTime {
+                if bluetooth.packetsReceived == 0 {
                     Label(
-                        "Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))",
-                        systemImage: "clock"
-                    )
-                } else {
-                    Label(
-                        "Last Packet: None",
-                        systemImage: "clock"
+                        "Waiting for RNode traffic…",
+                        systemImage: "wave.3.right"
                     )
                     .foregroundStyle(.secondary)
+                } else {
+                    Label(
+                        "Packets Received: \(bluetooth.packetsReceived)",
+                        systemImage: "shippingbox.fill"
+                    )
+
+                    if let lastPacket = bluetooth.lastPacketTime {
+                        Label(
+                            "Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))",
+                            systemImage: "clock"
+                        )
+                    }
                 }
             }
 
             Section("Hardware") {
                 Label(
-                    "Firmware: \(bluetooth.firmwareVersion)",
+                    bluetooth.firmwareVersion == "Unknown"
+                        ? "RNode Firmware: Not reported"
+                        : "RNode Firmware: \(bluetooth.firmwareVersion)",
                     systemImage: "cpu"
                 )
 
