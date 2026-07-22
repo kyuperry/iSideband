@@ -32,6 +32,11 @@ final class BluetoothManager: NSObject, ObservableObject {
     @Published var firmwareVersion = "Unknown"
     @Published var boardName = "Unknown"
     @Published var batteryPercent: Int?
+    @Published var radioFrequency: UInt32?
+    @Published var radioBandwidth: UInt32?
+    @Published var transmitPower: Int?
+    @Published var spreadingFactor: Int?
+    @Published var codingRate: Int?
     @Published var temperature: Double?
     @Published var radioReady = false
 
@@ -452,6 +457,26 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let radioReady = telemetry.radioReady {
                         self.radioReady = radioReady
+                    }
+                    
+                    if let frequency = telemetry.frequency {
+                        radioFrequency = frequency
+                    }
+
+                    if let bandwidth = telemetry.bandwidth {
+                        radioBandwidth = bandwidth
+                    }
+
+                    if let transmitPower = telemetry.transmitPower {
+                        self.transmitPower = transmitPower
+                    }
+
+                    if let spreadingFactor = telemetry.spreadingFactor {
+                        self.spreadingFactor = spreadingFactor
+                    }
+
+                    if let codingRate = telemetry.codingRate {
+                        self.codingRate = codingRate
                     }
 
                     let commandByte = packet.command.map {

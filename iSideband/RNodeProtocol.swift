@@ -60,6 +60,12 @@ struct RNodePacket {
 
 enum RNodeCommand: UInt8 {
     case data = 0x00
+
+    case frequency = 0x01
+    case bandwidth = 0x02
+    case transmitPower = 0x03
+    case spreadingFactor = 0x04
+    case codingRate = 0x05
     case radioState = 0x06
     
     case receivedBytes = 0x21
@@ -88,6 +94,21 @@ enum RNodeCommand: UInt8 {
         switch self {
         case .data:
             return "Radio Data"
+            
+        case .frequency:
+            return "Frequency"
+
+        case .bandwidth:
+            return "Bandwidth"
+
+        case .transmitPower:
+            return "Transmit Power"
+
+        case .spreadingFactor:
+            return "Spreading Factor"
+
+        case .codingRate:
+            return "Coding Rate"
             
         case .radioState:
             return "Radio State"

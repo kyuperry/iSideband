@@ -101,6 +101,42 @@ struct RNodeDetailView: View {
                     systemImage: batteryIcon
                 )
             }
+            Section("Radio Settings") {
+                Label(
+                    bluetooth.radioFrequency.map {
+                        "Frequency: \($0) Hz"
+                    } ?? "Frequency: Not reported",
+                    systemImage: "waveform"
+                )
+
+                Label(
+                    bluetooth.radioBandwidth.map {
+                        "Bandwidth: \($0) Hz"
+                    } ?? "Bandwidth: Not reported",
+                    systemImage: "arrow.left.and.right"
+                )
+
+                Label(
+                    bluetooth.transmitPower.map {
+                        "Transmit Power: \($0) dBm"
+                    } ?? "Transmit Power: Not reported",
+                    systemImage: "bolt.horizontal"
+                )
+
+                Label(
+                    bluetooth.spreadingFactor.map {
+                        "Spreading Factor: SF\($0)"
+                    } ?? "Spreading Factor: Not reported",
+                    systemImage: "dot.radiowaves.up.forward"
+                )
+
+                Label(
+                    bluetooth.codingRate.map {
+                        "Coding Rate: 4/\($0)"
+                    } ?? "Coding Rate: Not reported",
+                    systemImage: "square.grid.3x3"
+                )
+            }
 
             Section {
                 if isConnected {
