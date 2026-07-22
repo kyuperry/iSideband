@@ -140,9 +140,38 @@ struct ContentView: View {
 
     private var deviceList: some View {
         List(bluetooth.devices) { device in
-            NavigationLink {
-                RNodeDetailView(bluetooth: bluetooth)
-            } label: {
+            if bluetooth.connectedDeviceID == device.id {
+                NavigationLink {
+                    RNodeDetailView(bluetooth: bluetooth)
+                } label: {
+                    HStack(spacing: 12) {
+                        VStack(
+                            alignment: .leading,
+                            spacing: 4
+                        ) {
+                            Text(device.name)
+                                .font(.headline)
+
+                            Text("\(device.rssi) dBm")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Text("Connected")
+                            .foregroundStyle(.green)
+                            .lineLimit(1)
+                            .fixedSize()
+
+                        Text("Details")
+                            .foregroundStyle(.blue)
+                            .lineLimit(1)
+                            .fixedSize()
+                    }
+                    .padding(.vertical, 6)
+                }
+            } else {
                 HStack(spacing: 12) {
                     VStack(
                         alignment: .leading,
@@ -158,28 +187,17 @@ struct ContentView: View {
 
                     Spacer()
 
-                    if bluetooth.connectingDeviceID
-                        == device.id
-                    {
+                    if bluetooth.connectingDeviceID == device.id {
                         ProgressView()
-                    } else if bluetooth.connectedDeviceID
-                        == device.id
-                    {
-                        Text("Connected")
-                            .foregroundStyle(.green)
+                    } else {
+                        Button("Connect") {
+                            bluetooth.connect(to: device)
+                        }
+                        .buttonStyle(.borderedProminent)
                     }
                 }
                 .padding(.vertical, 6)
             }
-            .simultaneousGesture(
-                TapGesture().onEnded {
-                    if bluetooth.connectedDeviceID
-                        != device.id
-                    {
-                        bluetooth.connect(to: device)
-                    }
-                }
-            )
         }
         .listStyle(.plain)
     }
