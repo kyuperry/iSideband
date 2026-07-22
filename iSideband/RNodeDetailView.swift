@@ -82,6 +82,17 @@ struct RNodeDetailView: View {
                 )
             }
         }
+        Section {
+            Button(role: .destructive) {
+                bluetooth.disconnect()
+            } label: {
+                Label(
+                    "Disconnect RNode",
+                    systemImage: "xmark.circle"
+                )
+            }
+            .disabled(!isConnected)
+        }
         .navigationTitle(
             bluetooth.connectedDeviceName ?? "RNode Details"
         )
