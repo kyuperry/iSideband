@@ -6,6 +6,8 @@ struct ContentView: View {
     @State private var showRestartConfirmation = false
     @State private var showRadioOffConfirmation = false
     @State private var statusMessage: String?
+    @State private var showSwitchConfirmation = false
+    @State private var pendingConnectionID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -191,9 +193,45 @@ struct ContentView: View {
                         ProgressView()
                     } else {
                         Button("Connect") {
-                            bluetooth.connect(to: device)
+                            if bluetooth.connectedDeviceID != nil {
+                                pendingConnectionID = device.id
+                                showSwitchConfirmation = true
+                            } else {
+                                bluetooth.connect(to: device)
+                            }
                         }
                         .buttonStyle(.borderedProminent)
+                        .confirmationDialog(
+                            "Switch RNodes?",
+                            isPresented: $showSwitchConfirmation,
+                            titleVisibility: .visible
+                        ) {
+                            Button("Disconnect and Connect", role: .destructive) {
+                                guard let pendingConnectionID,
+                                      let device = bluetooth.devices.first(
+                                        where: { $0.id == pendingConnectionID }
+                                      )
+                                else {
+                                    return
+                                }
+
+                                bluetooth.disconnect()
+
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                    bluetooth.connect(to: device)
+                                }
+
+                                self.pendingConnectionID = nil
+                            }
+
+                            Button("Cancel", role: .cancel) {
+                                pendingConnectionID = nil
+                            }
+                        } message: {
+                            Text(
+                                "Another RNode is already connected. This will disconnect it and connect to the selected RNode."
+                            )
+                        }
                     }
                 }
                 .padding(.vertical, 6)
