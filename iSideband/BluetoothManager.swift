@@ -12,6 +12,7 @@ struct DiscoveredDevice: Identifiable {
 @MainActor
 final class BluetoothManager: NSObject, ObservableObject {
     private let packetDecoder = RNodePacketDecoder()
+    private let packetRouter = RNodePacketRouter()
     private let frameAssembler = RNodeFrameAssembler()
 
     @Published private(set) var devices: [DiscoveredDevice] = []
@@ -28,6 +29,11 @@ final class BluetoothManager: NSObject, ObservableObject {
     @Published var packetsReceived = 0
     @Published var lastPacketTime: Date?
     @Published var lastRSSI: Int?
+    @Published var firmwareVersion = "Unknown"
+    @Published var boardName = "Unknown"
+    @Published var batteryPercent: Int?
+    @Published var temperature: Double?
+    @Published var radioReady = false
 
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -186,11 +192,23 @@ extension BluetoothManager: CBCentralManagerDelegate {
     ) {
         Task { @MainActor in
 
-            let name = peripheral.name ?? ""
+            let advertisedName =
+                advertisementData[
+                    CBAdvertisementDataLocalNameKey
+                ] as? String
 
-            // Only show devices that advertise themselves as RNodes
+            let name =
+                advertisedName ??
+                peripheral.name ??
+                ""
+            print("DISCOVERED:", name.isEmpty ? "Unnamed" : name, peripheral.identifier, RSSI)
+            
+            //guard name.localizedCaseInsensitiveContains("RNode") else {
+            //return
+            //}
+// Only show devices that advertise themselves as RNodes
             guard name.localizedCaseInsensitiveContains("RNode") else {
-                return
+             return
             }
             lastRSSI = RSSI.intValue
 
@@ -205,7 +223,7 @@ extension BluetoothManager: CBCentralManagerDelegate {
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didConnect peripheral: CBPeripheral
-    ) {
+    ) { print("CONNECTED TO:", peripheral.name ?? "Unnamed", peripheral.identifier)
         Task { @MainActor in
             connectedPeripheral = peripheral
             connectingDeviceID = nil
@@ -225,7 +243,11 @@ extension BluetoothManager: CBCentralManagerDelegate {
         _ central: CBCentralManager,
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
-    ) {
+    ) { print(
+        "FAILED TO CONNECT:",
+        peripheral.name ?? "Unnamed",
+        error?.localizedDescription ?? "Unknown error"
+    )
         Task { @MainActor in
             clearConnectionState()
 
@@ -391,6 +413,23 @@ extension BluetoothManager: CBPeripheralDelegate {
                     lastPacketTime = Date()
 
                     let packet = packetDecoder.decode(frame)
+                    let telemetry = packetRouter.route(packet)
+
+                    if let firmwareVersion = telemetry.firmwareVersion {
+                        self.firmwareVersion = firmwareVersion
+                    }
+
+                    if let batteryPercent = telemetry.batteryPercent {
+                        self.batteryPercent = batteryPercent
+                    }
+
+                    if let temperature = telemetry.temperature {
+                        self.temperature = temperature
+                    }
+
+                    if let radioReady = telemetry.radioReady {
+                        self.radioReady = radioReady
+                    }
 
                     let commandByte = packet.command.map {
                         String(format: "0x%02X", $0)
@@ -405,7 +444,21 @@ extension BluetoothManager: CBPeripheralDelegate {
                     Raw: \(packet.hexString)
                     """)
                 }
+                
+            } else if characteristic.uuid == CBUUID(string: "2A24") {
+                if let text = String(data: data, encoding: .utf8) {
+                    boardName = text
+                }
 
+            } else if characteristic.uuid == CBUUID(string: "2A26") {
+                if let text = String(data: data, encoding: .utf8) {
+                    firmwareVersion = text
+                }
+
+            } else if characteristic.uuid == CBUUID(string: "2A19") {
+                if let level = data.first {
+                    batteryPercent = min(Int(level), 100)
+                }
             } else if let text = String(
                 data: data,
                 encoding: .utf8

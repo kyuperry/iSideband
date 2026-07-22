@@ -8,6 +8,11 @@ struct RNodeDetailView: View {
 
             Section("Connection") {
                 Label(
+                    bluetooth.connectedDeviceName ?? "RNode",
+                    systemImage: "antenna.radiowaves.left.and.right"
+                )
+                .font(.headline)
+                Label(
                     bluetooth.connectedDeviceID != nil
                     ? "Connected"
                     : "Disconnected",
@@ -20,7 +25,6 @@ struct RNodeDetailView: View {
                     "RSSI: \(bluetooth.lastRSSI ?? 0) dBm",
                     systemImage: "dot.radiowaves.left.and.right"
                 )
-
                 Label(
                     "Packets: \(bluetooth.packetsReceived)",
                     systemImage: "shippingbox.fill"
@@ -35,9 +39,40 @@ struct RNodeDetailView: View {
             }
 
             Section("Radio") {
-                Text("Firmware: Loading…")
-                Text("Board: Loading…")
-                Text("Battery: Loading…")
+                Label(
+                    "BLE Firmware: \(bluetooth.firmwareVersion)",
+                    systemImage: "cpu"
+                )
+
+                Label(
+                    "BLE Model: \(bluetooth.boardName)",
+                    systemImage: "memorychip"
+                )
+
+                Label(
+                    bluetooth.batteryPercent.map {
+                        "Battery: \($0)%"
+                    } ?? "Battery: Loading…",
+                    systemImage: "battery.100"
+                )
+/*
+                Label(
+                    bluetooth.temperature.map {
+                        "Temperature: \(String(format: "%.1f", $0))°C"
+                    } ?? "Temperature: Loading…",
+                    systemImage: "thermometer.medium"
+                )*/
+ 
+/*
+                Label(
+                    bluetooth.radioReady
+                    ? "Radio Ready"
+                    : "Radio Status: Loading…",
+                    systemImage: bluetooth.radioReady
+                    ? "checkmark.circle.fill"
+                    : "antenna.radiowaves.left.and.right"
+                )
+*/
             }
         }
         .navigationTitle(bluetooth.connectedDeviceName ?? "RNode")
