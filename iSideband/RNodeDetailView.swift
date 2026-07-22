@@ -103,15 +103,29 @@ struct RNodeDetailView: View {
             }
 
             Section {
-                Button(role: .destructive) {
-                    showDisconnectConfirmation = true
-                } label: {
-                    Label(
-                        "Disconnect RNode",
-                        systemImage: "xmark.circle"
-                    )
+                if isConnected {
+                    Button(role: .destructive) {
+                        showDisconnectConfirmation = true
+                    } label: {
+                        Label(
+                            "Disconnect RNode",
+                            systemImage: "xmark.circle"
+                        )
+                    }
+                } else {
+                    Button {
+                        guard let device = bluetooth.devices.first else {
+                            return
+                        }
+
+                        bluetooth.connect(to: device)
+                    } label: {
+                        Label(
+                            "Reconnect RNode",
+                            systemImage: "arrow.clockwise.circle"
+                        )
+                    }
                 }
-                .disabled(!isConnected)
             }
         }
         .navigationTitle(
