@@ -99,7 +99,9 @@ final class BluetoothManager: NSObject, ObservableObject {
         )
     }
 
-    func sendToRNode(_ data: Data) {
+    func sendToRNode(_ data: Data)
+    {
+        
         guard
             let connectedPeripheral,
             let rnodeWriteCharacteristic
@@ -162,6 +164,27 @@ final class BluetoothManager: NSObject, ObservableObject {
         rnodeNotifyCharacteristic = nil
 
         serviceCount = 0
+    }
+    func restartRNode() {
+        let frame = Data([
+            0xC0,
+            0x55,
+            0xF8,
+            0xC0
+        ])
+
+        sendToRNode(frame)
+    }
+
+    func turnRadioOff() {
+        let frame = Data([
+            0xC0,
+            0x3F,
+            0x00,
+            0xC0
+        ])
+
+        sendToRNode(frame)
     }
 }
 

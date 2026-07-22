@@ -3,6 +3,8 @@ import CoreBluetooth
 
 struct ContentView: View {
     @StateObject private var bluetooth = BluetoothManager()
+    @State private var showRestartConfirmation = false
+    @State private var showRadioOffConfirmation = false
 
     var body: some View {
         NavigationStack {
@@ -15,10 +17,54 @@ struct ContentView: View {
                     deviceList
                 }
 
-                scanButton
+                VStack(spacing: 12) {
+                    scanButton
+
+                    if bluetooth.connectedDeviceID != nil {
+                        HStack(spacing: 12) {
+                            Button("Restart RNode") {
+                                showRestartConfirmation = true
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button("Turn Radio Off") {
+                                showRadioOffConfirmation = true
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                    }
+                }
             }
             .padding()
-            .navigationTitle("RNode (\(bluetooth.packetsReceived))")
+            .navigationTitle("RNode")
+            .confirmationDialog(
+                "Restart RNode?",
+                isPresented: $showRestartConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Restart RNode", role: .destructive) {
+                    bluetooth.restartRNode()
+                }
+
+                Button("Cancel", role: .cancel) {
+                }
+            } message: {
+                Text("The Bluetooth connection will briefly disconnect while the RNode restarts.")
+            }
+            .confirmationDialog(
+                "Turn Radio Off?",
+                isPresented: $showRadioOffConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Turn Radio Off", role: .destructive) {
+                    bluetooth.turnRadioOff()
+                }
+
+                Button("Cancel", role: .cancel) {
+                }
+            } message: {
+                Text("This turns off the RNode radio, but does not completely power off the device.")
+            }
         }
     }
 
@@ -29,27 +75,18 @@ struct ContentView: View {
                 .foregroundStyle(.blue)
 
             Text(bluetooth.connectionMessage)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Packets Received: \(bluetooth.packetsReceived)")
-                    .font(.caption)
-
-                Text("BLE RSSI: \(bluetooth.lastRSSI ?? 0) dBm")
-                    .font(.caption)
-
-                if let lastPacket = bluetooth.lastPacketTime {
-                    Text("Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))")
-                        .font(.caption)
-                }
-            }
-            .padding(.top, 8)
                 .font(.headline)
                 .multilineTextAlignment(.center)
 
-            Text("Tap an RNode to connect")
-                .foregroundStyle(.secondary)
+            Text(
+                bluetooth.connectedDeviceID == nil
+                    ? "Tap an RNode to connect"
+                    : "Tap the RNode for details"
+            )
+            .foregroundStyle(.secondary)
         }
+        .padding(.top, 8)
     }
-
     private var emptyState: some View {
         ContentUnavailableView(
             "No Devices Found",
@@ -68,64 +105,39 @@ struct ContentView: View {
             NavigationLink {
                 RNodeDetailView(bluetooth: bluetooth)
             } label: {
-                HStack {
+                HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(device.name)
                             .font(.headline)
-                            .foregroundStyle(.primary)
 
                         Text("\(device.rssi) dBm")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        
-                            VStack(alignment: .leading, spacing: 10) {
-                                Label("RNode Status", systemImage: "antenna.radiowaves.left.and.right")
+                    }
 
-                                Divider()
-
-                                Label("Connected", systemImage: "checkmark.circle.fill")
-
-                                Label("Packets: \(bluetooth.packetsReceived)", systemImage: "shippingbox.fill")
-
-                                Label("RSSI: \(bluetooth.lastRSSI ?? 0) dBm", systemImage: "dot.radiowaves.left.and.right")
-
-                                if let lastPacket = bluetooth.lastPacketTime {
-                                    Label(
-                                        "Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))",
-                                        systemImage: "clock"
-                                    )
-                                }
-                            }
-                            .padding()
-                            .background(.thinMaterial)
-                            .clipShape(RoundedRectangle(cornerRadius: 16))
-                        }
-                    .simultaneousGesture(
-                        TapGesture().onEnded {
-                            if bluetooth.connectedDeviceID != device.id {
-                                bluetooth.connect(to: device)
-                            }
-                        }
-                    )
+                    Spacer()
 
                     Spacer()
 
                     if bluetooth.connectingDeviceID == device.id {
                         ProgressView()
                     } else if bluetooth.connectedDeviceID == device.id {
-                        Label("Connected", systemImage: "checkmark.circle.fill")
+                        Text("Connected")
                             .foregroundStyle(.green)
-                    } else {
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.tertiary)
                     }
                 }
+                .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if bluetooth.connectedDeviceID != device.id {
+                        bluetooth.connect(to: device)
+                    }
+                }
+            )
         }
         .listStyle(.plain)
     }
-
     private var scanButton: some View {
         Button {
             if bluetooth.isScanning {
