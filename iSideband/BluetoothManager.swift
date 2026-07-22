@@ -505,12 +505,6 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {
                 if let level = data.first {
-                    print("Battery data length: \(data.count)")
-                    print(
-                        "Battery data hex: " +
-                        data.map { String(format: "%02X", $0) }.joined(separator: " ")
-                    )
-                    print("Raw BLE battery level: \(level)")
                     let reportedLevel = Int(level)
 
                     if reportedLevel <= 100 {
