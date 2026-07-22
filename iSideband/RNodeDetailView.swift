@@ -93,13 +93,6 @@ struct RNodeDetailView: View {
                     "Model: \(bluetooth.boardName)",
                     systemImage: "memorychip"
                 )
-
-                Label(
-                    bluetooth.batteryPercent.map {
-                        "Battery: \($0)%"
-                    } ?? "Battery: Not reported",
-                    systemImage: batteryIcon
-                )
             }
             Section("Radio Settings") {
                 Text(

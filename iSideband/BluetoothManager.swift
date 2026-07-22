@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import CoreBluetooth
 import Combine
+import UserNotifications
 
 struct DiscoveredDevice: Identifiable {
     let id: UUID
@@ -10,7 +11,11 @@ struct DiscoveredDevice: Identifiable {
 }
 
 @MainActor
-final class BluetoothManager: NSObject, ObservableObject {
+final class BluetoothManager:
+    NSObject,
+    ObservableObject,
+    UNUserNotificationCenterDelegate
+{
     private let packetDecoder = RNodePacketDecoder()
     private let packetRouter = RNodePacketRouter()
     private let frameAssembler = RNodeFrameAssembler()
@@ -45,16 +50,40 @@ final class BluetoothManager: NSObject, ObservableObject {
 
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
+    private var hasSentLowBatteryNotification = false
 
     override init() {
         super.init()
+
+        UNUserNotificationCenter.current().delegate = self
+
+        UNUserNotificationCenter.current().requestAuthorization(
+            options: [.alert, .sound, .badge]
+        ) { granted, error in
+            if let error {
+                print(
+                    "Notification permission error: " +
+                    error.localizedDescription
+                )
+            } else {
+                print("Notification permission granted: \(granted)")
+            }
+        }
 
         centralManager = CBCentralManager(
             delegate: self,
             queue: nil
         )
     }
-
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler:
+            @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        print("Foreground notification delegate called")
+        completionHandler([.banner, .list, .sound])
+    }
     func startScanning() {
         guard centralManager.state == .poweredOn else {
             connectionMessage = "Bluetooth is not ready"
@@ -170,6 +199,40 @@ final class BluetoothManager: NSObject, ObservableObject {
 
         serviceCount = 0
     }
+    private func sendLowBatteryNotification(percent: Int) {
+        guard percent <= 20 else {
+            hasSentLowBatteryNotification = false
+            return
+        }
+
+        guard !hasSentLowBatteryNotification else {
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = "RNode Battery Low"
+        content.body = "Your connected RNode battery is at \(percent)%."
+        content.sound = .default
+
+        let request = UNNotificationRequest(
+            identifier: "rnode-low-battery",
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                print(
+                    "Low-battery notification failed: " +
+                    error.localizedDescription
+                )
+            } else {
+                print("Low-battery notification sent")
+            }
+        }
+
+        hasSentLowBatteryNotification = true
+    }
     func restartRNode() {
         let frame = Data([
             0xC0,
@@ -180,7 +243,6 @@ final class BluetoothManager: NSObject, ObservableObject {
 
         sendToRNode(frame)
     }
-
     func turnRadioOff() {
         let frame = Data([
             0xC0,
@@ -408,6 +470,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             if characteristic.isNotifying {
                 connectionMessage = "RNode data channel ready"
                 print("RNode notification channel is active")
+                
             }
         }
     }
@@ -504,11 +567,12 @@ extension BluetoothManager: CBPeripheralDelegate {
                 }
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {
-                if let level = data.first {
-                    let reportedLevel = Int(level)
+                if let rawValue = data.first {
+                    let reportedLevel = Int(rawValue)
 
                     if reportedLevel <= 100 {
                         batteryPercent = reportedLevel
+                        sendLowBatteryNotification(percent: reportedLevel)
                     } else {
                         print("Ignoring invalid BLE battery level: \(reportedLevel)")
                         batteryPercent = nil

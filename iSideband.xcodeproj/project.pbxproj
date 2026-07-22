@@ -10,9 +10,22 @@
 		0B11BCE6300DC37B00FC94FB /* iSideband.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iSideband.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		0B233F923011841400477DB1 /* Exceptions for "iSideband" folder in "iSideband" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 0B11BCE5300DC37B00FC94FB /* iSideband */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		0B11BCE8300DC37B00FC94FB /* iSideband */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				0B233F923011841400477DB1 /* Exceptions for "iSideband" folder in "iSideband" target */,
+			);
 			path = iSideband;
 			sourceTree = "<group>";
 		};
@@ -256,6 +269,7 @@
 				DEVELOPMENT_TEAM = 6XYV9P6366;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iSideband/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -289,6 +303,7 @@
 				DEVELOPMENT_TEAM = 6XYV9P6366;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = iSideband/Info.plist;
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

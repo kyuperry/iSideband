@@ -86,7 +86,7 @@ final class RNodePacketRouter {
 
         print("Battery first byte: \(value)")
 
-        return min(Int(value), 100)
+        return Int(value)
     }
 
     private func decodeTemperature(
