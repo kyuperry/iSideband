@@ -102,6 +102,12 @@ struct RNodeDetailView: View {
                 )
             }
             Section("Radio Settings") {
+                Text(
+                "These values will appear after the RNode reports its current radio configuration."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+                
                 Label(
                     bluetooth.radioFrequency.map {
                         "Frequency: \($0) Hz"
