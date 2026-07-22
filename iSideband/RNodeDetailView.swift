@@ -3,30 +3,45 @@ import SwiftUI
 struct RNodeDetailView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
+    private var isConnected: Bool {
+        bluetooth.connectedDeviceID != nil
+    }
+
     var body: some View {
         List {
-
             Section("Connection") {
-                Label(
-                    bluetooth.connectedDeviceName ?? "RNode",
-                    systemImage: "antenna.radiowaves.left.and.right"
-                )
-                .font(.headline)
-                Label(
-                    bluetooth.connectedDeviceID != nil
-                    ? "Connected"
-                    : "Disconnected",
-                    systemImage: bluetooth.connectedDeviceID != nil
-                    ? "checkmark.circle.fill"
-                    : "xmark.circle"
-                )
+                HStack {
+                    Label(
+                        bluetooth.connectedDeviceName ?? "RNode",
+                        systemImage: "antenna.radiowaves.left.and.right"
+                    )
+                    .font(.headline)
 
+                    Spacer()
+
+                    Text(isConnected ? "Connected" : "Disconnected")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(isConnected ? .green : .red)
+                }
+
+                if let rssi = bluetooth.lastRSSI {
+                    Label(
+                        "Signal Strength: \(rssi) dBm",
+                        systemImage: "dot.radiowaves.left.and.right"
+                    )
+                } else {
+                    Label(
+                        "Signal Strength: Unavailable",
+                        systemImage: "dot.radiowaves.left.and.right"
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Activity") {
                 Label(
-                    "RSSI: \(bluetooth.lastRSSI ?? 0) dBm",
-                    systemImage: "dot.radiowaves.left.and.right"
-                )
-                Label(
-                    "Packets: \(bluetooth.packetsReceived)",
+                    "Packets Received: \(bluetooth.packetsReceived)",
                     systemImage: "shippingbox.fill"
                 )
 
@@ -35,17 +50,23 @@ struct RNodeDetailView: View {
                         "Last Packet: \(lastPacket.formatted(date: .omitted, time: .standard))",
                         systemImage: "clock"
                     )
+                } else {
+                    Label(
+                        "Last Packet: None",
+                        systemImage: "clock"
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
 
-            Section("Radio") {
+            Section("Hardware") {
                 Label(
-                    "BLE Firmware: \(bluetooth.firmwareVersion)",
+                    "Firmware: \(bluetooth.firmwareVersion)",
                     systemImage: "cpu"
                 )
 
                 Label(
-                    "BLE Model: \(bluetooth.boardName)",
+                    "Model: \(bluetooth.boardName)",
                     systemImage: "memorychip"
                 )
 
@@ -53,28 +74,32 @@ struct RNodeDetailView: View {
                     bluetooth.batteryPercent.map {
                         "Battery: \($0)%"
                     } ?? "Battery: Loading…",
-                    systemImage: "battery.100"
+                    systemImage: batteryIcon
                 )
-/*
-                Label(
-                    bluetooth.temperature.map {
-                        "Temperature: \(String(format: "%.1f", $0))°C"
-                    } ?? "Temperature: Loading…",
-                    systemImage: "thermometer.medium"
-                )*/
- 
-/*
-                Label(
-                    bluetooth.radioReady
-                    ? "Radio Ready"
-                    : "Radio Status: Loading…",
-                    systemImage: bluetooth.radioReady
-                    ? "checkmark.circle.fill"
-                    : "antenna.radiowaves.left.and.right"
-                )
-*/
             }
         }
-        .navigationTitle(bluetooth.connectedDeviceName ?? "RNode")
+        .navigationTitle(
+            bluetooth.connectedDeviceName ?? "RNode Details"
+        )
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var batteryIcon: String {
+        guard let percent = bluetooth.batteryPercent else {
+            return "battery.0"
+        }
+
+        switch percent {
+        case 76...100:
+            return "battery.100"
+        case 51...75:
+            return "battery.75"
+        case 26...50:
+            return "battery.50"
+        case 1...25:
+            return "battery.25"
+        default:
+            return "battery.0"
+        }
     }
 }
