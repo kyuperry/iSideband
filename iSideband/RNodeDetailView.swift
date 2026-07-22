@@ -10,6 +10,25 @@ struct RNodeDetailView: View {
 
     var body: some View {
         List {
+            Section {
+                HStack(spacing: 10) {
+                    Image(
+                        systemName: isConnected
+                            ? "checkmark.circle.fill"
+                            : "xmark.circle.fill"
+                    )
+                    .foregroundStyle(isConnected ? .green : .red)
+
+                    Text(
+                        isConnected
+                            ? "RNode Connected"
+                            : "RNode Disconnected"
+                    )
+                    .fontWeight(.semibold)
+
+                    Spacer()
+                }
+            }
             Section("Connection") {
                 HStack {
                     Label(
