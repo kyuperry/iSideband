@@ -103,14 +103,20 @@ struct RNodeDetailView: View {
                 
                 Label(
                     bluetooth.radioFrequency.map {
-                        "Frequency: \($0) Hz"
+                        String(
+                            format: "Frequency: %.3f MHz",
+                            Double($0) / 1_000_000
+                        )
                     } ?? "Frequency: Not reported",
                     systemImage: "waveform"
                 )
                 
                 Label(
                     bluetooth.radioBandwidth.map {
-                        "Bandwidth: \($0) Hz"
+                        String(
+                            format: "Bandwidth: %.0f kHz",
+                            Double($0) / 1_000
+                        )
                     } ?? "Bandwidth: Not reported",
                     systemImage: "arrow.left.and.right"
                 )

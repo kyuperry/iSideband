@@ -242,7 +242,8 @@ final class BluetoothManager:
         ])
 
         sendToRNode(frame)
-    }
+        }
+    
     func turnRadioOff() {
         let frame = Data([
             0xC0,
@@ -253,7 +254,56 @@ final class BluetoothManager:
 
         sendToRNode(frame)
     }
-    func sendMessage(_ text: String) {
+    func requestRNodeDetails() {
+        let frames: [Data] = [
+            Data([
+                0xC0,
+                0x01,
+                0x00, 0x00, 0x00, 0x00,
+                0xC0
+            ]),
+            Data([
+                0xC0,
+                0x02,
+                0x00, 0x00, 0x00, 0x00,
+                0xC0
+            ]),
+            Data([
+                0xC0,
+                0x03,
+                0xFF,
+                0xC0
+            ]),
+            Data([
+                0xC0,
+                0x04,
+                0xFF,
+                0xC0
+            ]),
+            Data([
+                0xC0,
+                0x05,
+                0xFF,
+                0xC0
+            ]),
+            Data([
+                0xC0,
+                0x50,
+                0xFF,
+                0xC0
+            ])
+        ]
+
+        for (index, frame) in frames.enumerated() {
+            DispatchQueue.main.asyncAfter(
+                deadline: .now() + (Double(index) * 0.2)
+            ) {
+                self.sendToRNode(frame)
+            }
+        }
+    }
+
+        func sendMessage(_ text: String) {
         print("Sending message: \(text)")
     }
 }
@@ -435,6 +485,10 @@ extension BluetoothManager: CBPeripheralDelegate {
                     rnodeWriteCharacteristic = characteristic
                     print("Saved RNode write characteristic")
 
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        self.requestRNodeDetails()
+                    }
+
                 case "6E400003-B5A3-F393-E0A9-E50E24DCCA9E":
                     rnodeNotifyCharacteristic = characteristic
 
@@ -444,7 +498,22 @@ extension BluetoothManager: CBPeripheralDelegate {
                     )
 
                     print("Subscribed to RNode notifications")
+                    
+                case "2A19":
+                    if characteristic.properties.contains(.notify) {
+                        peripheral.setNotifyValue(
+                            true,
+                            for: characteristic
+                        )
+                    }
 
+                    if characteristic.properties.contains(.read) {
+                        peripheral.readValue(
+                            for: characteristic
+                        )
+                    }
+
+                    print("Subscribed to BLE battery updates")
                 default:
                     if characteristic.properties.contains(.read) {
                         peripheral.readValue(
@@ -554,13 +623,14 @@ extension BluetoothManager: CBPeripheralDelegate {
                     Length: \(packet.length) bytes
                     Starts with C0: \(packet.startsWithFrame)
                     Ends with C0: \(packet.endsWithFrame)
-                    Command: \(packet.commandType.description) (\(commandByte))
+                    print("Command byte: \(commandByte)")
                     Raw: \(packet.hexString)
                     """)
                 }
                 
             } else if characteristic.uuid == CBUUID(string: "2A24") {
                 if let text = String(data: data, encoding: .utf8) {
+                    print("BLE Model Number String: \(text)")
                     boardName = text
                 }
 
@@ -571,11 +641,11 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {
                 if let rawValue = data.first {
-                    print("BLE Battery raw byte: \(rawValue)")
+                    let reportedLevel = Int(rawValue)
+                    print("Battery UUID: \(characteristic.uuid.uuidString)")
+                    print("BLE Battery raw byte: \(reportedLevel)")
                     print("BLE Battery data: \(data as NSData)")
                     print("BLE Battery byte count: \(data.count)")
-                    
-                    let reportedLevel = Int(rawValue)
 
                     if reportedLevel <= 100 {
                         batteryPercent = reportedLevel

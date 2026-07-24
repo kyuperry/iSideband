@@ -78,15 +78,17 @@ final class RNodePacketRouter {
     private func decodeBatteryPercent(
         from packet: RNodePacket
     ) -> Int? {
-        print("Battery payload bytes: \(packet.payloadHexString)")
-
-        guard let value = packet.payload.first else {
+        guard packet.payload.count >= 2 else {
             return nil
         }
 
-        print("Battery first byte: \(value)")
+        let percent = Int(packet.payload[1])
 
-        return Int(value)
+        guard (0...100).contains(percent) else {
+            return nil
+        }
+
+        return percent
     }
 
     private func decodeTemperature(
