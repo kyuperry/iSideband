@@ -571,14 +571,20 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {
                 if let rawValue = data.first {
+                    print("BLE Battery raw byte: \(rawValue)")
+                    print("BLE Battery data: \(data as NSData)")
+                    print("BLE Battery byte count: \(data.count)")
+                    
                     let reportedLevel = Int(rawValue)
 
                     if reportedLevel <= 100 {
                         batteryPercent = reportedLevel
                         sendLowBatteryNotification(percent: reportedLevel)
                     } else {
-                        print("Ignoring invalid BLE battery level: \(reportedLevel)")
-                        batteryPercent = nil
+                        let cappedLevel = min(reportedLevel, 100)
+                        print("Capping BLE battery level \(reportedLevel) to \(cappedLevel)")
+                        batteryPercent = cappedLevel
+                        sendLowBatteryNotification(percent: cappedLevel)
                     }
                 }
             } else if let text = String(

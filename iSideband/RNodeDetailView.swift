@@ -96,10 +96,10 @@ struct RNodeDetailView: View {
             }
             Section("Radio Settings") {
                 Text(
-                "These values will appear after the RNode reports its current radio configuration."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+                    "These values will appear after the RNode reports its current radio configuration."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
                 
                 Label(
                     bluetooth.radioFrequency.map {
@@ -107,33 +107,40 @@ struct RNodeDetailView: View {
                     } ?? "Frequency: Not reported",
                     systemImage: "waveform"
                 )
-
+                
                 Label(
                     bluetooth.radioBandwidth.map {
                         "Bandwidth: \($0) Hz"
                     } ?? "Bandwidth: Not reported",
                     systemImage: "arrow.left.and.right"
                 )
-
+                
                 Label(
                     bluetooth.transmitPower.map {
                         "Transmit Power: \($0) dBm"
                     } ?? "Transmit Power: Not reported",
                     systemImage: "bolt.horizontal"
                 )
-
+                
                 Label(
                     bluetooth.spreadingFactor.map {
                         "Spreading Factor: SF\($0)"
                     } ?? "Spreading Factor: Not reported",
                     systemImage: "dot.radiowaves.up.forward"
                 )
-
+                
                 Label(
                     bluetooth.codingRate.map {
                         "Coding Rate: 4/\($0)"
                     } ?? "Coding Rate: Not reported",
                     systemImage: "square.grid.3x3"
+                )
+                
+                Label(
+                    bluetooth.batteryPercent.map {
+                        "Battery: \($0)%"
+                    } ?? "Battery: Not reported",
+                    systemImage: batteryIcon
                 )
             }
 
