@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ChatView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @StateObject private var lxmf = LXMFService()
 
     let title: String
 
@@ -54,7 +55,10 @@ struct ChatView: View {
                         )
                     )
 
-                    bluetooth.sendMessage(trimmedMessage)
+                    lxmf.send(
+                        text: trimmedMessage,
+                        destination: title
+                    )
                     message = ""
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
@@ -70,6 +74,9 @@ struct ChatView: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            lxmf.start()
+        }
     }
 
     private func messageBubble(
