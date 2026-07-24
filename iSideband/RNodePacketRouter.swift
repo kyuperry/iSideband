@@ -110,6 +110,12 @@ final class RNodePacketRouter {
         guard packet.payload.count >= 4 else {
             return nil
         }
+        print(
+            "UInt32 telemetry payload:",
+            packet.payload.prefix(4)
+                .map { String(format: "%02X", $0) }
+                .joined(separator: " ")
+        )
 
         return UInt32(packet.payload[0]) << 24
             | UInt32(packet.payload[1]) << 16

@@ -1,0 +1,2 @@
+cd ~/Desktop/iSideband
+git status

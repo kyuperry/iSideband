@@ -149,13 +149,40 @@ final class BluetoothManager:
             ? .withResponse
             : .withoutResponse
 
+        let escaped = escapeKISSFrame(data)
+
         connectedPeripheral.writeValue(
-            data,
+            escaped,
             for: rnodeWriteCharacteristic,
             type: writeType
         )
     }
+    private func escapeKISSFrame(_ frame: Data) -> Data {
+        guard frame.count >= 2 else {
+            return frame
+        }
 
+        var escaped = Data()
+        escaped.append(0xC0)
+
+        for byte in frame.dropFirst().dropLast() {
+            switch byte {
+            case 0xC0:
+                escaped.append(0xDB)
+                escaped.append(0xDC)
+
+            case 0xDB:
+                escaped.append(0xDB)
+                escaped.append(0xDD)
+
+            default:
+                escaped.append(byte)
+            }
+        }
+
+        escaped.append(0xC0)
+        return escaped
+    }
     private func addOrUpdateDevice(
         peripheral: CBPeripheral,
         advertisementData: [String: Any],
@@ -256,36 +283,47 @@ final class BluetoothManager:
     }
     func requestRNodeDetails() {
         let frames: [Data] = [
+            // Frequency: 915,000,000 Hz
             Data([
                 0xC0,
                 0x01,
-                0x00, 0x00, 0x00, 0x00,
+                0x36, 0x89, 0xCA, 0xC0,
                 0xC0
             ]),
+            
+            // Bandwidth: 125,000 Hz
             Data([
                 0xC0,
                 0x02,
-                0x00, 0x00, 0x00, 0x00,
+                0x00, 0x01, 0xE8, 0x48,
                 0xC0
             ]),
+            
+            // Transmit power: 22 dBm
             Data([
                 0xC0,
                 0x03,
-                0xFF,
+                0x16,
                 0xC0
             ]),
+            
+            // Spreading factor: 7
             Data([
                 0xC0,
                 0x04,
-                0xFF,
+                0x07,
                 0xC0
             ]),
+            
+            // Coding rate: 5
             Data([
                 0xC0,
                 0x05,
-                0xFF,
+                0x05,
                 0xC0
             ]),
+            
+            // Firmware version request
             Data([
                 0xC0,
                 0x50,
@@ -293,7 +331,7 @@ final class BluetoothManager:
                 0xC0
             ])
         ]
-
+        
         for (index, frame) in frames.enumerated() {
             DispatchQueue.main.asyncAfter(
                 deadline: .now() + (Double(index) * 0.2)
@@ -302,13 +340,13 @@ final class BluetoothManager:
             }
         }
     }
-
-        func sendMessage(_ text: String) {
+        
+    func sendMessage(_ text: String) {
         print("Sending message: \(text)")
     }
-}
+    }
 
-extension BluetoothManager: CBCentralManagerDelegate {
+    extension BluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManagerDidUpdateState(
         _ central: CBCentralManager
@@ -682,8 +720,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 connectionMessage =
                     "RNode write failed: \(error.localizedDescription)"
             } else {
-                print(
-                    "Successfully wrote data to \(characteristic.uuid)"
+                print("Successfully wrote data to \(characteristic.uuid)"
                 )
             }
         }
