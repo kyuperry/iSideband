@@ -253,6 +253,9 @@ final class BluetoothManager:
 
         sendToRNode(frame)
     }
+    func sendMessage(_ text: String) {
+        print("Sending message: \(text)")
+    }
 }
 
 extension BluetoothManager: CBCentralManagerDelegate {
@@ -609,4 +612,5 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
         }
     }
+    
 }

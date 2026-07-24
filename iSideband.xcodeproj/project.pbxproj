@@ -11,7 +11,7 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		0B233F923011841400477DB1 /* Exceptions for "iSideband" folder in "iSideband" target */ = {
+		0BE838AE3012F9B200F57795 /* Exceptions for "iSideband" folder in "iSideband" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
@@ -24,7 +24,7 @@
 		0B11BCE8300DC37B00FC94FB /* iSideband */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				0B233F923011841400477DB1 /* Exceptions for "iSideband" folder in "iSideband" target */,
+				0BE838AE3012F9B200F57795 /* Exceptions for "iSideband" folder in "iSideband" target */,
 			);
 			path = iSideband;
 			sourceTree = "<group>";

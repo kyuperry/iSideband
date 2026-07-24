@@ -1,8 +1,7 @@
-//
-//  Message.swift
-//  iSideband
-//
-//  Created by Kyle Perry on 7/22/26.
-//
-
 import Foundation
+
+struct Message: Identifiable {
+    let id = UUID()
+    let text: String
+    let isMine: Bool
+}
