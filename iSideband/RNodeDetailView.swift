@@ -143,9 +143,7 @@ struct RNodeDetailView: View {
                 )
                 
                 Label(
-                    bluetooth.batteryPercent.map {
-                        "Battery: \($0)%"
-                    } ?? "Battery: Not reported",
+                    "Battery: Not reported",
                     systemImage: batteryIcon
                 )
             }
