@@ -2,28 +2,26 @@ import SwiftUI
 
 struct ConversationsView: View {
     @ObservedObject var bluetooth: BluetoothManager
-    
+
     @State private var selectedTab: ConversationTab = .direct
     @State private var showNewConversation = false
     @State private var showCreateGroup = false
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
-    @State private var groups: [GroupConversation] = Self.loadGroups()
-    
-    
+    @State private var groups: [GroupConversation] =
+        Self.loadGroups()
+
     var body: some View {
         VStack(spacing: 0) {
             Group {
                 switch selectedTab {
                 case .direct:
                     directConversations
-                    
+
                 case .groups:
                     groupConversations
                 }
             }
-            
-            
         }
         .safeAreaInset(edge: .bottom) {
             HStack(spacing: 8) {
@@ -32,7 +30,7 @@ struct ConversationsView: View {
                     systemImage: "person.fill",
                     tab: .direct
                 )
-                
+
                 tabButton(
                     title: "Groups",
                     systemImage: "person.3.fill",
@@ -78,19 +76,19 @@ struct ConversationsView: View {
             Button("Start Direct Chat") {
                 selectedTab = .direct
             }
-            
+
             Button("Create Group") {
                 showCreateGroup = true
             }
-            
+
             Button("Enter LXMF Address") {
                 print("LXMF address entry selected")
             }
-            
+
             Button("Scan QR Code") {
                 print("QR scanner selected")
             }
-            
+
             Button("Cancel", role: .cancel) { }
         }
         .sheet(isPresented: $showCreateGroup) {
@@ -102,18 +100,27 @@ struct ConversationsView: View {
                             text: $groupName
                         )
                     }
-                    
+
                     Section("Icon") {
                         HStack(spacing: 18) {
-                            groupIconButton("person.3.fill")
+                            groupIconButton(
+                                "person.3.fill"
+                            )
+
                             groupIconButton(
                                 "antenna.radiowaves.left.and.right"
                             )
-                            groupIconButton("tent.fill")
-                            groupIconButton("star.fill")
+
+                            groupIconButton(
+                                "tent.fill"
+                            )
+
+                            groupIconButton(
+                                "star.fill"
+                            )
                         }
                     }
-                    
+
                     Section("Members") {
                         Text("No RNodes available yet")
                             .foregroundStyle(.secondary)
@@ -122,31 +129,20 @@ struct ConversationsView: View {
                 .navigationTitle("Create Group")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
+                    ToolbarItem(
+                        placement: .cancellationAction
+                    ) {
                         Button("Cancel") {
                             showCreateGroup = false
                             groupName = ""
                         }
                     }
-                    
-                    ToolbarItem(placement: .confirmationAction) {
+
+                    ToolbarItem(
+                        placement: .confirmationAction
+                    ) {
                         Button("Create") {
-                            let trimmedName = groupName.trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            )
-
-                            let newGroup = GroupConversation(
-                                name: trimmedName,
-                                systemImage: selectedGroupIcon
-                            )
-
-                            groups.append(newGroup)
-                            saveGroups()
-                            
-                            selectedTab = .groups
-                            showCreateGroup = false
-                            groupName = ""
-                            selectedGroupIcon = "person.3.fill"
+                            createGroup()
                         }
                         .disabled(
                             groupName.trimmingCharacters(
@@ -158,56 +154,54 @@ struct ConversationsView: View {
             }
         }
     }
-    
+
     private var directConversations: some View {
         Group {
             if bluetooth.connectedDeviceID != nil {
+                let latestPreview =
+                    latestDirectPreview()
+
+                let conversation = Conversation(
+                    title:
+                        bluetooth.connectedDeviceName
+                        ?? "Connected RNode",
+                    lastMessage: latestPreview.text,
+                    lastActivity: latestPreview.date,
+                    unreadCount: 0
+                )
+
                 List {
                     NavigationLink {
-                        MessagesView(bluetooth: bluetooth)
+                        MessagesView(
+                            bluetooth: bluetooth
+                        )
                     } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.blue)
-                            
-                            VStack(
-                                alignment: .leading,
-                                spacing: 4
-                            ) {
-                                Text(
-                                    bluetooth.connectedDeviceName
-                                    ?? "Connected RNode"
-                                )
-                                .font(.headline)
-                                
-                                Text("Connected")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
+                        directConversationRow(
+                            conversation
+                        )
                     }
                 }
+                .listStyle(.plain)
             } else {
                 emptyState(
-                    systemImage: "person.crop.circle.badge.questionmark",
+                    systemImage:
+                        "person.crop.circle.badge.questionmark",
                     title: "No RNodes",
-                    message: "Connected RNodes will appear here for direct messaging."
+                    message:
+                        "Connected RNodes will appear here for direct messaging."
                 )
             }
         }
     }
-    
+
     private var groupConversations: some View {
         Group {
             if groups.isEmpty {
                 emptyState(
                     systemImage: "person.3.fill",
                     title: "No Groups",
-                    message: "Create a group to start messaging."
+                    message:
+                        "Create a group to start messaging."
                 )
             } else {
                 List(groups) { group in
@@ -216,36 +210,140 @@ struct ConversationsView: View {
                             group: group
                         )
                     } label: {
-                        HStack(spacing: 14) {
-                            Image(systemName: group.systemImage)
-                                .font(.title2)
-                                .frame(width: 44, height: 44)
-                                .background {
-                                    Circle()
-                                        .fill(
-                                            Color.accentColor.opacity(0.15)
-                                        )
-                                }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(group.name)
-                                    .font(.headline)
-
-                                Text("No messages yet")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.vertical, 4)
+                        groupConversationRow(
+                            group
+                        )
                     }
                 }
                 .listStyle(.plain)
             }
         }
     }
-    
+
+    private func directConversationRow(
+        _ conversation: Conversation
+    ) -> some View {
+        HStack(spacing: 12) {
+            Image(
+                systemName:
+                    "person.crop.circle.fill"
+            )
+            .font(.system(size: 42))
+            .foregroundStyle(.blue)
+
+            VStack(
+                alignment: .leading,
+                spacing: 5
+            ) {
+                HStack {
+                    Text(conversation.title)
+                        .font(.headline)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    Text(
+                        conversation.lastActivity
+                            .formatted(
+                                date: .omitted,
+                                time: .shortened
+                            )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text(conversation.lastMessage)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Spacer()
+
+                    if conversation.unreadCount > 0 {
+                        Text(
+                            "\(conversation.unreadCount)"
+                        )
+                        .font(.caption.bold())
+                        .foregroundStyle(.white)
+                        .frame(
+                            minWidth: 22,
+                            minHeight: 22
+                        )
+                        .background(
+                            Circle()
+                                .fill(
+                                    Color.accentColor
+                                )
+                        )
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 5)
+    }
+
+    private func groupConversationRow(
+        _ group: GroupConversation
+    ) -> some View {
+        let preview =
+            latestGroupPreview(for: group)
+
+        return HStack(spacing: 14) {
+            Image(systemName: group.systemImage)
+                .font(.title2)
+                .frame(width: 44, height: 44)
+                .background {
+                    Circle()
+                        .fill(
+                            Color.accentColor
+                                .opacity(0.15)
+                        )
+                }
+
+            VStack(
+                alignment: .leading,
+                spacing: 4
+            ) {
+                Text(group.name)
+                    .font(.headline)
+
+                Text(preview)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+
+            Spacer()
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func createGroup() {
+        let trimmedName =
+            groupName.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        guard !trimmedName.isEmpty else {
+            return
+        }
+
+        let newGroup = GroupConversation(
+            name: trimmedName,
+            systemImage: selectedGroupIcon
+        )
+
+        groups.append(newGroup)
+        saveGroups()
+
+        selectedTab = .groups
+        showCreateGroup = false
+        groupName = ""
+        selectedGroupIcon = "person.3.fill"
+    }
+
     private func groupIconButton(
         _ systemImage: String
     ) -> some View {
@@ -258,13 +356,17 @@ struct ConversationsView: View {
                 .background {
                     Circle()
                         .fill(
-                            selectedGroupIcon == systemImage
-                            ? Color.accentColor.opacity(0.2)
-                            : Color.secondary.opacity(0.1)
+                            selectedGroupIcon
+                                == systemImage
+                            ? Color.accentColor
+                                .opacity(0.2)
+                            : Color.secondary
+                                .opacity(0.1)
                         )
                 }
                 .overlay {
-                    if selectedGroupIcon == systemImage {
+                    if selectedGroupIcon
+                        == systemImage {
                         Circle()
                             .stroke(
                                 Color.accentColor,
@@ -275,7 +377,7 @@ struct ConversationsView: View {
         }
         .buttonStyle(.plain)
     }
-    
+
     private func emptyState(
         systemImage: String,
         title: String,
@@ -283,31 +385,36 @@ struct ConversationsView: View {
     ) -> some View {
         VStack(spacing: 12) {
             Spacer()
-            
+
             Image(systemName: systemImage)
                 .font(.system(size: 44))
                 .foregroundStyle(.secondary)
-            
+
             Text(title)
                 .font(.title2.bold())
-            
+
             Text(message)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal)
-            
+
             Spacer()
         }
     }
-    private static func loadGroups() -> [GroupConversation] {
+
+    private static func loadGroups()
+        -> [GroupConversation] {
         guard
-            let data = UserDefaults.standard.data(
-                forKey: "savedGroupConversations"
-            ),
-            let decodedGroups = try? JSONDecoder().decode(
-                [GroupConversation].self,
-                from: data
-            )
+            let data =
+                UserDefaults.standard.data(
+                    forKey:
+                        "savedGroupConversations"
+                ),
+            let decodedGroups =
+                try? JSONDecoder().decode(
+                    [GroupConversation].self,
+                    from: data
+                )
         else {
             return []
         }
@@ -316,15 +423,108 @@ struct ConversationsView: View {
     }
 
     private func saveGroups() {
-        guard let data = try? JSONEncoder().encode(groups) else {
+        guard
+            let data =
+                try? JSONEncoder().encode(
+                    groups
+                )
+        else {
             return
         }
 
         UserDefaults.standard.set(
             data,
-            forKey: "savedGroupConversations"
+            forKey:
+                "savedGroupConversations"
         )
     }
+
+    private func latestDirectPreview() -> (
+        text: String,
+        date: Date
+    ) {
+        guard
+            let data = UserDefaults.standard.data(
+                forKey: "savedDirectMessages"
+            ),
+            let savedMessages = try? JSONDecoder().decode(
+                [ChatMessage].self,
+                from: data
+            ),
+            let latestMessage = savedMessages.last
+        else {
+            return (
+                "Ready for direct messaging",
+                Date()
+            )
+        }
+
+        switch latestMessage.type {
+        case .text:
+            return (
+                latestMessage.text,
+                latestMessage.date
+            )
+
+        case .photo:
+            return (
+                "📷 Photo",
+                latestMessage.date
+            )
+
+        case .file:
+            return (
+                "📄 \(latestMessage.attachmentName ?? "File")",
+                latestMessage.date
+            )
+
+        default:
+            return (
+                latestMessage.text.isEmpty
+                    ? "New message"
+                    : latestMessage.text,
+                latestMessage.date
+            )
+        }
+    }
+    private func latestGroupPreview(
+        for group: GroupConversation
+    ) -> String {
+        let storageKey =
+        "savedGroupMessages_\(group.id.uuidString)"
+        
+        guard
+            let data =
+                UserDefaults.standard.data(
+                    forKey: storageKey
+                ),
+            let savedMessages =
+                try? JSONDecoder().decode(
+                    [Message].self,
+                    from: data
+                ),
+            let latestMessage =
+                savedMessages.last
+        else {
+            return "No messages yet"
+        }
+        
+        switch latestMessage.type {
+        case .text:
+            return latestMessage.text
+
+        case .photo:
+            return "📷 Photo"
+
+        case .file:
+            return "📄 \(latestMessage.attachmentName ?? "File")"
+
+        @unknown default:
+            return "New message"
+        }
+        }
+    
+
     private func tabButton(
         title: String,
         systemImage: String,
@@ -333,21 +533,31 @@ struct ConversationsView: View {
         Button {
             selectedTab = tab
         } label: {
-            Label(title, systemImage: systemImage)
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
-                .foregroundStyle(
-                    selectedTab == tab
-                        ? Color.accentColor
-                        : Color.secondary
+            Label(
+                title,
+                systemImage: systemImage
+            )
+            .font(
+                .subheadline.weight(
+                    .semibold
                 )
-                .background {
-                    if selectedTab == tab {
-                        Capsule()
-                            .fill(Color.accentColor.opacity(0.15))
-                    }
+            )
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .foregroundStyle(
+                selectedTab == tab
+                    ? Color.accentColor
+                    : Color.secondary
+            )
+            .background {
+                if selectedTab == tab {
+                    Capsule()
+                        .fill(
+                            Color.accentColor
+                                .opacity(0.15)
+                        )
                 }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -358,7 +568,9 @@ private enum ConversationTab {
     case groups
 }
 
-struct GroupConversation: Identifiable, Codable {
+struct GroupConversation:
+    Identifiable,
+    Codable {
     let id: UUID
     let name: String
     let systemImage: String
