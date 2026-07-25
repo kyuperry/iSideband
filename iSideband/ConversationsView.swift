@@ -8,7 +8,7 @@ struct ConversationsView: View {
     @State private var showCreateGroup = false
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
-    @State private var groups: [GroupConversation] = []
+    @State private var groups: [GroupConversation] = Self.loadGroups()
     
     
     var body: some View {
@@ -141,6 +141,8 @@ struct ConversationsView: View {
                             )
 
                             groups.append(newGroup)
+                            saveGroups()
+                            
                             selectedTab = .groups
                             showCreateGroup = false
                             groupName = ""
@@ -210,8 +212,8 @@ struct ConversationsView: View {
             } else {
                 List(groups) { group in
                     NavigationLink {
-                        MessagesView(
-                            bluetooth: bluetooth
+                        GroupChatView(
+                            group: group
                         )
                     } label: {
                         HStack(spacing: 14) {
@@ -297,6 +299,32 @@ struct ConversationsView: View {
             Spacer()
         }
     }
+    private static func loadGroups() -> [GroupConversation] {
+        guard
+            let data = UserDefaults.standard.data(
+                forKey: "savedGroupConversations"
+            ),
+            let decodedGroups = try? JSONDecoder().decode(
+                [GroupConversation].self,
+                from: data
+            )
+        else {
+            return []
+        }
+
+        return decodedGroups
+    }
+
+    private func saveGroups() {
+        guard let data = try? JSONEncoder().encode(groups) else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            data,
+            forKey: "savedGroupConversations"
+        )
+    }
     private func tabButton(
         title: String,
         systemImage: String,
@@ -330,10 +358,20 @@ private enum ConversationTab {
     case groups
 }
 
-struct GroupConversation: Identifiable {
-    let id = UUID()
+struct GroupConversation: Identifiable, Codable {
+    let id: UUID
     let name: String
     let systemImage: String
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        systemImage: String
+    ) {
+        self.id = id
+        self.name = name
+        self.systemImage = systemImage
+    }
 }
 
 #Preview {
