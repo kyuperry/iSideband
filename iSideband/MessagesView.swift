@@ -5,6 +5,7 @@ struct ChatMessage: Identifiable {
     let text: String
     let date: Date
     let isOutgoing: Bool
+    let status: String?
 }
 
 struct MessagesView: View {
@@ -34,13 +35,24 @@ struct MessagesView: View {
 
                 Spacer()
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 10) {
-                        ForEach(messages) { message in
-                            messageBubble(message)
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(spacing: 10) {
+                            ForEach(messages) { message in
+                                messageBubble(message)
+                            }
+
+                            Color.clear
+                                .frame(height: 1)
+                                .id("BOTTOM")
+                        }
+                        .padding()
+                    }
+                    .onChange(of: messages.count) {
+                        withAnimation {
+                            proxy.scrollTo("BOTTOM", anchor: .bottom)
                         }
                     }
-                    .padding()
                 }
             }
 
@@ -88,7 +100,8 @@ struct MessagesView: View {
             ChatMessage(
                 text: trimmed,
                 date: Date(),
-                isOutgoing: true
+                isOutgoing: true,
+                status: "Sent to RNode"
             )
         )
 
@@ -126,12 +139,19 @@ struct MessagesView: View {
                         RoundedRectangle(cornerRadius: 18)
                     )
 
-                Text(
-                    message.date.formatted(
-                        date: .omitted,
-                        time: .shortened
+                HStack(spacing: 5) {
+                    Text(
+                        message.date.formatted(
+                            date: .omitted,
+                            time: .shortened
+                        )
                     )
-                )
+
+                    if let status = message.status {
+                        Text("•")
+                        Text(status)
+                    }
+                }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
             }
