@@ -13,6 +13,8 @@ struct MessagesView: View {
 
     @State private var messageText = ""
     @State private var messages: [ChatMessage] = []
+    @State private var showingAttachmentMenu = false
+    
 
     var body: some View {
         VStack(spacing: 0) {
@@ -59,6 +61,20 @@ struct MessagesView: View {
             Divider()
 
             HStack(alignment: .bottom, spacing: 10) {
+                
+                Button {
+                    showingAttachmentMenu = true
+                } label: {
+                    Image(systemName: "plus")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.primary)
+                        .frame(width: 42, height: 42)
+                        .background(
+                            Circle()
+                                .fill(Color.secondary.opacity(0.15))
+                        )
+                }
+                .buttonStyle(.plain)
                 TextField(
                     "Message",
                     text: $messageText,
@@ -70,8 +86,20 @@ struct MessagesView: View {
                 Button {
                     sendMessage()
                 } label: {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 30))
+                    Image(systemName: "arrow.up")
+                        .font(.headline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(
+                            Circle()
+                                .fill(
+                                    messageText.trimmingCharacters(
+                                        in: .whitespacesAndNewlines
+                                    ).isEmpty
+                                    ? Color.gray.opacity(0.35)
+                                    : Color.accentColor
+                                )
+                        )
                 }
                 .disabled(
                     messageText.trimmingCharacters(
@@ -83,6 +111,31 @@ struct MessagesView: View {
         }
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
+        .confirmationDialog(
+            "Add Attachment",
+            isPresented: $showingAttachmentMenu,
+            titleVisibility: .visible
+        ) {
+            Button("Choose Photo") {
+                print("Choose Photo selected")
+            }
+
+            Button("Take Photo") {
+                print("Take Photo selected")
+            }
+
+            Button("Choose File") {
+                print("Choose File selected")
+            }
+
+            Button("Voice Note — Coming Soon") { }
+                .disabled(true)
+
+            Button("Share Location — Coming Soon") { }
+                .disabled(true)
+
+            Button("Cancel", role: .cancel) { }
+        }
     }
 
     private func sendMessage() {
