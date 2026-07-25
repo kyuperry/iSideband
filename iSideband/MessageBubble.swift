@@ -15,6 +15,7 @@ struct MessageBubble: View {
     let attachmentSize: Int?
 
     @State private var selectedImage: UIImage?
+    @State private var selectedFileURL: URL?
 
     var body: some View {
         HStack {
@@ -69,6 +70,24 @@ struct MessageBubble: View {
                 )
             }
         }
+        .sheet(
+            isPresented: Binding(
+                get: {
+                    selectedFileURL != nil
+                },
+                set: { isPresented in
+                    if !isPresented {
+                        selectedFileURL = nil
+                    }
+                }
+            )
+        ) {
+            if let selectedFileURL {
+                FilePreview(
+                    url: selectedFileURL
+                )
+            }
+        }
     }
 
     @ViewBuilder
@@ -97,7 +116,12 @@ struct MessageBubble: View {
             }
             .buttonStyle(.plain)
         } else if isFile {
-            fileBubble
+            Button {
+                openFile()
+            } label: {
+                fileBubble
+            }
+            .buttonStyle(.plain)
         } else {
             textBubble
         }
@@ -174,5 +198,26 @@ struct MessageBubble: View {
         isOutgoing
             ? Color.accentColor
             : Color.secondary.opacity(0.2)
+    }
+
+    private func openFile() {
+        guard let attachmentPath else {
+            return
+        }
+
+        let fileURL = URL(
+            fileURLWithPath: attachmentPath
+        )
+
+        guard FileManager.default.fileExists(
+            atPath: fileURL.path
+        ) else {
+            print(
+                "Attachment file is missing: \(fileURL.path)"
+            )
+            return
+        }
+
+        selectedFileURL = fileURL
     }
 }
