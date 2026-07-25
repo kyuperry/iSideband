@@ -342,7 +342,22 @@ final class BluetoothManager:
     }
         
     func sendMessage(_ text: String) {
-        print("Sending message: \(text)")
+        guard let payload = text.data(using: .utf8) else {
+            print("Unable to encode message")
+            return
+        }
+
+        var frame = Data([
+            0xC0,
+            0x00
+        ])
+
+        frame.append(payload)
+        frame.append(0xC0)
+
+        sendToRNode(frame)
+
+        print("Sent raw radio-data test: \(text)")
     }
     }
 
@@ -614,6 +629,26 @@ extension BluetoothManager: CBPeripheralDelegate {
                     lastPacketTime = Date()
 
                     let packet = packetDecoder.decode(frame)
+                    
+                    if packet.commandType == .data {
+                        let payloadData = Data(packet.payload)
+
+                        print(
+                            "Radio data received:",
+                            payloadData.map {
+                                String(format: "%02X", $0)
+                            }.joined(separator: " ")
+                        )
+
+                        if let text = String(
+                            data: payloadData,
+                            encoding: .utf8
+                        ) {
+                            print("Radio data as text: \(text)")
+                        }
+
+                        continue
+                    }
                     let telemetry = packetRouter.route(packet)
 
                     if let firmwareVersion = telemetry.firmwareVersion {

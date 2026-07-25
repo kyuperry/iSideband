@@ -8,6 +8,7 @@ struct ContentView: View {
     @State private var statusMessage: String?
     @State private var showSwitchConfirmation = false
     @State private var pendingConnectionID: UUID?
+    @State private var messageText = ""
 
     var body: some View {
         NavigationStack {
@@ -34,12 +35,25 @@ struct ContentView: View {
                                 showRadioOffConfirmation = true
                             }
                             .buttonStyle(.bordered)
+                            
+                            .buttonStyle(.borderedProminent)
                         }
                     }
                 }
             }
             .padding()
             .navigationTitle("RNode")
+            .toolbar {
+                if bluetooth.connectedDeviceID != nil {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink {
+                            MessagesView(bluetooth: bluetooth)
+                        } label: {
+                            Image(systemName: "message.fill")
+                        }
+                    }
+                }
+            }
             .confirmationDialog(
                 "Restart RNode?",
                 isPresented: $showRestartConfirmation,

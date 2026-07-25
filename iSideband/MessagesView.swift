@@ -1,56 +1,152 @@
 import SwiftUI
 
+struct ChatMessage: Identifiable {
+    let id = UUID()
+    let text: String
+    let date: Date
+    let isOutgoing: Bool
+}
+
 struct MessagesView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
+    @State private var messageText = ""
+    @State private var messages: [ChatMessage] = []
+
     var body: some View {
-        NavigationStack {
-            List {
-                NavigationLink {
-                    ChatView(
-                        bluetooth: bluetooth,
-                        title: "Broadcast"
-                    )
-                } label: {
-                    Label(
-                        "Broadcast",
-                        systemImage: "dot.radiowaves.left.and.right"
-                    )
+        VStack(spacing: 0) {
+            if messages.isEmpty {
+                Spacer()
+
+                VStack(spacing: 12) {
+                    Image(systemName: "message")
+                        .font(.system(size: 44))
+                        .foregroundStyle(.secondary)
+
+                    Text("No Messages")
+                        .font(.title2.bold())
+
+                    Text("Messages sent here are currently raw radio-data tests.")
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal)
                 }
 
-                NavigationLink {
-                    ChatView(
-                        bluetooth: bluetooth,
-                        title: "Camp Node"
-                    )
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text("Camp Node")
-                            .font(.headline)
-
-                        Text("Last heard • Just now")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                Spacer()
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 10) {
+                        ForEach(messages) { message in
+                            messageBubble(message)
+                        }
                     }
-                }
-
-                NavigationLink {
-                    ChatView(
-                        bluetooth: bluetooth,
-                        title: "Test Node"
-                    )
-                } label: {
-                    VStack(alignment: .leading) {
-                        Text("Test Node")
-                            .font(.headline)
-
-                        Text("Offline")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
+                    .padding()
                 }
             }
-            .navigationTitle("Messages")
+
+            Divider()
+
+            HStack(alignment: .bottom, spacing: 10) {
+                TextField(
+                    "Message",
+                    text: $messageText,
+                    axis: .vertical
+                )
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(1...5)
+
+                Button {
+                    sendMessage()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 30))
+                }
+                .disabled(
+                    messageText.trimmingCharacters(
+                        in: .whitespacesAndNewlines
+                    ).isEmpty
+                )
+            }
+            .padding()
         }
+        .navigationTitle("Messages")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func sendMessage() {
+        let trimmed = messageText.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
+        guard !trimmed.isEmpty else {
+            return
+        }
+
+        bluetooth.sendMessage(trimmed)
+
+        messages.append(
+            ChatMessage(
+                text: trimmed,
+                date: Date(),
+                isOutgoing: true
+            )
+        )
+
+        messageText = ""
+    }
+
+    private func messageBubble(
+        _ message: ChatMessage
+    ) -> some View {
+        HStack {
+            if message.isOutgoing {
+                Spacer()
+            }
+
+            VStack(
+                alignment: message.isOutgoing
+                    ? .trailing
+                    : .leading,
+                spacing: 4
+            ) {
+                Text(message.text)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(
+                        message.isOutgoing
+                            ? Color.accentColor
+                            : Color.secondary.opacity(0.2)
+                    )
+                    .foregroundStyle(
+                        message.isOutgoing
+                            ? .white
+                            : .primary
+                    )
+                    .clipShape(
+                        RoundedRectangle(cornerRadius: 18)
+                    )
+
+                Text(
+                    message.date.formatted(
+                        date: .omitted,
+                        time: .shortened
+                    )
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            if !message.isOutgoing {
+                Spacer()
+            }
+        }
+    }
+}
+
+#Preview {
+    NavigationStack {
+        MessagesView(
+            bluetooth: BluetoothManager()
+        )
     }
 }
