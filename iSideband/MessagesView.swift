@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct ChatMessage: Identifiable {
+struct ChatMessage: Identifiable, Codable {
     let id = UUID()
     let text: String
     let date: Date
