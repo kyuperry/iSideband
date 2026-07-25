@@ -8,6 +8,8 @@ struct ConversationsView: View {
     @State private var showCreateGroup = false
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
+    @State private var groups: [GroupConversation] = []
+    
     
     var body: some View {
         VStack(spacing: 0) {
@@ -129,8 +131,20 @@ struct ConversationsView: View {
                     
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Create") {
+                            let trimmedName = groupName.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            )
+
+                            let newGroup = GroupConversation(
+                                name: trimmedName,
+                                systemImage: selectedGroupIcon
+                            )
+
+                            groups.append(newGroup)
                             selectedTab = .groups
                             showCreateGroup = false
+                            groupName = ""
+                            selectedGroupIcon = "person.3.fill"
                         }
                         .disabled(
                             groupName.trimmingCharacters(
@@ -186,11 +200,48 @@ struct ConversationsView: View {
     }
     
     private var groupConversations: some View {
-        emptyState(
-            systemImage: "person.3",
-            title: "No Groups",
-            message: "Group conversations will appear here after you create or join one."
-        )
+        Group {
+            if groups.isEmpty {
+                emptyState(
+                    systemImage: "person.3.fill",
+                    title: "No Groups",
+                    message: "Create a group to start messaging."
+                )
+            } else {
+                List(groups) { group in
+                    NavigationLink {
+                        MessagesView(
+                            bluetooth: bluetooth
+                        )
+                    } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: group.systemImage)
+                                .font(.title2)
+                                .frame(width: 44, height: 44)
+                                .background {
+                                    Circle()
+                                        .fill(
+                                            Color.accentColor.opacity(0.15)
+                                        )
+                                }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(group.name)
+                                    .font(.headline)
+
+                                Text("No messages yet")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+                .listStyle(.plain)
+            }
+        }
     }
     
     private func groupIconButton(
@@ -277,6 +328,12 @@ struct ConversationsView: View {
 private enum ConversationTab {
     case direct
     case groups
+}
+
+struct GroupConversation: Identifiable {
+    let id = UUID()
+    let name: String
+    let systemImage: String
 }
 
 #Preview {
