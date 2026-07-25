@@ -1,20 +1,67 @@
 import SwiftUI
+import PhotosUI
+import UniformTypeIdentifiers
+import UIKit
 
-struct ChatMessage: Identifiable, Codable {
-    let id = UUID()
+enum DirectMessageType: String, Codable, Hashable {
+    case text
+    case photo
+    case file
+}
+
+struct ChatMessage: Identifiable, Codable, Hashable {
+    let id: UUID
     let text: String
     let date: Date
     let isOutgoing: Bool
     let status: String?
+
+    let type: DirectMessageType
+    let attachmentName: String?
+    let attachmentPath: String?
+    let attachmentSize: Int?
+
+    init(
+        id: UUID = UUID(),
+        text: String,
+        date: Date = Date(),
+        isOutgoing: Bool,
+        status: String? = nil,
+        type: DirectMessageType = .text,
+        attachmentName: String? = nil,
+        attachmentPath: String? = nil,
+        attachmentSize: Int? = nil
+    ) {
+        self.id = id
+        self.text = text
+        self.date = date
+        self.isOutgoing = isOutgoing
+        self.status = status
+        self.type = type
+        self.attachmentName = attachmentName
+        self.attachmentPath = attachmentPath
+        self.attachmentSize = attachmentSize
+    }
 }
 
 struct MessagesView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
     @State private var messageText = ""
-    @State private var messages: [ChatMessage] = []
+    @State private var messages: [ChatMessage]
+
     @State private var showingAttachmentMenu = false
-    
+    @State private var showingPhotoPicker = false
+    @State private var showingFilePicker = false
+    @State private var selectedPhoto: PhotosPickerItem?
+
+    init(bluetooth: BluetoothManager) {
+        self.bluetooth = bluetooth
+
+        _messages = State(
+            initialValue: Self.loadMessages()
+        )
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,10 +76,12 @@ struct MessagesView: View {
                     Text("No Messages")
                         .font(.title2.bold())
 
-                    Text("Messages sent here are currently raw radio-data tests.")
-                        .multilineTextAlignment(.center)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal)
+                    Text(
+                        "Messages sent here are currently raw radio-data tests."
+                    )
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal)
                 }
 
                 Spacer()
@@ -42,6 +91,25 @@ struct MessagesView: View {
                         LazyVStack(spacing: 10) {
                             ForEach(messages) { message in
                                 messageBubble(message)
+                                    .contextMenu {
+                                        Button {
+                                            copyMessage(message)
+                                        } label: {
+                                            Label(
+                                                "Copy",
+                                                systemImage: "doc.on.doc"
+                                            )
+                                        }
+
+                                        Button(role: .destructive) {
+                                            deleteMessage(message)
+                                        } label: {
+                                            Label(
+                                                "Delete",
+                                                systemImage: "trash"
+                                            )
+                                        }
+                                    }
                             }
 
                             Color.clear
@@ -52,7 +120,10 @@ struct MessagesView: View {
                     }
                     .onChange(of: messages.count) {
                         withAnimation {
-                            proxy.scrollTo("BOTTOM", anchor: .bottom)
+                            proxy.scrollTo(
+                                "BOTTOM",
+                                anchor: .bottom
+                            )
                         }
                     }
                 }
@@ -60,54 +131,7 @@ struct MessagesView: View {
 
             Divider()
 
-            HStack(alignment: .bottom, spacing: 10) {
-                
-                Button {
-                    showingAttachmentMenu = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 42, height: 42)
-                        .background(
-                            Circle()
-                                .fill(Color.secondary.opacity(0.15))
-                        )
-                }
-                .buttonStyle(.plain)
-                TextField(
-                    "Message",
-                    text: $messageText,
-                    axis: .vertical
-                )
-                .textFieldStyle(.roundedBorder)
-                .lineLimit(1...5)
-
-                Button {
-                    sendMessage()
-                } label: {
-                    Image(systemName: "arrow.up")
-                        .font(.headline.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 42, height: 42)
-                        .background(
-                            Circle()
-                                .fill(
-                                    messageText.trimmingCharacters(
-                                        in: .whitespacesAndNewlines
-                                    ).isEmpty
-                                    ? Color.gray.opacity(0.35)
-                                    : Color.accentColor
-                                )
-                        )
-                }
-                .disabled(
-                    messageText.trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    ).isEmpty
-                )
-            }
-            .padding()
+            messageComposer
         }
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
@@ -117,16 +141,15 @@ struct MessagesView: View {
             titleVisibility: .visible
         ) {
             Button("Choose Photo") {
-                print("Choose Photo selected")
-            }
-
-            Button("Take Photo") {
-                print("Take Photo selected")
+                showingPhotoPicker = true
             }
 
             Button("Choose File") {
-                print("Choose File selected")
+                showingFilePicker = true
             }
+
+            Button("Take Photo — Coming Soon") { }
+                .disabled(true)
 
             Button("Voice Note — Coming Soon") { }
                 .disabled(true)
@@ -136,6 +159,41 @@ struct MessagesView: View {
 
             Button("Cancel", role: .cancel) { }
         }
+        .photosPicker(
+            isPresented: $showingPhotoPicker,
+            selection: $selectedPhoto,
+            matching: .images
+        )
+        .fileImporter(
+            isPresented: $showingFilePicker,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            handleSelectedFile(result)
+        }
+        .onChange(of: selectedPhoto) {
+            handleSelectedPhoto()
+        }
+        .onChange(of: messages) {
+            saveMessages()
+        }
+    }
+
+    private var messageComposer: some View {
+        MessageComposer(
+            messageText: $messageText,
+            onAttachmentTapped: {
+                showingAttachmentMenu = true
+            },
+            onSendTapped: {
+                sendMessage()
+            }
+        )
+    }
+    private var canSendMessage: Bool {
+        !messageText.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ).isEmpty
     }
 
     private func sendMessage() {
@@ -152,7 +210,6 @@ struct MessagesView: View {
         messages.append(
             ChatMessage(
                 text: trimmed,
-                date: Date(),
                 isOutgoing: true,
                 status: "Sent to RNode"
             )
@@ -160,59 +217,262 @@ struct MessagesView: View {
 
         messageText = ""
     }
-
+    @ViewBuilder
     private func messageBubble(
         _ message: ChatMessage
     ) -> some View {
-        HStack {
-            if message.isOutgoing {
-                Spacer()
-            }
+        MessageBubble(
+            text: message.text,
+            date: message.date,
+            isOutgoing: message.isOutgoing,
+            status: message.status,
+            isPhoto: message.type == .photo,
+            isFile: message.type == .file,
+            attachmentName: message.attachmentName,
+            attachmentPath: message.attachmentPath,
+            attachmentSize: message.attachmentSize
+        )
+    }
 
-            VStack(
-                alignment: message.isOutgoing
-                    ? .trailing
-                    : .leading,
-                spacing: 4
-            ) {
-                Text(message.text)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(
-                        message.isOutgoing
-                            ? Color.accentColor
-                            : Color.secondary.opacity(0.2)
-                    )
-                    .foregroundStyle(
-                        message.isOutgoing
-                            ? .white
-                            : .primary
-                    )
-                    .clipShape(
-                        RoundedRectangle(cornerRadius: 18)
-                    )
+    private func handleSelectedPhoto() {
+        guard let selectedPhoto else {
+            return
+        }
 
-                HStack(spacing: 5) {
-                    Text(
-                        message.date.formatted(
-                            date: .omitted,
-                            time: .shortened
-                        )
-                    )
-
-                    if let status = message.status {
-                        Text("•")
-                        Text(status)
-                    }
+        Task {
+            guard
+                let originalData = try? await selectedPhoto
+                    .loadTransferable(type: Data.self),
+                let originalImage = UIImage(data: originalData),
+                let photoData = originalImage.jpegData(
+                    compressionQuality: 0.8
+                ),
+                let savedURL = savePhotoToDisk(photoData)
+            else {
+                await MainActor.run {
+                    self.selectedPhoto = nil
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+
+                return
             }
 
-            if !message.isOutgoing {
-                Spacer()
+            await MainActor.run {
+                messages.append(
+                    ChatMessage(
+                        text: "",
+                        isOutgoing: true,
+                        status: "Saved locally",
+                        type: .photo,
+                        attachmentName:
+                            savedURL.lastPathComponent,
+                        attachmentPath: savedURL.path,
+                        attachmentSize: photoData.count
+                    )
+                )
+
+                self.selectedPhoto = nil
             }
         }
+    }
+
+    private func handleSelectedFile(
+        _ result: Result<[URL], Error>
+    ) {
+        guard
+            case .success(let urls) = result,
+            let sourceURL = urls.first
+        else {
+            return
+        }
+
+        let hasAccess =
+            sourceURL.startAccessingSecurityScopedResource()
+
+        defer {
+            if hasAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        guard let savedURL = saveFileToDisk(
+            from: sourceURL
+        ) else {
+            return
+        }
+
+        let attributes = try? FileManager.default
+            .attributesOfItem(
+                atPath: savedURL.path
+            )
+
+        let fileSize = (
+            attributes?[.size] as? NSNumber
+        )?.intValue
+
+        messages.append(
+            ChatMessage(
+                text: "",
+                isOutgoing: true,
+                status: "Saved locally",
+                type: .file,
+                attachmentName: sourceURL.lastPathComponent,
+                attachmentPath: savedURL.path,
+                attachmentSize: fileSize
+            )
+        )
+    }
+
+    private func copyMessage(
+        _ message: ChatMessage
+    ) {
+        if message.type == .photo,
+           let path = message.attachmentPath,
+           let image = UIImage(contentsOfFile: path) {
+            UIPasteboard.general.image = image
+            return
+        }
+
+        if message.type == .file {
+            UIPasteboard.general.string =
+                message.attachmentName ?? "Attachment"
+            return
+        }
+
+        UIPasteboard.general.string = message.text
+    }
+
+    private func deleteMessage(
+        _ message: ChatMessage
+    ) {
+        if let attachmentPath = message.attachmentPath {
+            try? FileManager.default.removeItem(
+                atPath: attachmentPath
+            )
+        }
+
+        messages.removeAll {
+            $0.id == message.id
+        }
+    }
+
+    private func savePhotoToDisk(
+        _ data: Data
+    ) -> URL? {
+        let fileManager = FileManager.default
+
+        guard let documentsDirectory = fileManager.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first else {
+            return nil
+        }
+
+        let directory = documentsDirectory
+            .appendingPathComponent(
+                "DirectAttachments",
+                isDirectory: true
+            )
+
+        do {
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            let fileURL = directory
+                .appendingPathComponent(
+                    "\(UUID().uuidString).jpg"
+                )
+
+            try data.write(
+                to: fileURL,
+                options: .atomic
+            )
+
+            return fileURL
+        } catch {
+            print(
+                "Could not save direct photo: \(error)"
+            )
+
+            return nil
+        }
+    }
+
+    private func saveFileToDisk(
+        from sourceURL: URL
+    ) -> URL? {
+        let fileManager = FileManager.default
+
+        guard let documentsDirectory = fileManager.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first else {
+            return nil
+        }
+
+        let directory = documentsDirectory
+            .appendingPathComponent(
+                "DirectAttachments",
+                isDirectory: true
+            )
+
+        do {
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            let destinationURL = directory
+                .appendingPathComponent(
+                    "\(UUID().uuidString)-\(sourceURL.lastPathComponent)"
+                )
+
+            try fileManager.copyItem(
+                at: sourceURL,
+                to: destinationURL
+            )
+
+            return destinationURL
+        } catch {
+            print(
+                "Could not save direct file: \(error)"
+            )
+
+            return nil
+        }
+    }
+
+    private static let storageKey =
+        "savedDirectMessages"
+
+    private static func loadMessages() -> [ChatMessage] {
+        guard
+            let data = UserDefaults.standard.data(
+                forKey: storageKey
+            ),
+            let savedMessages = try? JSONDecoder().decode(
+                [ChatMessage].self,
+                from: data
+            )
+        else {
+            return []
+        }
+
+        return savedMessages
+    }
+
+    private func saveMessages() {
+        guard let data = try? JSONEncoder().encode(
+            messages
+        ) else {
+            return
+        }
+
+        UserDefaults.standard.set(
+            data,
+            forKey: Self.storageKey
+        )
     }
 }
 
