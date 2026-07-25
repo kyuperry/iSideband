@@ -9,9 +9,16 @@ import SwiftUI
 
 @main
 struct iSidebandApp: App {
+    @StateObject private var lxmfManager =
+        LXMFManager.shared
+
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(lxmfManager)
+                .task {
+                    lxmfManager.start()
+                }
         }
     }
 }

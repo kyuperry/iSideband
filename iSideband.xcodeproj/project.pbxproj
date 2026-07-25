@@ -8,6 +8,7 @@
 
 /* Begin PBXFileReference section */
 		0B11BCE6300DC37B00FC94FB /* iSideband.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iSideband.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		0BCE33C130154A54001470C4 /* Untitled.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Untitled.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -47,6 +48,7 @@
 			children = (
 				0B11BCE8300DC37B00FC94FB /* iSideband */,
 				0B11BCE7300DC37B00FC94FB /* Products */,
+				0BCE33C0301549EE001470C4 /* New Group */,
 			);
 			sourceTree = "<group>";
 		};
@@ -56,6 +58,14 @@
 				0B11BCE6300DC37B00FC94FB /* iSideband.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		0BCE33C0301549EE001470C4 /* New Group */ = {
+			isa = PBXGroup;
+			children = (
+				0BCE33C130154A54001470C4 /* Untitled.swift */,
+			);
+			path = "New Group";
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

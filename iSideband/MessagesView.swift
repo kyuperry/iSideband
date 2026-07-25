@@ -46,6 +46,8 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 
 struct MessagesView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @EnvironmentObject
+    private var lxmfManager: LXMFManager
 
     @State private var messageText = ""
     @State private var messages: [ChatMessage]
@@ -206,6 +208,16 @@ struct MessagesView: View {
         }
 
         bluetooth.sendMessage(trimmed)
+        let testPeer = LXMFPeer(
+            displayName: "Test Peer",
+            destinationHash:
+                "0123456789abcdef0123456789abcdef"
+        )
+
+        lxmfManager.send(
+            text: trimmed,
+            to: testPeer
+        )
 
         messages.append(
             ChatMessage(
