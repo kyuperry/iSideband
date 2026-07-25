@@ -4,35 +4,37 @@ struct ConversationsView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
     var body: some View {
-        NavigationStack {
-            List {
-                NavigationLink {
-                    ConversationsView(bluetooth: bluetooth)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "message.fill")
-                            .font(.title2)
-                            .foregroundStyle(.blue)
+        List {
+            NavigationLink {
+                MessagesView(bluetooth: bluetooth)
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "message.fill")
+                        .font(.title2)
+                        .foregroundStyle(.blue)
 
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Test Conversation")
-                                .font(.headline)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(
+                            bluetooth.connectedDeviceName
+                                ?? "Connected RNode"
+                        )
+                        .font(.headline)
 
-                            Text("Connected RNode")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Image(systemName: "chevron.right")
-                            .foregroundStyle(.tertiary)
+                        Text(
+                            bluetooth.connectedDeviceID == nil
+                                ? "Disconnected"
+                                : "Connected"
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 4)
+
+                    Spacer()
                 }
+                .padding(.vertical, 4)
             }
-            .navigationTitle("Messages")
         }
+        .navigationTitle("Messages")
     }
 }
 

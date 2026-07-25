@@ -47,7 +47,7 @@ struct ContentView: View {
                 if bluetooth.connectedDeviceID != nil {
                     ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink {
-                            MessagesView(bluetooth: bluetooth)
+                            ConversationsView(bluetooth: bluetooth)
                         } label: {
                             Image(systemName: "message.fill")
                         }
