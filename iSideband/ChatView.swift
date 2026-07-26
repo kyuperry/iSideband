@@ -80,8 +80,10 @@ struct ChatView: View {
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            lxmfManager.start()
-        }
+                lxmfManager.start(
+                    bluetooth: bluetooth
+                )
+            }
     }
 
     private var trimmedMessage: String {

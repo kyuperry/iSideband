@@ -13,13 +13,18 @@ final class LXMFManager: ObservableObject {
 
     private init() { }
 
-    func start() {
+    func start(
+        bluetooth: BluetoothManager
+    ) {
         print("Starting LXMF Manager")
 
         isConnected = true
         identityReady = true
 
-        service.start(manager: self)
+        service.start(
+            manager: self,
+            bluetooth: bluetooth
+        )
     }
 
     func stop() {

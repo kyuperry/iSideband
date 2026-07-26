@@ -140,6 +140,11 @@ struct MessagesView: View {
         }
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            lxmfManager.start(
+                bluetooth: bluetooth
+            )
+        }
         .confirmationDialog(
             "Add Attachment",
             isPresented: $showingAttachmentMenu,
@@ -252,13 +257,39 @@ struct MessagesView: View {
             text: message.text,
             date: message.date,
             isOutgoing: message.isOutgoing,
-            status: message.status,
+            status: displayStatus(for: message),
             isPhoto: message.type == .photo,
             isFile: message.type == .file,
             attachmentName: message.attachmentName,
             attachmentPath: message.attachmentPath,
             attachmentSize: message.attachmentSize
         )
+    }
+    private func displayStatus(
+        for message: ChatMessage
+    ) -> String? {
+        guard let lxmfMessageID = message.lxmfMessageID else {
+            return message.status
+        }
+
+        guard let queuedMessage = lxmfManager.outgoingMessages.first(
+            where: { $0.id == lxmfMessageID }
+        ) else {
+            return message.status
+        }
+
+        switch queuedMessage.status {
+        case .queued:
+            return "Queued"
+        case .sending:
+            return "Sending"
+        case .sent:
+            return "Sent"
+        case .delivered:
+            return "Delivered"
+        case .failed:
+            return "Failed"
+        }
     }
 
     private func handleSelectedPhoto() {

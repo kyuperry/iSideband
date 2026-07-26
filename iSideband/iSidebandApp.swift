@@ -9,15 +9,18 @@ import SwiftUI
 
 @main
 struct iSidebandApp: App {
-    @StateObject private var lxmfManager =
-        LXMFManager.shared
+
+    @StateObject private var lxmfManager = LXMFManager.shared
+    @StateObject private var bluetooth = BluetoothManager()
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environmentObject(lxmfManager)
                 .task {
-                    lxmfManager.start()
+                    lxmfManager.start(
+                        bluetooth: bluetooth
+                    )
                 }
         }
     }

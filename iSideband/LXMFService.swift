@@ -8,10 +8,15 @@ final class LXMFService: ObservableObject {
         "LXMF engine not initialized"
 
     private weak var manager: LXMFManager?
+    private weak var bluetooth: BluetoothManager?
     private var isProcessingQueue = false
 
-    func start(manager: LXMFManager) {
+    func start(
+        manager: LXMFManager,
+        bluetooth: BluetoothManager
+    ) {
         self.manager = manager
+        self.bluetooth = bluetooth
 
         isReady = true
         statusMessage = "LXMF service ready"
