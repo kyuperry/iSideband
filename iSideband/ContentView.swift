@@ -24,6 +24,8 @@ struct ContentView: View {
                 VStack(spacing: 12) {
                     scanButton
 
+                    SidebandIdentityImporter()
+
                     if bluetooth.connectedDeviceID != nil {
                         HStack(spacing: 12) {
                             Button("Restart RNode") {

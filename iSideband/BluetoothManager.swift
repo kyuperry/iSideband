@@ -19,6 +19,7 @@ final class BluetoothManager:
     private let packetDecoder = RNodePacketDecoder()
     private let packetRouter = RNodePacketRouter()
     private let frameAssembler = RNodeFrameAssembler()
+    private let reticulumDecoder = ReticulumPacketDecoder()
     
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
@@ -642,6 +643,22 @@ extension BluetoothManager: CBPeripheralDelegate {
                     
                     if packet.commandType == .data {
                         let payloadData = Data(packet.payload)
+
+                        do {
+                            let reticulumPacket =
+                                try reticulumDecoder.decode(payloadData)
+
+                            print("Reticulum packet received")
+                            print("Destination:", reticulumPacket.destinationHashHex)
+                            print("Type:", reticulumPacket.packetType)
+
+                            if reticulumPacket.isAnnounce {
+                                print("Announce packet detected")
+                            }
+
+                        } catch {
+                            print("Not a decoded Reticulum packet:", error)
+                        }
 
                         print(
                             "Radio data received:",

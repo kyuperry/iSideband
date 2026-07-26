@@ -2,7 +2,12 @@
 //  RNodePacketDecoder.swift
 //  iSideband
 //
-//  Created by Kyle Perry on 7/21/26.
-//
 
 import Foundation
+
+final class RNodePacketDecoder {
+
+    func decode(_ data: Data) -> RNodePacket {
+        RNodePacket(raw: data)
+    }
+}

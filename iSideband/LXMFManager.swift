@@ -16,6 +16,7 @@ final class LXMFManager: ObservableObject {
     func start(
         bluetooth: BluetoothManager
     ) {
+        ReticulumDecoderSelfTest.run()
         print("Starting LXMF Manager")
 
         isConnected = true
