@@ -20,6 +20,7 @@ final class BluetoothManager:
     private let packetRouter = RNodePacketRouter()
     private let frameAssembler = RNodeFrameAssembler()
     private let reticulumDecoder = ReticulumPacketDecoder()
+    private let announceDecoder = ReticulumAnnounceDecoder()
     
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
@@ -654,6 +655,29 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                             if reticulumPacket.isAnnounce {
                                 print("Announce packet detected")
+
+                                do {
+                                    let announce = try announceDecoder.decode(
+                                        reticulumPacket
+                                    )
+
+                                    ReticulumAnnounceStore.shared.save(
+                                        announce
+                                    )
+
+                                    print(
+                                        """
+                                        VALID RETICULUM ANNOUNCE RECEIVED
+                                        Destination: \(announce.destinationHashHex)
+                                        Name: \(announce.displayName ?? "Unknown")
+                                        """
+                                    )
+                                } catch {
+                                    print(
+                                        "Reticulum announce rejected:",
+                                        error.localizedDescription
+                                    )
+                                }
                             }
 
                         } catch {

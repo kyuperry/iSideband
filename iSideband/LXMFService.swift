@@ -10,6 +10,11 @@ final class LXMFService: ObservableObject {
     private weak var manager: LXMFManager?
     private weak var bluetooth: BluetoothManager?
     private var isProcessingQueue = false
+    private let announceEncoder =
+        ReticulumAnnounceEncoder()
+
+    private let packetEncoder =
+        ReticulumPacketEncoder()
 
     func start(
         manager: LXMFManager,
@@ -31,7 +36,71 @@ final class LXMFService: ObservableObject {
 
         print("LXMF Service stopped")
     }
+    func announceIdentity() {
+        guard isReady else {
+            statusMessage =
+                "Cannot announce: LXMF service is not ready"
 
+            print(statusMessage)
+            return
+        }
+
+        guard let bluetooth else {
+            statusMessage =
+                "Cannot announce: RNode is unavailable"
+
+            print(statusMessage)
+            return
+        }
+
+        do {
+            let identity =
+                try ReticulumIdentityStore.shared
+                    .loadOrCreateIdentity()
+
+            let encodedAnnounce =
+                try announceEncoder.encode(
+                    identity: identity,
+                    destinationName: "lxmf.delivery"
+                )
+
+            let packet =
+                try packetEncoder.encodeAnnouncePacket(
+                    destinationHash:
+                        encodedAnnounce.destinationHash,
+                    payload:
+                        encodedAnnounce.payload
+                )
+
+            bluetooth.sendRadioPayload(packet)
+
+            let destinationHex =
+                encodedAnnounce.destinationHash
+                    .map {
+                        String(format: "%02x", $0)
+                    }
+                    .joined()
+
+            statusMessage =
+                "Reticulum identity announced"
+
+            print(
+                """
+                RETICULUM ANNOUNCE TRANSMITTED
+                Destination: \(destinationHex)
+                Packet bytes: \(packet.count)
+                """
+            )
+        } catch {
+            statusMessage =
+                "Announce failed: \(error.localizedDescription)"
+
+            print(
+                "RETICULUM ANNOUNCE FAILED:",
+                error.localizedDescription
+            )
+        }
+    }
     func processQueue() {
         guard isReady else {
             print("LXMF queue blocked: service is not ready")

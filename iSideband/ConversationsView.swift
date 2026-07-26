@@ -151,12 +151,9 @@ struct ConversationsView: View {
     }
 
     private func announceIdentity() {
-        print(
-            """
-            RETICULUM ANNOUNCE BUTTON PRESSED
-            Real announce transmission is not implemented yet.
-            """
-        )
+        print("RETICULUM ANNOUNCE BUTTON PRESSED")
+
+        LXMFManager.shared.announceIdentity()
 
         showingAnnounceMessage = true
     }

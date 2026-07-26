@@ -58,7 +58,52 @@ struct ReticulumPacketEncoder {
 
         return bytes
     }
+    func encodeAnnouncePacket(
+        destinationHash: Data,
+        payload: Data
+    ) throws -> Data {
+        guard destinationHash.count ==
+                Self.destinationHashByteCount
+        else {
+            throw ReticulumEncodingError
+                .invalidDestinationHash
+        }
 
+        /*
+         Reticulum header flags:
+
+         Header type: normal        = 0
+         Context flag: unset        = 0
+         Transport type: broadcast = 0
+         Destination type: single  = 0
+         Packet type: announce     = 1
+
+         Combined flags byte: 0x01
+         */
+        let flags: UInt8 = 0x01
+        let hops: UInt8 = 0x00
+        let context = ReticulumPacketContext.none.rawValue
+
+        var packet = Data()
+        packet.append(flags)
+        packet.append(hops)
+        packet.append(destinationHash)
+        packet.append(context)
+        packet.append(payload)
+
+        print(
+            """
+            RETICULUM ANNOUNCE PACKET ENCODED
+            Destination: \(destinationHash.map {
+                String(format: "%02x", $0)
+            }.joined())
+            Payload bytes: \(payload.count)
+            Total bytes: \(packet.count)
+            """
+        )
+
+        return packet
+    }
     func encodeLXMFMessage(
         text: String,
         destinationHash: String
