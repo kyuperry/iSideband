@@ -6,6 +6,7 @@ struct ConversationsView: View {
     @State private var selectedTab: ConversationTab = .direct
     @State private var showCreateGroup = false
     @State private var showAddLXMFContact = false
+    @State private var showingAnnounceMessage = false
 
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
@@ -28,52 +29,38 @@ struct ConversationsView: View {
         .safeAreaInset(edge: .bottom) {
             conversationTabBar
         }
+        .overlay(alignment: .bottomTrailing) {
+            floatingAddButton
+                .padding(.trailing, 20)
+                .padding(.bottom, 92)
+        }
         .navigationTitle("Messages")
         .toolbar {
             ToolbarItem(
                 placement: .topBarTrailing
             ) {
-                Menu {
-                    Button {
-                        selectedTab = .direct
-                    } label: {
-                        Label(
-                            "Start Direct Chat",
-                            systemImage: "person.fill"
-                        )
-                    }
-
-                    Button {
-                        showCreateGroup = true
-                    } label: {
-                        Label(
-                            "Create Group",
-                            systemImage: "person.3.fill"
-                        )
-                    }
-
-                    Button {
-                        showAddLXMFContact = true
-                    } label: {
-                        Label(
-                            "Add LXMF Contact",
-                            systemImage:
-                                "person.crop.circle.badge.plus"
-                        )
-                    }
-
-                    Button {
-                        print("QR scanner selected")
-                    } label: {
-                        Label(
-                            "Scan QR Code",
-                            systemImage: "qrcode.viewfinder"
-                        )
-                    }
+                Button {
+                    announceIdentity()
                 } label: {
-                    Image(systemName: "plus")
+                    Image(
+                        systemName:
+                            "dot.radiowaves.left.and.right"
+                    )
                 }
+                .accessibilityLabel("Announce")
             }
+        }
+        .alert(
+            "Announce",
+            isPresented: $showingAnnounceMessage
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(
+                """
+                The Announce button is ready. Real Reticulum announce transmission will be connected when the announce encoder is implemented.
+                """
+            )
         }
         .sheet(
             isPresented: $showCreateGroup
@@ -96,6 +83,82 @@ struct ConversationsView: View {
                 showAddLXMFContact = false
             }
         }
+    }
+
+    private var floatingAddButton: some View {
+        Menu {
+            Button {
+                selectedTab = .direct
+            } label: {
+                Label(
+                    "Start Direct Chat",
+                    systemImage: "person.fill"
+                )
+            }
+
+            Button {
+                showCreateGroup = true
+            } label: {
+                Label(
+                    "Create Group",
+                    systemImage: "person.3.fill"
+                )
+            }
+
+            Button {
+                showAddLXMFContact = true
+            } label: {
+                Label(
+                    "Add LXMF Contact",
+                    systemImage:
+                        "person.crop.circle.badge.plus"
+                )
+            }
+
+            Button {
+                print("QR scanner selected")
+            } label: {
+                Label(
+                    "Scan QR Code",
+                    systemImage: "qrcode.viewfinder"
+                )
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(
+                    .system(
+                        size: 24,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(.white)
+                .frame(
+                    width: 58,
+                    height: 58
+                )
+                .background {
+                    Circle()
+                        .fill(Color.accentColor)
+                }
+                .shadow(
+                    color: Color.black.opacity(0.3),
+                    radius: 8,
+                    x: 0,
+                    y: 4
+                )
+        }
+        .accessibilityLabel("New conversation")
+    }
+
+    private func announceIdentity() {
+        print(
+            """
+            RETICULUM ANNOUNCE BUTTON PRESSED
+            Real announce transmission is not implemented yet.
+            """
+        )
+
+        showingAnnounceMessage = true
     }
 
     private var conversationTabBar: some View {

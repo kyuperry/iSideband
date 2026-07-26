@@ -12,12 +12,17 @@ struct GroupChatView: View {
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var isShowingPhotoPicker = false
     @State private var isShowingFilePicker = false
+    @State private var isShowingCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var showVoiceMessageNotice = false
 
     init(group: GroupConversation) {
         self.group = group
 
         _messages = State(
-            initialValue: Self.loadMessages(for: group.id)
+            initialValue: Self.loadMessages(
+                for: group.id
+            )
         )
     }
 
@@ -33,7 +38,8 @@ struct GroupChatView: View {
                         messageBubble(for: message)
                             .contextMenu {
                                 Button {
-                                    UIPasteboard.general.string = message.text
+                                    UIPasteboard.general.string =
+                                        message.text
                                 } label: {
                                     Label(
                                         "Copy",
@@ -42,9 +48,7 @@ struct GroupChatView: View {
                                 }
 
                                 Button(role: .destructive) {
-                                    if let index = messages.firstIndex(of: message) {
-                                        messages.remove(at: index)
-                                    }
+                                    deleteMessage(message)
                                 } label: {
                                     Label(
                                         "Delete",
@@ -89,8 +93,29 @@ struct GroupChatView: View {
         ) { result in
             handleSelectedFile(result)
         }
+        .fullScreenCover(
+            isPresented: $isShowingCamera
+        ) {
+            GroupCameraPicker(
+                image: $capturedImage
+            )
+            .ignoresSafeArea()
+        }
         .onChange(of: selectedPhoto) {
             handleSelectedPhoto()
+        }
+        .onChange(of: capturedImage) {
+            handleCapturedImage()
+        }
+        .alert(
+            "Voice Message",
+            isPresented: $showVoiceMessageNotice
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(
+                "Voice recording will be connected next."
+            )
         }
     }
 
@@ -101,8 +126,17 @@ struct GroupChatView: View {
                     isShowingPhotoPicker = true
                 } label: {
                     Label(
-                        "Choose Photo",
+                        "Photo Library",
                         systemImage: "photo"
+                    )
+                }
+
+                Button {
+                    isShowingCamera = true
+                } label: {
+                    Label(
+                        "Take Photo",
+                        systemImage: "camera"
                     )
                 }
 
@@ -114,6 +148,15 @@ struct GroupChatView: View {
                         systemImage: "doc"
                     )
                 }
+
+                Button {
+                    showVoiceMessageNotice = true
+                } label: {
+                    Label(
+                        "Voice Message",
+                        systemImage: "mic.fill"
+                    )
+                }
             } label: {
                 Image(systemName: "plus")
                     .font(
@@ -122,12 +165,16 @@ struct GroupChatView: View {
                             weight: .semibold
                         )
                     )
-                    .frame(width: 38, height: 38)
+                    .foregroundStyle(.primary)
+                    .frame(width: 42, height: 42)
                     .background(
-                        Color.gray.opacity(0.15)
+                        Circle()
+                            .fill(
+                                Color.secondary.opacity(0.15)
+                            )
                     )
-                    .clipShape(Circle())
             }
+            .buttonStyle(.plain)
 
             TextField(
                 "Type a message…",
@@ -138,7 +185,7 @@ struct GroupChatView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                Color.gray.opacity(0.12)
+                Color.secondary.opacity(0.12)
             )
             .clipShape(
                 RoundedRectangle(
@@ -158,13 +205,15 @@ struct GroupChatView: View {
                         )
                     )
                     .foregroundStyle(.white)
-                    .frame(width: 38, height: 38)
+                    .frame(width: 42, height: 42)
                     .background(
-                        canSendMessage
-                            ? Color.accentColor
-                            : Color.gray
+                        Circle()
+                            .fill(
+                                canSendMessage
+                                ? Color.accentColor
+                                : Color.gray.opacity(0.4)
+                            )
                     )
-                    .clipShape(Circle())
             }
             .disabled(!canSendMessage)
         }
@@ -186,7 +235,9 @@ struct GroupChatView: View {
             text: message.text,
             date: Date(),
             isOutgoing: message.isMine,
-            status: String(describing: message.status),
+            status: String(
+                describing: message.status
+            ),
             isPhoto: message.type == .photo,
             isFile: message.type == .file,
             attachmentName: message.attachmentName,
@@ -212,17 +263,20 @@ struct GroupChatView: View {
         )
 
         draft = ""
+    }
 
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + 1
-        ) {
-            messages.append(
-                Message(
-                    text: "Received: \(text)",
-                    isMine: false
-                )
+    private func deleteMessage(
+        _ message: Message
+    ) {
+        guard
+            let index = messages.firstIndex(
+                of: message
             )
+        else {
+            return
         }
+
+        messages.remove(at: index)
     }
 
     private func handleSelectedPhoto() {
@@ -240,7 +294,9 @@ struct GroupChatView: View {
                 let photoData = originalImage.jpegData(
                     compressionQuality: 0.8
                 ),
-                let savedURL = savePhotoToDisk(photoData)
+                let savedURL = savePhotoToDisk(
+                    photoData
+                )
             else {
                 await MainActor.run {
                     self.selectedPhoto = nil
@@ -250,21 +306,51 @@ struct GroupChatView: View {
             }
 
             await MainActor.run {
-                messages.append(
-                    Message(
-                        text: "",
-                        isMine: true,
-                        type: .photo,
-                        attachmentName:
-                            savedURL.lastPathComponent,
-                        attachmentPath: savedURL.path,
-                        attachmentSize: photoData.count
-                    )
+                appendPhotoMessage(
+                    url: savedURL,
+                    size: photoData.count
                 )
 
                 self.selectedPhoto = nil
             }
         }
+    }
+
+    private func handleCapturedImage() {
+        guard
+            let capturedImage,
+            let photoData = capturedImage.jpegData(
+                compressionQuality: 0.8
+            ),
+            let savedURL = savePhotoToDisk(
+                photoData
+            )
+        else {
+            return
+        }
+
+        appendPhotoMessage(
+            url: savedURL,
+            size: photoData.count
+        )
+
+        self.capturedImage = nil
+    }
+
+    private func appendPhotoMessage(
+        url: URL,
+        size: Int
+    ) {
+        messages.append(
+            Message(
+                text: "",
+                isMine: true,
+                type: .photo,
+                attachmentName: url.lastPathComponent,
+                attachmentPath: url.path,
+                attachmentSize: size
+            )
+        )
     }
 
     private func handleSelectedFile(
@@ -278,11 +364,13 @@ struct GroupChatView: View {
         }
 
         let hasAccess =
-            sourceURL.startAccessingSecurityScopedResource()
+            sourceURL
+                .startAccessingSecurityScopedResource()
 
         defer {
             if hasAccess {
-                sourceURL.stopAccessingSecurityScopedResource()
+                sourceURL
+                    .stopAccessingSecurityScopedResource()
             }
         }
 
@@ -294,10 +382,14 @@ struct GroupChatView: View {
             return
         }
 
-        let fileSize = try? FileManager.default
-            .attributesOfItem(
-                atPath: savedURL.path
-            )[.size] as? Int
+        let attributes =
+            try? FileManager.default
+                .attributesOfItem(
+                    atPath: savedURL.path
+                )
+
+        let fileSize =
+            attributes?[.size] as? Int
 
         messages.append(
             Message(
@@ -306,7 +398,7 @@ struct GroupChatView: View {
                 type: .file,
                 attachmentName: savedURL.lastPathComponent,
                 attachmentPath: savedURL.path,
-                attachmentSize: fileSize ?? nil
+                attachmentSize: fileSize
             )
         )
     }
@@ -338,12 +430,9 @@ struct GroupChatView: View {
                 withIntermediateDirectories: true
             )
 
-            let filename =
-                "\(UUID().uuidString).jpg"
-
             let fileURL =
                 attachmentsDirectory.appendingPathComponent(
-                    filename
+                    "\(UUID().uuidString).jpg"
                 )
 
             try data.write(
@@ -436,7 +525,9 @@ struct GroupChatView: View {
     ) -> [Message] {
         guard
             let data = UserDefaults.standard.data(
-                forKey: storageKey(for: groupID)
+                forKey: storageKey(
+                    for: groupID
+                )
             ),
             let savedMessages =
                 try? JSONDecoder().decode(
@@ -465,5 +556,62 @@ struct GroupChatView: View {
                 for: group.id
             )
         )
+    }
+}
+
+private struct GroupCameraPicker:
+    UIViewControllerRepresentable {
+
+    @Binding var image: UIImage?
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeUIViewController(
+        context: Context
+    ) -> UIImagePickerController {
+        let picker = UIImagePickerController()
+
+        picker.sourceType = .camera
+        picker.delegate = context.coordinator
+        picker.allowsEditing = false
+
+        return picker
+    }
+
+    func updateUIViewController(
+        _ uiViewController: UIImagePickerController,
+        context: Context
+    ) {}
+
+    final class Coordinator:
+        NSObject,
+        UINavigationControllerDelegate,
+        UIImagePickerControllerDelegate {
+
+        let parent: GroupCameraPicker
+
+        init(parent: GroupCameraPicker) {
+            self.parent = parent
+        }
+
+        func imagePickerController(
+            _ picker: UIImagePickerController,
+            didFinishPickingMediaWithInfo info:
+                [UIImagePickerController.InfoKey: Any]
+        ) {
+            parent.image =
+                info[.originalImage] as? UIImage
+
+            parent.dismiss()
+        }
+
+        func imagePickerControllerDidCancel(
+            _ picker: UIImagePickerController
+        ) {
+            parent.dismiss()
+        }
     }
 }

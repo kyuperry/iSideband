@@ -49,6 +49,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 
 struct MessagesView: View {
     @ObservedObject var bluetooth: BluetoothManager
+
     @EnvironmentObject
     private var lxmfManager: LXMFManager
 
@@ -58,7 +59,11 @@ struct MessagesView: View {
     @State private var showingAttachmentMenu = false
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
+    @State private var showingVoiceMessageNotice = false
+
     @State private var selectedPhoto: PhotosPickerItem?
+
+    @State private var showingAnnounceConfirmation = false
 
     init(bluetooth: BluetoothManager) {
         self.bluetooth = bluetooth
@@ -140,6 +145,48 @@ struct MessagesView: View {
         }
         .navigationTitle("Messages")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(
+                placement: .topBarTrailing
+            ) {
+                Button {
+                    sendAnnounce()
+                } label: {
+                    Label(
+                        "Announce",
+                        systemImage:
+                            "dot.radiowaves.left.and.right"
+                    )
+                }
+                .accessibilityHint(
+                    "Announce your iSideband identity"
+                )
+            }
+        }
+        .alert(
+            "Announce",
+            isPresented: $showingAnnounceConfirmation
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(
+                """
+                The Announce button is ready. Real Reticulum announce transmission will be connected when the announce encoder is implemented.
+                """
+            )
+        }
+        .alert(
+            "Voice Message",
+            isPresented: $showingVoiceMessageNotice
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(
+                """
+                Voice messaging has been added to the attachment menu. Microphone recording and LXMF audio transfer will be connected in the next step.
+                """
+            )
+        }
         .onAppear {
             lxmfManager.start(
                 bluetooth: bluetooth
@@ -150,18 +197,34 @@ struct MessagesView: View {
             isPresented: $showingAttachmentMenu,
             titleVisibility: .visible
         ) {
-            Button("Choose Photo") {
+            Button {
                 showingPhotoPicker = true
+            } label: {
+                Label(
+                    "Choose Photo",
+                    systemImage: "photo"
+                )
             }
 
-            Button("Choose File") {
+            Button {
                 showingFilePicker = true
+            } label: {
+                Label(
+                    "Choose File",
+                    systemImage: "doc"
+                )
+            }
+
+            Button {
+                showingVoiceMessageNotice = true
+            } label: {
+                Label(
+                    "Record Voice Message",
+                    systemImage: "mic.fill"
+                )
             }
 
             Button("Take Photo — Coming Soon") { }
-                .disabled(true)
-
-            Button("Voice Note — Coming Soon") { }
                 .disabled(true)
 
             Button("Share Location — Coming Soon") { }
@@ -200,6 +263,18 @@ struct MessagesView: View {
             }
         )
     }
+
+    private func sendAnnounce() {
+        print(
+            """
+            RETICULUM ANNOUNCE BUTTON PRESSED
+            Real announce transmission is not implemented yet.
+            """
+        )
+
+        showingAnnounceConfirmation = true
+    }
+
     private var canSendMessage: Bool {
         !messageText.trimmingCharacters(
             in: .whitespacesAndNewlines
@@ -215,7 +290,6 @@ struct MessagesView: View {
             return
         }
 
-        
         let testPeer = LXMFPeer(
             displayName: "Test Peer",
             destinationHash:
@@ -249,6 +323,7 @@ struct MessagesView: View {
 
         messageText = ""
     }
+
     @ViewBuilder
     private func messageBubble(
         _ message: ChatMessage
@@ -265,6 +340,7 @@ struct MessagesView: View {
             attachmentSize: message.attachmentSize
         )
     }
+
     private func displayStatus(
         for message: ChatMessage
     ) -> String? {
@@ -272,21 +348,29 @@ struct MessagesView: View {
             return message.status
         }
 
-        guard let queuedMessage = lxmfManager.outgoingMessages.first(
-            where: { $0.id == lxmfMessageID }
-        ) else {
+        guard let queuedMessage =
+                lxmfManager.outgoingMessages.first(
+                    where: {
+                        $0.id == lxmfMessageID
+                    }
+                )
+        else {
             return message.status
         }
 
         switch queuedMessage.status {
         case .queued:
             return "Queued"
+
         case .sending:
             return "Sending"
+
         case .sent:
             return "Sent"
+
         case .delivered:
             return "Delivered"
+
         case .failed:
             return "Failed"
         }
@@ -301,7 +385,9 @@ struct MessagesView: View {
             guard
                 let originalData = try? await selectedPhoto
                     .loadTransferable(type: Data.self),
-                let originalImage = UIImage(data: originalData),
+                let originalImage = UIImage(
+                    data: originalData
+                ),
                 let photoData = originalImage.jpegData(
                     compressionQuality: 0.8
                 ),
@@ -373,7 +459,8 @@ struct MessagesView: View {
                 isOutgoing: true,
                 status: "Saved locally",
                 type: .file,
-                attachmentName: sourceURL.lastPathComponent,
+                attachmentName:
+                    sourceURL.lastPathComponent,
                 attachmentPath: savedURL.path,
                 attachmentSize: fileSize
             )
@@ -385,7 +472,9 @@ struct MessagesView: View {
     ) {
         if message.type == .photo,
            let path = message.attachmentPath,
-           let image = UIImage(contentsOfFile: path) {
+           let image = UIImage(
+                contentsOfFile: path
+           ) {
             UIPasteboard.general.image = image
             return
         }
@@ -393,6 +482,7 @@ struct MessagesView: View {
         if message.type == .file {
             UIPasteboard.general.string =
                 message.attachmentName ?? "Attachment"
+
             return
         }
 
@@ -418,10 +508,12 @@ struct MessagesView: View {
     ) -> URL? {
         let fileManager = FileManager.default
 
-        guard let documentsDirectory = fileManager.urls(
-            for: .documentDirectory,
-            in: .userDomainMask
-        ).first else {
+        guard let documentsDirectory =
+                fileManager.urls(
+                    for: .documentDirectory,
+                    in: .userDomainMask
+                ).first
+        else {
             return nil
         }
 
@@ -462,10 +554,12 @@ struct MessagesView: View {
     ) -> URL? {
         let fileManager = FileManager.default
 
-        guard let documentsDirectory = fileManager.urls(
-            for: .documentDirectory,
-            in: .userDomainMask
-        ).first else {
+        guard let documentsDirectory =
+                fileManager.urls(
+                    for: .documentDirectory,
+                    in: .userDomainMask
+                ).first
+        else {
             return nil
         }
 
@@ -483,7 +577,10 @@ struct MessagesView: View {
 
             let destinationURL = directory
                 .appendingPathComponent(
-                    "\(UUID().uuidString)-\(sourceURL.lastPathComponent)"
+                    """
+                    \(UUID().uuidString)-\
+                    \(sourceURL.lastPathComponent)
+                    """
                 )
 
             try fileManager.copyItem(
@@ -538,6 +635,9 @@ struct MessagesView: View {
     NavigationStack {
         MessagesView(
             bluetooth: BluetoothManager()
+        )
+        .environmentObject(
+            LXMFManager.shared
         )
     }
 }
