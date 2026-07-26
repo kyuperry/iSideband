@@ -60,10 +60,11 @@ struct MessagesView: View {
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingVoiceMessageNotice = false
+    @State private var showingAnnounceConfirmation = false
+    @State private var announceButtonText = "Announce"
+    @State private var isSendingAnnounce = false
 
     @State private var selectedPhoto: PhotosPickerItem?
-
-    @State private var showingAnnounceConfirmation = false
 
     init(bluetooth: BluetoothManager) {
         self.bluetooth = bluetooth
@@ -153,11 +154,14 @@ struct MessagesView: View {
                     sendAnnounce()
                 } label: {
                     Label(
-                        "Announce",
+                        announceButtonText,
                         systemImage:
-                            "dot.radiowaves.left.and.right"
+                            isSendingAnnounce
+                            ? "antenna.radiowaves.left.and.right"
+                            : "dot.radiowaves.left.and.right"
                     )
                 }
+                .disabled(isSendingAnnounce)
                 .accessibilityHint(
                     "Announce your iSideband identity"
                 )
@@ -169,11 +173,7 @@ struct MessagesView: View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(
-                """
-                The Announce button is ready. Real Reticulum announce transmission will be connected when the announce encoder is implemented.
-                """
-            )
+            Text("Announcement sent.")
         }
         .alert(
             "Voice Message",
@@ -265,14 +265,36 @@ struct MessagesView: View {
     }
 
     private func sendAnnounce() {
-        print(
-            """
-            RETICULUM ANNOUNCE BUTTON PRESSED
-            Real announce transmission is not implemented yet.
-            """
-        )
+        guard !isSendingAnnounce else {
+            return
+        }
 
-        showingAnnounceConfirmation = true
+        print("RETICULUM ANNOUNCE BUTTON PRESSED")
+
+        isSendingAnnounce = true
+        announceButtonText = "Sending…"
+
+        lxmfManager.announceIdentity()
+
+        Task {
+            try? await Task.sleep(
+                for: .milliseconds(500)
+            )
+
+            await MainActor.run {
+                announceButtonText = "Announcement Sent"
+                showingAnnounceConfirmation = true
+            }
+
+            try? await Task.sleep(
+                for: .seconds(2)
+            )
+
+            await MainActor.run {
+                announceButtonText = "Announce"
+                isSendingAnnounce = false
+            }
+        }
     }
 
     private var canSendMessage: Bool {

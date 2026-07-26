@@ -56,11 +56,7 @@ struct ConversationsView: View {
         ) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text(
-                """
-                The Announce button is ready. Real Reticulum announce transmission will be connected when the announce encoder is implemented.
-                """
-            )
+            Text("Announcement sent.")
         }
         .sheet(
             isPresented: $showCreateGroup
@@ -152,8 +148,6 @@ struct ConversationsView: View {
 
     private func announceIdentity() {
         print("RETICULUM ANNOUNCE BUTTON PRESSED")
-
-        LXMFManager.shared.announceIdentity()
 
         showingAnnounceMessage = true
     }

@@ -1,15 +1,53 @@
 import Foundation
 import Combine
 
+enum LXMFAnnounceType {
+    case direct
+    case group
+
+    var destinationName: String {
+        switch self {
+        case .direct:
+            return "lxmf.delivery"
+
+        case .group:
+            return "lxmf.group"
+        }
+    }
+
+    var successMessage: String {
+        switch self {
+        case .direct:
+            return "Direct message announcement sent"
+
+        case .group:
+            return "Group message announcement sent"
+        }
+    }
+
+    var logName: String {
+        switch self {
+        case .direct:
+            return "DIRECT"
+
+        case .group:
+            return "GROUP"
+        }
+    }
+}
+
 @MainActor
 final class LXMFService: ObservableObject {
     @Published private(set) var isReady = false
+
     @Published private(set) var statusMessage =
         "LXMF engine not initialized"
 
     private weak var manager: LXMFManager?
     private weak var bluetooth: BluetoothManager?
+
     private var isProcessingQueue = false
+
     private let announceEncoder =
         ReticulumAnnounceEncoder()
 
@@ -36,6 +74,7 @@ final class LXMFService: ObservableObject {
 
         print("LXMF Service stopped")
     }
+
     func announceIdentity() {
         guard isReady else {
             statusMessage =
@@ -77,7 +116,10 @@ final class LXMFService: ObservableObject {
             let destinationHex =
                 encodedAnnounce.destinationHash
                     .map {
-                        String(format: "%02x", $0)
+                        String(
+                            format: "%02x",
+                            $0
+                        )
                     }
                     .joined()
 
@@ -87,6 +129,7 @@ final class LXMFService: ObservableObject {
             print(
                 """
                 RETICULUM ANNOUNCE TRANSMITTED
+                Destination name: lxmf.delivery
                 Destination: \(destinationHex)
                 Packet bytes: \(packet.count)
                 """
@@ -103,7 +146,9 @@ final class LXMFService: ObservableObject {
     }
     func processQueue() {
         guard isReady else {
-            print("LXMF queue blocked: service is not ready")
+            print(
+                "LXMF queue blocked: service is not ready"
+            )
             return
         }
 
@@ -111,14 +156,18 @@ final class LXMFService: ObservableObject {
             return
         }
 
-        guard let message = manager?.nextQueuedMessage() else {
+        guard let message =
+            manager?.nextQueuedMessage()
+        else {
             return
         }
 
         isProcessingQueue = true
 
         Task {
-            await transmitMessage(of: message)
+            await transmitMessage(
+                of: message
+            )
 
             isProcessingQueue = false
             processQueue()
@@ -132,15 +181,22 @@ final class LXMFService: ObservableObject {
             id: message.id,
             status: .sending
         )
+
         guard let bluetooth else {
             manager?.updateMessageStatus(
                 id: message.id,
                 status: .failed
             )
+
+            statusMessage =
+                "Message failed: RNode unavailable"
+
             return
         }
 
-        bluetooth.sendMessage(message.text)
+        bluetooth.sendMessage(
+            message.text
+        )
 
         statusMessage =
             "Sending message to \(message.peer.displayName)"

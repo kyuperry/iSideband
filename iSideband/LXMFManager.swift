@@ -81,6 +81,7 @@ final class LXMFManager: ObservableObject {
     func announceIdentity() {
         service.announceIdentity()
     }
+
     func nextQueuedMessage() -> LXMFOutgoingMessage? {
         outgoingMessages.first {
             $0.status == .queued
