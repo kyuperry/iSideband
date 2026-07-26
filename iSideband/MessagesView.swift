@@ -15,6 +15,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     let date: Date
     let isOutgoing: Bool
     let status: String?
+    let lxmfMessageID: UUID?
 
     let type: DirectMessageType
     let attachmentName: String?
@@ -27,6 +28,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         date: Date = Date(),
         isOutgoing: Bool,
         status: String? = nil,
+        lxmfMessageID: UUID? = nil,
         type: DirectMessageType = .text,
         attachmentName: String? = nil,
         attachmentPath: String? = nil,
@@ -37,6 +39,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         self.date = date
         self.isOutgoing = isOutgoing
         self.status = status
+        self.lxmfMessageID = lxmfMessageID
         self.type = type
         self.attachmentName = attachmentName
         self.attachmentPath = attachmentPath
@@ -214,16 +217,28 @@ struct MessagesView: View {
                 "0123456789abcdef0123456789abcdef"
         )
 
-        lxmfManager.send(
+        guard let queuedMessage = lxmfManager.send(
             text: trimmed,
             to: testPeer
-        )
+        ) else {
+            messages.append(
+                ChatMessage(
+                    text: trimmed,
+                    isOutgoing: true,
+                    status: "Failed"
+                )
+            )
+
+            messageText = ""
+            return
+        }
 
         messages.append(
             ChatMessage(
                 text: trimmed,
                 isOutgoing: true,
-                status: "Sent to RNode"
+                status: "Queued for LXMF",
+                lxmfMessageID: queuedMessage.id
             )
         )
 

@@ -2,7 +2,7 @@ import SwiftUI
 
 struct ChatView: View {
     @ObservedObject var bluetooth: BluetoothManager
-    @StateObject private var lxmf = LXMFService()
+    @ObservedObject private var lxmfManager = LXMFManager.shared
 
     let title: String
 
@@ -37,7 +37,7 @@ struct ChatView: View {
 
             HStack(spacing: 10) {
                 Button {
-                    // Attachment choices will be connected next.
+                    // Attachment choices will be connected later.
                 } label: {
                     Image(systemName: "plus")
                         .font(.headline.weight(.bold))
@@ -49,30 +49,12 @@ struct ChatView: View {
                         )
                 }
                 .buttonStyle(.plain)
+
                 TextField("Message", text: $message)
                     .textFieldStyle(.roundedBorder)
 
                 Button {
-                    let trimmedMessage = message.trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    )
-
-                    guard !trimmedMessage.isEmpty else {
-                        return
-                    }
-
-                    messages.append(
-                        Message(
-                            text: trimmedMessage,
-                            isMine: true
-                        )
-                    )
-
-                    lxmf.send(
-                        text: trimmedMessage,
-                        destination: title
-                    )
-                    message = ""
+                    sendMessage()
                 } label: {
                     Image(systemName: "arrow.up")
                         .font(.headline.weight(.bold))
@@ -81,28 +63,62 @@ struct ChatView: View {
                         .background(
                             Circle()
                                 .fill(
-                                    message.trimmingCharacters(
-                                        in: .whitespacesAndNewlines
-                                    ).isEmpty
+                                    trimmedMessage.isEmpty
                                     ? Color.gray.opacity(0.35)
                                     : Color.accentColor
                                 )
-                                .animation(.easeInOut(duration: 0.2), value: message)
+                                .animation(
+                                    .easeInOut(duration: 0.2),
+                                    value: message
+                                )
                         )
                 }
-                .disabled(
-                    message.trimmingCharacters(
-                        in: .whitespacesAndNewlines
-                    ).isEmpty
-                )
+                .disabled(trimmedMessage.isEmpty)
             }
             .padding()
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
-            lxmf.start()
+            lxmfManager.start()
         }
+    }
+
+    private var trimmedMessage: String {
+        message.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+    }
+
+    private func sendMessage() {
+        guard !trimmedMessage.isEmpty else {
+            return
+        }
+
+        let peer = LXMFPeer(
+            displayName: title,
+            destinationHash:
+                "0123456789abcdef0123456789abcdef"
+        )
+
+        guard let queuedMessage = lxmfManager.send(
+            text: trimmedMessage,
+            to: peer
+        ) else {
+            print("ChatView could not queue LXMF message")
+            return
+        }
+
+        _ = queuedMessage
+
+        messages.append(
+            Message(
+                text: trimmedMessage,
+                isMine: true
+            )
+        )
+
+        message = ""
     }
 
     private func messageBubble(
@@ -119,10 +135,12 @@ struct ChatView: View {
                 .padding(.vertical, 10)
                 .background(
                     isMine
-                        ? Color.accentColor
-                        : Color.secondary.opacity(0.15)
+                    ? Color.accentColor
+                    : Color.secondary.opacity(0.15)
                 )
-                .foregroundStyle(isMine ? .white : .primary)
+                .foregroundStyle(
+                    isMine ? .white : .primary
+                )
                 .clipShape(
                     RoundedRectangle(cornerRadius: 18)
                 )

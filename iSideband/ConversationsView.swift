@@ -4,10 +4,12 @@ struct ConversationsView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
     @State private var selectedTab: ConversationTab = .direct
-    @State private var showNewConversation = false
     @State private var showCreateGroup = false
+    @State private var showAddLXMFContact = false
+
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
+
     @State private var groups: [GroupConversation] =
         Self.loadGroups()
 
@@ -24,132 +26,169 @@ struct ConversationsView: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            HStack(spacing: 8) {
-                tabButton(
-                    title: "Direct",
-                    systemImage: "person.fill",
-                    tab: .direct
-                )
-
-                tabButton(
-                    title: "Groups",
-                    systemImage: "person.3.fill",
-                    tab: .groups
-                )
-            }
-            .padding(6)
-            .frame(maxWidth: 280)
-            .background(Material.ultraThin)
-            .clipShape(Capsule())
-            .overlay {
-                Capsule()
-                    .stroke(
-                        Color.secondary.opacity(0.2),
-                        lineWidth: 1
-                    )
-            }
-            .shadow(
-                color: Color.black.opacity(0.18),
-                radius: 10,
-                x: 0,
-                y: 4
-            )
-            .padding(.horizontal)
-            .padding(.top, 8)
-            .padding(.bottom, 6)
+            conversationTabBar
         }
         .navigationTitle("Messages")
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showNewConversation = true
+            ToolbarItem(
+                placement: .topBarTrailing
+            ) {
+                Menu {
+                    Button {
+                        selectedTab = .direct
+                    } label: {
+                        Label(
+                            "Start Direct Chat",
+                            systemImage: "person.fill"
+                        )
+                    }
+
+                    Button {
+                        showCreateGroup = true
+                    } label: {
+                        Label(
+                            "Create Group",
+                            systemImage: "person.3.fill"
+                        )
+                    }
+
+                    Button {
+                        showAddLXMFContact = true
+                    } label: {
+                        Label(
+                            "Add LXMF Contact",
+                            systemImage:
+                                "person.crop.circle.badge.plus"
+                        )
+                    }
+
+                    Button {
+                        print("QR scanner selected")
+                    } label: {
+                        Label(
+                            "Scan QR Code",
+                            systemImage: "qrcode.viewfinder"
+                        )
+                    }
                 } label: {
                     Image(systemName: "plus")
                 }
             }
         }
-        .confirmationDialog(
-            "New Conversation",
-            isPresented: $showNewConversation,
-            titleVisibility: .visible
+        .sheet(
+            isPresented: $showCreateGroup
         ) {
-            Button("Start Direct Chat") {
-                selectedTab = .direct
-            }
-
-            Button("Create Group") {
-                showCreateGroup = true
-            }
-
-            Button("Enter LXMF Address") {
-                print("LXMF address entry selected")
-            }
-
-            Button("Scan QR Code") {
-                print("QR scanner selected")
-            }
-
-            Button("Cancel", role: .cancel) { }
+            createGroupSheet
         }
-        .sheet(isPresented: $showCreateGroup) {
-            NavigationStack {
-                Form {
-                    Section("Group Name") {
-                        TextField(
-                            "Enter group name",
-                            text: $groupName
+        .navigationDestination(
+            isPresented: $showAddLXMFContact
+        ) {
+            AddLXMFContactView { contact in
+                print(
+                    """
+                    Saved LXMF Contact
+
+                    Name: \(contact.displayName)
+                    Destination: \(contact.destinationHash)
+                    """
+                )
+
+                showAddLXMFContact = false
+            }
+        }
+    }
+
+    private var conversationTabBar: some View {
+        HStack(spacing: 8) {
+            tabButton(
+                title: "Direct",
+                systemImage: "person.fill",
+                tab: .direct
+            )
+
+            tabButton(
+                title: "Groups",
+                systemImage: "person.3.fill",
+                tab: .groups
+            )
+        }
+        .padding(6)
+        .frame(maxWidth: 280)
+        .background(Material.ultraThin)
+        .clipShape(Capsule())
+        .overlay {
+            Capsule()
+                .stroke(
+                    Color.secondary.opacity(0.2),
+                    lineWidth: 1
+                )
+        }
+        .shadow(
+            color: Color.black.opacity(0.18),
+            radius: 10,
+            x: 0,
+            y: 4
+        )
+        .padding(.horizontal)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
+    }
+
+    private var createGroupSheet: some View {
+        NavigationStack {
+            Form {
+                Section("Group Name") {
+                    TextField(
+                        "Enter group name",
+                        text: $groupName
+                    )
+                }
+
+                Section("Icon") {
+                    HStack(spacing: 18) {
+                        groupIconButton(
+                            "person.3.fill"
                         )
-                    }
 
-                    Section("Icon") {
-                        HStack(spacing: 18) {
-                            groupIconButton(
-                                "person.3.fill"
-                            )
+                        groupIconButton(
+                            "antenna.radiowaves.left.and.right"
+                        )
 
-                            groupIconButton(
-                                "antenna.radiowaves.left.and.right"
-                            )
+                        groupIconButton(
+                            "tent.fill"
+                        )
 
-                            groupIconButton(
-                                "tent.fill"
-                            )
-
-                            groupIconButton(
-                                "star.fill"
-                            )
-                        }
-                    }
-
-                    Section("Members") {
-                        Text("No RNodes available yet")
-                            .foregroundStyle(.secondary)
+                        groupIconButton(
+                            "star.fill"
+                        )
                     }
                 }
-                .navigationTitle("Create Group")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(
-                        placement: .cancellationAction
-                    ) {
-                        Button("Cancel") {
-                            showCreateGroup = false
-                            groupName = ""
-                        }
-                    }
 
-                    ToolbarItem(
-                        placement: .confirmationAction
-                    ) {
-                        Button("Create") {
-                            createGroup()
-                        }
-                        .disabled(
-                            groupName.trimmingCharacters(
-                                in: .whitespacesAndNewlines
-                            ).isEmpty
-                        )
+                Section("Members") {
+                    Text("No RNodes available yet")
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Create Group")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(
+                    placement: .cancellationAction
+                ) {
+                    Button("Cancel") {
+                        cancelCreateGroup()
                     }
+                }
+
+                ToolbarItem(
+                    placement: .confirmationAction
+                ) {
+                    Button("Create") {
+                        createGroup()
+                    }
+                    .disabled(
+                        trimmedGroupName.isEmpty
+                    )
                 }
             }
         }
@@ -271,12 +310,12 @@ struct ConversationsView: View {
                             minWidth: 22,
                             minHeight: 22
                         )
-                        .background(
+                        .background {
                             Circle()
                                 .fill(
                                     Color.accentColor
                                 )
-                        )
+                        }
                     }
                 }
             }
@@ -291,16 +330,21 @@ struct ConversationsView: View {
             latestGroupPreview(for: group)
 
         return HStack(spacing: 14) {
-            Image(systemName: group.systemImage)
-                .font(.title2)
-                .frame(width: 44, height: 44)
-                .background {
-                    Circle()
-                        .fill(
-                            Color.accentColor
-                                .opacity(0.15)
-                        )
-                }
+            Image(
+                systemName: group.systemImage
+            )
+            .font(.title2)
+            .frame(
+                width: 44,
+                height: 44
+            )
+            .background {
+                Circle()
+                    .fill(
+                        Color.accentColor
+                            .opacity(0.15)
+                    )
+            }
 
             VStack(
                 alignment: .leading,
@@ -320,18 +364,25 @@ struct ConversationsView: View {
         .padding(.vertical, 4)
     }
 
-    private func createGroup() {
-        let trimmedName =
-            groupName.trimmingCharacters(
-                in: .whitespacesAndNewlines
-            )
+    private var trimmedGroupName: String {
+        groupName.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+    }
 
-        guard !trimmedName.isEmpty else {
+    private func cancelCreateGroup() {
+        showCreateGroup = false
+        groupName = ""
+        selectedGroupIcon = "person.3.fill"
+    }
+
+    private func createGroup() {
+        guard !trimmedGroupName.isEmpty else {
             return
         }
 
         let newGroup = GroupConversation(
-            name: trimmedName,
+            name: trimmedGroupName,
             systemImage: selectedGroupIcon
         )
 
@@ -352,7 +403,10 @@ struct ConversationsView: View {
         } label: {
             Image(systemName: systemImage)
                 .font(.title2)
-                .frame(width: 44, height: 44)
+                .frame(
+                    width: 44,
+                    height: 44
+                )
                 .background {
                     Circle()
                         .fill(
@@ -444,14 +498,18 @@ struct ConversationsView: View {
         date: Date
     ) {
         guard
-            let data = UserDefaults.standard.data(
-                forKey: "savedDirectMessages"
-            ),
-            let savedMessages = try? JSONDecoder().decode(
-                [ChatMessage].self,
-                from: data
-            ),
-            let latestMessage = savedMessages.last
+            let data =
+                UserDefaults.standard.data(
+                    forKey:
+                        "savedDirectMessages"
+                ),
+            let savedMessages =
+                try? JSONDecoder().decode(
+                    [ChatMessage].self,
+                    from: data
+                ),
+            let latestMessage =
+                savedMessages.last
         else {
             return (
                 "Ready for direct messaging",
@@ -487,12 +545,13 @@ struct ConversationsView: View {
             )
         }
     }
+
     private func latestGroupPreview(
         for group: GroupConversation
     ) -> String {
         let storageKey =
-        "savedGroupMessages_\(group.id.uuidString)"
-        
+            "savedGroupMessages_\(group.id.uuidString)"
+
         guard
             let data =
                 UserDefaults.standard.data(
@@ -508,7 +567,7 @@ struct ConversationsView: View {
         else {
             return "No messages yet"
         }
-        
+
         switch latestMessage.type {
         case .text:
             return latestMessage.text
@@ -517,13 +576,13 @@ struct ConversationsView: View {
             return "📷 Photo"
 
         case .file:
-            return "📄 \(latestMessage.attachmentName ?? "File")"
+            return
+                "📄 \(latestMessage.attachmentName ?? "File")"
 
         @unknown default:
             return "New message"
         }
-        }
-    
+    }
 
     private func tabButton(
         title: String,
