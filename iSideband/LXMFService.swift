@@ -49,20 +49,29 @@ final class LXMFService: ObservableObject {
         isProcessingQueue = true
 
         Task {
-            await simulateTransmission(of: message)
+            await transmitMessage(of: message)
 
             isProcessingQueue = false
             processQueue()
         }
     }
 
-    private func simulateTransmission(
+    private func transmitMessage(
         of message: LXMFOutgoingMessage
     ) async {
         manager?.updateMessageStatus(
             id: message.id,
             status: .sending
         )
+        guard let bluetooth else {
+            manager?.updateMessageStatus(
+                id: message.id,
+                status: .failed
+            )
+            return
+        }
+
+        bluetooth.sendMessage(message.text)
 
         statusMessage =
             "Sending message to \(message.peer.displayName)"
@@ -81,7 +90,7 @@ final class LXMFService: ObservableObject {
 
         print(
             """
-            LXMF SIMULATED TRANSMISSION COMPLETE
+            RADIO TRANSMISSION HANDED TO RNODE
             Destination: \(message.peer.destinationHash)
             Message: \(message.text)
             """

@@ -215,7 +215,7 @@ struct MessagesView: View {
             return
         }
 
-        bluetooth.sendMessage(trimmed)
+        
         let testPeer = LXMFPeer(
             displayName: "Test Peer",
             destinationHash:

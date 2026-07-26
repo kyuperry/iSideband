@@ -19,16 +19,16 @@ final class BluetoothManager:
     private let packetDecoder = RNodePacketDecoder()
     private let packetRouter = RNodePacketRouter()
     private let frameAssembler = RNodeFrameAssembler()
-
+    
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
     @Published private(set) var bluetoothState: CBManagerState = .unknown
-
+    
     @Published private(set) var connectedDeviceID: UUID?
     @Published private(set) var connectedDeviceName: String?
     @Published private(set) var connectingDeviceID: UUID?
     @Published private(set) var connectionMessage = "Not connected"
-
+    
     @Published private(set) var serviceCount = 0
     @Published private(set) var receivedData = Data()
     @Published var packetsReceived = 0
@@ -44,19 +44,19 @@ final class BluetoothManager:
     @Published var codingRate: Int?
     @Published var temperature: Double?
     @Published var radioReady = false
-
+    
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
-
+    
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
     private var hasSentLowBatteryNotification = false
-
+    
     override init() {
         super.init()
-
+        
         UNUserNotificationCenter.current().delegate = self
-
+        
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .sound, .badge]
         ) { granted, error in
@@ -69,7 +69,7 @@ final class BluetoothManager:
                 print("Notification permission granted: \(granted)")
             }
         }
-
+        
         centralManager = CBCentralManager(
             delegate: self,
             queue: nil
@@ -79,7 +79,7 @@ final class BluetoothManager:
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
         withCompletionHandler completionHandler:
-            @escaping (UNNotificationPresentationOptions) -> Void
+        @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         print("Foreground notification delegate called")
         completionHandler([.banner, .list, .sound])
@@ -89,11 +89,11 @@ final class BluetoothManager:
             connectionMessage = "Bluetooth is not ready"
             return
         }
-
+        
         devices.removeAll()
         isScanning = true
         connectionMessage = "Scanning for nearby devices…"
-
+        
         centralManager.scanForPeripherals(
             withServices: nil,
             options: [
@@ -101,38 +101,38 @@ final class BluetoothManager:
             ]
         )
     }
-
+    
     func stopScanning() {
         centralManager.stopScan()
         isScanning = false
-
+        
         if connectedDeviceID == nil {
             connectionMessage = "Not connected"
         }
     }
-
+    
     func connect(to device: DiscoveredDevice) {
         stopScanning()
-
+        
         connectingDeviceID = device.id
         connectionMessage = "Connecting to \(device.name)…"
-
+        
         centralManager.connect(
             device.peripheral,
             options: nil
         )
     }
-
+    
     func disconnect() {
         guard let connectedPeripheral else {
             return
         }
-
+        
         centralManager.cancelPeripheralConnection(
             connectedPeripheral
         )
     }
-
+    
     func sendToRNode(_ data: Data)
     {
         
@@ -143,14 +143,14 @@ final class BluetoothManager:
             connectionMessage = "RNode data channel is not ready"
             return
         }
-
+        
         let writeType: CBCharacteristicWriteType =
-            rnodeWriteCharacteristic.properties.contains(.write)
-            ? .withResponse
-            : .withoutResponse
-
+        rnodeWriteCharacteristic.properties.contains(.write)
+        ? .withResponse
+        : .withoutResponse
+        
         let escaped = escapeKISSFrame(data)
-
+        
         connectedPeripheral.writeValue(
             escaped,
             for: rnodeWriteCharacteristic,
@@ -161,25 +161,25 @@ final class BluetoothManager:
         guard frame.count >= 2 else {
             return frame
         }
-
+        
         var escaped = Data()
         escaped.append(0xC0)
-
+        
         for byte in frame.dropFirst().dropLast() {
             switch byte {
             case 0xC0:
                 escaped.append(0xDB)
                 escaped.append(0xDC)
-
+                
             case 0xDB:
                 escaped.append(0xDB)
                 escaped.append(0xDD)
-
+                
             default:
                 escaped.append(byte)
             }
         }
-
+        
         escaped.append(0xC0)
         return escaped
     }
@@ -189,22 +189,22 @@ final class BluetoothManager:
         rssi: NSNumber
     ) {
         let advertisedName =
-            advertisementData[
-                CBAdvertisementDataLocalNameKey
-            ] as? String
-
+        advertisementData[
+            CBAdvertisementDataLocalNameKey
+        ] as? String
+        
         let name =
-            advertisedName ??
-            peripheral.name ??
-            "Unknown Bluetooth Device"
-
+        advertisedName ??
+        peripheral.name ??
+        "Unknown Bluetooth Device"
+        
         let device = DiscoveredDevice(
             id: peripheral.identifier,
             peripheral: peripheral,
             name: name,
             rssi: rssi.intValue
         )
-
+        
         if let index = devices.firstIndex(
             where: { $0.id == device.id }
         ) {
@@ -212,18 +212,18 @@ final class BluetoothManager:
         } else {
             devices.append(device)
         }
-
+        
         devices.sort { $0.rssi > $1.rssi }
     }
-
+    
     private func clearConnectionState() {
         connectingDeviceID = nil
         connectedDeviceID = nil
         connectedPeripheral = nil
-
+        
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
-
+        
         serviceCount = 0
     }
     private func sendLowBatteryNotification(percent: Int) {
@@ -231,22 +231,22 @@ final class BluetoothManager:
             hasSentLowBatteryNotification = false
             return
         }
-
+        
         guard !hasSentLowBatteryNotification else {
             return
         }
-
+        
         let content = UNMutableNotificationContent()
         content.title = "RNode Battery Low"
         content.body = "Your connected RNode battery is at \(percent)%."
         content.sound = .default
-
+        
         let request = UNNotificationRequest(
             identifier: "rnode-low-battery",
             content: content,
             trigger: nil
         )
-
+        
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
                 print(
@@ -257,7 +257,7 @@ final class BluetoothManager:
                 print("Low-battery notification sent")
             }
         }
-
+        
         hasSentLowBatteryNotification = true
     }
     func restartRNode() {
@@ -267,9 +267,9 @@ final class BluetoothManager:
             0xF8,
             0xC0
         ])
-
+        
         sendToRNode(frame)
-        }
+    }
     
     func turnRadioOff() {
         let frame = Data([
@@ -278,7 +278,7 @@ final class BluetoothManager:
             0x00,
             0xC0
         ])
-
+        
         sendToRNode(frame)
     }
     func requestRNodeDetails() {
@@ -340,27 +340,37 @@ final class BluetoothManager:
             }
         }
     }
+    func sendRadioPayload(_ payload: Data) {
+        guard !payload.isEmpty else {
+            print("Cannot send an empty radio payload")
+            return
+        }
         
+        var frame = Data([
+            0xC0,
+            0x00
+        ])
+        
+        frame.append(payload)
+        frame.append(0xC0)
+        
+        sendToRNode(frame)
+        
+        print(
+            "Radio payload handed to RNode: \(payload.count) bytes"
+        )
+    }
     func sendMessage(_ text: String) {
         guard let payload = text.data(using: .utf8) else {
             print("Unable to encode message")
             return
         }
-
-        var frame = Data([
-            0xC0,
-            0x00
-        ])
-
-        frame.append(payload)
-        frame.append(0xC0)
-
-        sendToRNode(frame)
-
+        
+        sendRadioPayload(payload)
+        
         print("Sent raw radio-data test: \(text)")
     }
-    }
-
+}
     extension BluetoothManager: CBCentralManagerDelegate {
 
     nonisolated func centralManagerDidUpdateState(
