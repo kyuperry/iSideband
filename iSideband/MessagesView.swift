@@ -75,7 +75,9 @@ struct MessagesView: View {
         self.contact = contact
 
         _messages = State(
-            initialValue: Self.loadMessages()
+            initialValue: Self.loadMessages(
+                for: contact
+            )
         )
     }
 
@@ -625,13 +627,31 @@ struct MessagesView: View {
         }
     }
 
-    private static let storageKey =
+    private static let storageKeyPrefix =
         "savedDirectMessages"
 
-    private static func loadMessages() -> [ChatMessage] {
+    private static func storageKey(
+        for contact: LXMFContact?
+    ) -> String {
+        guard let contact else {
+            return storageKeyPrefix
+        }
+
+        return storageKeyPrefix +
+            "." +
+            contact.destinationHash
+    }
+
+    private static func loadMessages(
+        for contact: LXMFContact?
+    ) -> [ChatMessage] {
+        let key = storageKey(
+            for: contact
+        )
+
         guard
             let data = UserDefaults.standard.data(
-                forKey: storageKey
+                forKey: key
             ),
             let savedMessages = try? JSONDecoder().decode(
                 [ChatMessage].self,
@@ -653,8 +673,10 @@ struct MessagesView: View {
 
         UserDefaults.standard.set(
             data,
-            forKey: Self.storageKey
-        )
+            forKey: Self.storageKey(
+                for: contact
+            )
+            )
     }
 }
 

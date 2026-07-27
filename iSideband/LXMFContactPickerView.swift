@@ -20,14 +20,22 @@ struct LXMFContactPickerView: View {
                     )
                 }
             } else {
-                List(contactStore.contacts) { contact in
-                    NavigationLink {
-                        MessagesView(
-                            bluetooth: bluetooth,
-                            contact: contact
-                        )
-                    } label: {
-                        contactRow(contact)
+                List {
+                    ForEach(contactStore.contacts) { contact in
+                        NavigationLink {
+                            MessagesView(
+                                bluetooth: bluetooth,
+                                contact: contact
+                            )
+                        } label: {
+                            contactRow(contact)
+                        }
+                    }
+                    .onDelete { indexSet in
+                        for index in indexSet {
+                            let contact = contactStore.contacts[index]
+                            contactStore.remove(contact)
+                        }
                     }
                 }
                 .listStyle(.plain)
