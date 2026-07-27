@@ -49,6 +49,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 
 struct MessagesView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    let contact: LXMFContact?
 
     @EnvironmentObject
     private var lxmfManager: LXMFManager
@@ -66,8 +67,12 @@ struct MessagesView: View {
 
     @State private var selectedPhoto: PhotosPickerItem?
 
-    init(bluetooth: BluetoothManager) {
+    init(
+        bluetooth: BluetoothManager,
+        contact: LXMFContact? = nil
+    ) {
         self.bluetooth = bluetooth
+        self.contact = contact
 
         _messages = State(
             initialValue: Self.loadMessages()

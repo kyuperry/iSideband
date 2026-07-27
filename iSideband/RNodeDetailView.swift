@@ -60,21 +60,6 @@ struct RNodeDetailView: View {
                         isConnected ? .green : .red
                     )
                 }
-
-                if let rssi = bluetooth.lastRSSI {
-                    Label(
-                        "Signal Strength: \(rssi) dBm",
-                        systemImage:
-                            "dot.radiowaves.left.and.right"
-                    )
-                } else {
-                    Label(
-                        "Signal Strength: Unavailable",
-                        systemImage:
-                            "dot.radiowaves.left.and.right"
-                    )
-                    .foregroundStyle(.secondary)
-                }
             }
 
             Section("Reticulum Identity") {
@@ -103,45 +88,34 @@ struct RNodeDetailView: View {
             }
 
             Section("Activity") {
-                if bluetooth.packetsReceived == 0 {
+                if let lastPacket =
+                    bluetooth.lastPacketTime {
                     Label(
-                        "Waiting for RNode traffic…",
-                        systemImage: "wave.3.right"
-                    )
-                    .foregroundStyle(.secondary)
-                } else {
-                    Label(
-                        """
-                        Packets Received: \
-                        \(bluetooth.packetsReceived)
-                        """,
-                        systemImage: "shippingbox.fill"
+                        "Last Reticulum Activity",
+                        systemImage:
+                            "antenna.radiowaves.left.and.right"
                     )
 
-                    if let lastPacket =
-                        bluetooth.lastPacketTime {
-                        Label(
-                            """
-                            Last Packet: \
-                            \(lastPacket.formatted(
-                                date: .omitted,
-                                time: .standard
-                            ))
-                            """,
-                            systemImage: "clock"
-                        )
-                    }
+                    Label(
+                        lastPacket.formatted(
+                            date: .omitted,
+                            time: .standard
+                        ),
+                        systemImage: "clock"
+                    )
+                } else {
+                    Label(
+                        "Waiting for Reticulum activity...",
+                        systemImage:
+                            "antenna.radiowaves.left.and.right"
+                    )
+                    .foregroundStyle(.secondary)
                 }
             }
 
             Section("Hardware") {
                 Label(
-                    bluetooth.firmwareVersion == "Unknown"
-                        ? "RNode Firmware: Not reported"
-                        : """
-                          RNode Firmware: \
-                          \(bluetooth.firmwareVersion)
-                          """,
+                    "RNode Firmware: Custom",
                     systemImage: "cpu"
                 )
 
@@ -149,6 +123,8 @@ struct RNodeDetailView: View {
                     "Model: \(bluetooth.boardName)",
                     systemImage: "memorychip"
                 )
+
+                bluetoothSignalRow
             }
 
             Section("Radio Settings") {
@@ -174,13 +150,25 @@ struct RNodeDetailView: View {
                 Label(
                     bluetooth.radioBandwidth.map {
                         String(
-                            format:
-                                "Bandwidth: %.0f kHz",
+                            format: "Bandwidth: %.0f kHz",
                             Double($0) / 1_000
                         )
-                    } ?? "Bandwidth: Not reported",
-                    systemImage:
-                        "arrow.left.and.right"
+                    } ?? {
+                        let savedBandwidth =
+                            UserDefaults.standard.double(
+                                forKey:
+                                    "radioBandwidthKHz"
+                            )
+
+                        return savedBandwidth > 0
+                            ? String(
+                                format:
+                                    "Bandwidth: %.0f kHz",
+                                savedBandwidth
+                            )
+                            : "Bandwidth: Not reported"
+                    }(),
+                    systemImage: "arrow.left.and.right"
                 )
 
                 Label(
@@ -192,24 +180,37 @@ struct RNodeDetailView: View {
 
                 Label(
                     bluetooth.spreadingFactor.map {
-                        "Spreading Factor: SF\($0)"
-                    } ?? "Spreading Factor: Not reported",
+                        "Spreading Factor: \($0)"
+                    } ?? {
+                        let savedSpreadingFactor =
+                            UserDefaults.standard.integer(
+                                forKey:
+                                    "radioSpreadingFactor"
+                            )
+
+                        return savedSpreadingFactor > 0
+                            ? "Spreading Factor: \(savedSpreadingFactor)"
+                            : "Spreading Factor: Not reported"
+                    }(),
                     systemImage:
-                        "dot.radiowaves.up.forward"
+                        "dot.radiowaves.left.and.right"
                 )
 
                 Label(
                     bluetooth.codingRate.map {
                         "Coding Rate: 4/\($0)"
-                    } ?? "Coding Rate: Not reported",
-                    systemImage: "square.grid.3x3"
-                )
+                    } ?? {
+                        let savedCodingRate =
+                            UserDefaults.standard.integer(
+                                forKey:
+                                    "radioCodingRate"
+                            )
 
-                Label(
-                    bluetooth.batteryPercent.map {
-                        "Battery: \($0)%"
-                    } ?? "Battery: Not reported",
-                    systemImage: batteryIcon
+                        return savedCodingRate > 0
+                            ? "Coding Rate: 4/\(savedCodingRate)"
+                            : "Coding Rate: Not reported"
+                    }(),
+                    systemImage: "square.grid.3x3"
                 )
             }
 
@@ -264,13 +265,118 @@ struct RNodeDetailView: View {
                 bluetooth.disconnect()
             }
 
-            Button("Cancel", role: .cancel) { }
+            Button(
+                "Cancel",
+                role: .cancel
+            ) { }
         } message: {
             Text(
                 """
                 This will end the Bluetooth connection without restarting the RNode.
                 """
             )
+        }
+    }
+
+    private var bluetoothSignalRow: some View {
+        HStack(spacing: 12) {
+            Image(
+                systemName:
+                    "antenna.radiowaves.left.and.right"
+            )
+            .foregroundStyle(.blue)
+            .frame(width: 24)
+
+            VStack(
+                alignment: .leading,
+                spacing: 3
+            ) {
+                Text("Bluetooth Signal")
+
+                Text(
+                    bluetooth.lastRSSI.map {
+                        "\($0) dBm"
+                    } ?? "Not available"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if let rssi = bluetooth.lastRSSI {
+                VStack(
+                    alignment: .trailing,
+                    spacing: 4
+                ) {
+                    RSSISignalBars(
+                        level: rssiSignalLevel(rssi)
+                    )
+
+                    Text(rssiQualityText(rssi))
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(
+                            rssiSignalColor(rssi)
+                        )
+                }
+            } else {
+                Text("Unavailable")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func rssiSignalLevel(
+        _ rssi: Int
+    ) -> Int {
+        switch rssi {
+        case -60...0:
+            return 4
+
+        case -70..<(-60):
+            return 3
+
+        case -80..<(-70):
+            return 2
+
+        default:
+            return 1
+        }
+    }
+
+    private func rssiQualityText(
+        _ rssi: Int
+    ) -> String {
+        switch rssiSignalLevel(rssi) {
+        case 4:
+            return "Excellent"
+
+        case 3:
+            return "Good"
+
+        case 2:
+            return "Fair"
+
+        default:
+            return "Weak"
+        }
+    }
+
+    private func rssiSignalColor(
+        _ rssi: Int
+    ) -> Color {
+        switch rssiSignalLevel(rssi) {
+        case 4, 3:
+            return .green
+
+        case 2:
+            return .yellow
+
+        default:
+            return .red
         }
     }
 
@@ -413,30 +519,57 @@ struct RNodeDetailView: View {
 
         UIPasteboard.general.string = value
     }
+}
 
-    private var batteryIcon: String {
-        guard
-            let percent =
-                bluetooth.batteryPercent
-        else {
-            return "battery.0"
-        }
+private struct RSSISignalBars: View {
+    let level: Int
 
-        switch percent {
-        case 76...100:
-            return "battery.100"
+    private var barColor: Color {
+        switch level {
+        case 4, 3:
+            return .green
 
-        case 51...75:
-            return "battery.75"
-
-        case 26...50:
-            return "battery.50"
-
-        case 1...25:
-            return "battery.25"
+        case 2:
+            return .yellow
 
         default:
-            return "battery.0"
+            return .red
         }
+    }
+
+    var body: some View {
+        HStack(
+            alignment: .bottom,
+            spacing: 3
+        ) {
+            ForEach(
+                1...4,
+                id: \.self
+            ) { bar in
+                RoundedRectangle(
+                    cornerRadius: 1.5,
+                    style: .continuous
+                )
+                .fill(
+                    bar <= level
+                        ? barColor
+                        : Color.secondary.opacity(0.25)
+                )
+                .frame(
+                    width: 5,
+                    height: CGFloat(5 + (bar * 4))
+                )
+            }
+        }
+        .frame(
+            height: 22,
+            alignment: .bottom
+        )
+        .accessibilityLabel(
+            "Bluetooth signal strength"
+        )
+        .accessibilityValue(
+            "\(level) of 4 bars"
+        )
     }
 }

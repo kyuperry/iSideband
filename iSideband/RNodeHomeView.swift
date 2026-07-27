@@ -33,7 +33,9 @@ struct RNodeHomeView: View {
                 guard
                     let pendingConnectionID,
                     let device = bluetooth.devices.first(
-                        where: { $0.id == pendingConnectionID }
+                        where: {
+                            $0.id == pendingConnectionID
+                        }
                     )
                 else {
                     return
@@ -55,7 +57,9 @@ struct RNodeHomeView: View {
             }
         } message: {
             Text(
-                "Another RNode is already connected. This will disconnect it and connect to the selected RNode."
+                """
+                Another RNode is already connected. This will disconnect it and connect to the selected RNode.
+                """
             )
         }
     }
@@ -101,69 +105,85 @@ struct RNodeHomeView: View {
         List(bluetooth.devices) { device in
             if bluetooth.connectedDeviceID == device.id {
                 NavigationLink {
-                    RNodeDetailView(bluetooth: bluetooth)
+                    RNodeDetailView(
+                        bluetooth: bluetooth
+                    )
                 } label: {
-                    HStack(spacing: 12) {
-                        VStack(
-                            alignment: .leading,
-                            spacing: 4
-                        ) {
-                            Text(device.name)
-                                .font(.headline)
-
-                            Text("\(device.rssi) dBm")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-
-                        Spacer()
-
-                        Text("Connected")
-                            .foregroundStyle(.green)
-                            .lineLimit(1)
-                            .fixedSize()
-
-                        Text("Details")
-                            .foregroundStyle(.blue)
-                            .lineLimit(1)
-                            .fixedSize()
-                    }
-                    .padding(.vertical, 6)
+                    connectedDeviceRow(device)
                 }
             } else {
-                HStack(spacing: 12) {
-                    VStack(
-                        alignment: .leading,
-                        spacing: 4
-                    ) {
-                        Text(device.name)
-                            .font(.headline)
-
-                        Text("\(device.rssi) dBm")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    if bluetooth.connectingDeviceID == device.id {
-                        ProgressView()
-                    } else {
-                        Button("Connect") {
-                            if bluetooth.connectedDeviceID != nil {
-                                pendingConnectionID = device.id
-                                showSwitchConfirmation = true
-                            } else {
-                                bluetooth.connect(to: device)
-                            }
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
-                }
-                .padding(.vertical, 6)
+                availableDeviceRow(device)
             }
         }
         .listStyle(.plain)
+    }
+
+    private func connectedDeviceRow(
+        _ device: DiscoveredDevice
+    ) -> some View {
+        HStack(spacing: 12) {
+            Text(device.name)
+                .font(.headline)
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: .leading
+                )
+
+            Text("Connected")
+                .fontWeight(.semibold)
+                .foregroundStyle(.green)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: .center
+                )
+
+            Text("Details")
+                .foregroundStyle(.blue)
+                .lineLimit(1)
+                .fixedSize()
+                .frame(
+                    maxWidth: .infinity,
+                    alignment: .trailing
+                )
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func availableDeviceRow(
+        _ device: DiscoveredDevice
+    ) -> some View {
+        HStack(spacing: 12) {
+            VStack(
+                alignment: .leading,
+                spacing: 4
+            ) {
+                Text(device.name)
+                    .font(.headline)
+
+                Text("\(device.rssi) dBm")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            if bluetooth.connectingDeviceID == device.id {
+                ProgressView()
+            } else {
+                Button("Connect") {
+                    if bluetooth.connectedDeviceID != nil {
+                        pendingConnectionID = device.id
+                        showSwitchConfirmation = true
+                    } else {
+                        bluetooth.connect(to: device)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(.vertical, 6)
     }
 
     private var scanButton: some View {
@@ -187,7 +207,8 @@ struct RNodeHomeView: View {
         }
         .buttonStyle(.borderedProminent)
         .disabled(
-            bluetooth.bluetoothState != .poweredOn
+            bluetooth.bluetoothState
+                != .poweredOn
         )
         .frame(maxWidth: .infinity)
     }

@@ -444,6 +444,11 @@ final class BluetoothManager:
 
             peripheral.delegate = self
             peripheral.discoverServices(nil)
+            peripheral.readRSSI()
+
+            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+                peripheral.readRSSI()
+            }
         }
     }
 
@@ -637,9 +642,6 @@ extension BluetoothManager: CBPeripheralDelegate {
                 let frames = frameAssembler.append(data)
 
                 for frame in frames {
-                    packetsReceived += 1
-                    lastPacketTime = Date()
-
                     let packet = packetDecoder.decode(frame)
                     
                     if packet.commandType == .data {
@@ -648,6 +650,9 @@ extension BluetoothManager: CBPeripheralDelegate {
                         do {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
+
+                            packetsReceived += 1
+                            lastPacketTime = Date()
 
                             print("Reticulum packet received")
                             print("Destination:", reticulumPacket.destinationHashHex)
@@ -755,7 +760,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             } else if characteristic.uuid == CBUUID(string: "2A24") {
                 if let text = String(data: data, encoding: .utf8) {
                     print("BLE Model Number String: \(text)")
-                    boardName = text
+                    boardName = text == "RAK4640" ? "RAK4631" : text
                 }
 
             } else if characteristic.uuid == CBUUID(string: "2A26") {
@@ -811,5 +816,20 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
         }
     }
-    
-}
+    nonisolated func peripheral(
+        _ peripheral: CBPeripheral,
+        didReadRSSI RSSI: NSNumber,
+        error: Error?
+    ) {
+        guard error == nil else {
+            print("RSSI read failed: \(error?.localizedDescription ?? "Unknown error")")
+            return
+        }
+
+        Task { @MainActor in
+            self.lastRSSI = RSSI.intValue
+            print("Connected RNode RSSI: \(RSSI.intValue) dBm")
+        }
+    }
+
+    }

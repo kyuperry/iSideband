@@ -67,24 +67,34 @@ struct ConversationsView: View {
             isPresented: $showAddLXMFContact
         ) {
             AddLXMFContactView { contact in
-                print(
-                    """
-                    Saved LXMF Contact
+                do {
+                    try LXMFContactStore.shared.add(contact)
 
-                    Name: \(contact.displayName)
-                    Destination: \(contact.destinationHash)
-                    """
-                )
+                    print(
+                        """
+                        SAVED LXMF CONTACT
+                        Name: \(contact.displayName)
+                        Destination: \(contact.destinationHash)
+                        """
+                    )
 
-                showAddLXMFContact = false
+                    showAddLXMFContact = false
+                } catch {
+                    print(
+                        "Failed to save LXMF contact: " +
+                        error.localizedDescription
+                    )
+                }
             }
         }
     }
 
     private var floatingAddButton: some View {
         Menu {
-            Button {
-                selectedTab = .direct
+            NavigationLink {
+                LXMFContactPickerView(
+                    bluetooth: bluetooth
+                )
             } label: {
                 Label(
                     "Start Direct Chat",
@@ -148,6 +158,8 @@ struct ConversationsView: View {
 
     private func announceIdentity() {
         print("RETICULUM ANNOUNCE BUTTON PRESSED")
+
+        LXMFManager.shared.announceIdentity()
 
         showingAnnounceMessage = true
     }
