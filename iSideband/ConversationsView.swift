@@ -68,7 +68,9 @@ struct ConversationsView: View {
         ) {
             AddLXMFContactView { contact in
                 do {
-                    try LXMFContactStore.shared.add(contact)
+                    try LXMFContactStore.shared.add(
+                        contact
+                    )
 
                     print(
                         """
@@ -108,6 +110,16 @@ struct ConversationsView: View {
                 Label(
                     "Create Group",
                     systemImage: "person.3.fill"
+                )
+            }
+
+            NavigationLink {
+                DiscoveredPeersView()
+            } label: {
+                Label(
+                    "Discovered Peers",
+                    systemImage:
+                        "antenna.radiowaves.left.and.right"
                 )
             }
 

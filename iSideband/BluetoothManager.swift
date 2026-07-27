@@ -666,9 +666,16 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         reticulumPacket
                                     )
 
-                                    ReticulumAnnounceStore.shared.save(
-                                        announce
-                                    )
+                                    ReticulumAnnounceStore.shared.save(announce)
+
+                                    if LXMFContactStore.shared.contact(
+                                        for: announce.destinationHashHex
+                                    ) == nil {
+                                        ReticulumDiscoveredPeerStore.shared.discover(
+                                            destinationHash: announce.destinationHashHex,
+                                            displayName: announce.displayName
+                                        )
+                                    }
 
                                     print(
                                         """
@@ -679,7 +686,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                                     )
                                 } catch {
                                     print(
-                                        "Reticulum announce rejected:",
+                                        "Reticulum announce rejected: " +
                                         error.localizedDescription
                                     )
                                 }
