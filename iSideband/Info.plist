@@ -10,5 +10,10 @@
 
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>iSideband uses your iPhone location for local GPS telemetry and optional location sharing.</string>
+
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>bluetooth-central</string>
+    </array>
 </dict>
 </plist>

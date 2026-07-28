@@ -62,7 +62,9 @@ final class BluetoothManager:
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
-    private var hasSentLowBatteryNotification = false
+    private let batteryNotificationMilestones = [50, 25]
+    private var sentBatteryMilestones = Set<Int>()
+    private var lastBatteryNotificationPercent: Int?
     private var hasRNodeBatteryTelemetry = false
     
     override init() {
@@ -85,7 +87,13 @@ final class BluetoothManager:
         
         centralManager = CBCentralManager(
             delegate: self,
-            queue: nil
+            queue: nil,
+            options: [
+                CBCentralManagerOptionRestoreIdentifierKey:
+                    "com.kyleperry.iSideband.rnode-central",
+                CBCentralManagerOptionShowPowerAlertKey:
+                    true
+            ]
         )
     }
     nonisolated func userNotificationCenter(
@@ -239,23 +247,46 @@ final class BluetoothManager:
         batteryPercent = nil
         batteryState = nil
         hasRNodeBatteryTelemetry = false
-        hasSentLowBatteryNotification = false
+        sentBatteryMilestones.removeAll()
+        lastBatteryNotificationPercent = nil
         
         serviceCount = 0
     }
     private func sendLowBatteryNotification(percent: Int) {
-        guard percent <= 20 else {
-            hasSentLowBatteryNotification = false
+        for milestone in batteryNotificationMilestones
+        where percent > milestone {
+            sentBatteryMilestones.remove(milestone)
+        }
+
+        let previousPercent = lastBatteryNotificationPercent
+        let crossedMilestone = batteryNotificationMilestones
+            .filter { !sentBatteryMilestones.contains($0) }
+            .filter { milestone in
+                if percent == milestone {
+                    return true
+                }
+
+                guard let previousPercent else {
+                    return false
+                }
+
+                return previousPercent > milestone
+                    && percent < milestone
+            }
+            .min()
+
+        lastBatteryNotificationPercent = percent
+
+        guard let milestone = crossedMilestone else {
             return
         }
-        
-        guard !hasSentLowBatteryNotification else {
-            return
-        }
-        
+
+        sentBatteryMilestones.insert(milestone)
+
         let content = UNMutableNotificationContent()
-        content.title = "RNode Battery Low"
-        content.body = "Your connected RNode battery is at \(percent)%."
+        content.title = "RNode Battery \(milestone)%"
+        content.body =
+            "Your connected RNode battery has reached \(milestone)%."
         content.sound = .default
         
         let request = UNNotificationRequest(
@@ -264,18 +295,30 @@ final class BluetoothManager:
             trigger: nil
         )
         
-        UNUserNotificationCenter.current().add(request) { error in
-            if let error {
+        let center = UNUserNotificationCenter.current()
+        Task {
+            let settings = await center.notificationSettings()
+            guard settings.authorizationStatus == .authorized
+                    || settings.authorizationStatus == .provisional
+                    || settings.authorizationStatus == .ephemeral
+            else {
+                print(
+                    "Low-battery notification skipped: notifications are not authorized"
+                )
+                return
+            }
+
+            do {
+                try await center.add(request)
+                print("Low-battery notification sent")
+            } catch {
                 print(
                     "Low-battery notification failed: " +
                     error.localizedDescription
                 )
-            } else {
-                print("Low-battery notification sent")
             }
         }
         
-        hasSentLowBatteryNotification = true
     }
     func restartRNode() {
         let frame = Data([
@@ -523,6 +566,39 @@ final class BluetoothManager:
             } else if connectedDeviceID == nil {
                 connectionMessage = "Bluetooth ready"
             }
+        }
+    }
+
+    nonisolated func centralManager(
+        _ central: CBCentralManager,
+        willRestoreState dict: [String: Any]
+    ) {
+        guard let peripherals =
+                dict[
+                    CBCentralManagerRestoredStatePeripheralsKey
+                ] as? [CBPeripheral],
+              let peripheral = peripherals.first
+        else {
+            return
+        }
+
+        Task { @MainActor in
+            connectedPeripheral = peripheral
+            connectedDeviceID = peripheral.identifier
+            connectedDeviceName =
+                peripheral.name ?? "RNode"
+            connectingDeviceID = nil
+            connectionMessage =
+                "Restored connection to \(peripheral.name ?? "RNode")"
+
+            peripheral.delegate = self
+            peripheral.discoverServices(nil)
+            peripheral.readRSSI()
+
+            print(
+                "Restored RNode Bluetooth connection:",
+                peripheral.identifier
+            )
         }
     }
 
