@@ -179,7 +179,6 @@ struct GeographicMeshMapView: View {
 
     @State private var cameraPosition: MapCameraPosition
 
-    @State private var showMapStyleMenu = false
     @State private var showInformationBanner = true
 
     init(startsInHawaii: Bool) {
@@ -201,8 +200,6 @@ struct GeographicMeshMapView: View {
                 MapScaleView()
             }
             .ignoresSafeArea(edges: .bottom)
-
-            mapStyleControls
 
             currentLocationButton
 
@@ -226,68 +223,15 @@ struct GeographicMeshMapView: View {
                 }
             }
         }
-        .animation(
-            .easeInOut(duration: 0.2),
-            value: showMapStyleMenu
-        )
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                mapStyleMenu
+            }
+        }
         .animation(
             .easeInOut(duration: 0.2),
             value: showInformationBanner
         )
-    }
-
-    private var mapStyleControls: some View {
-        VStack {
-            HStack {
-                VStack(
-                    alignment: .leading,
-                    spacing: 10
-                ) {
-                    Button {
-                        showMapStyleMenu.toggle()
-                    } label: {
-                        Image(
-                            systemName:
-                                selectedMapStyle.icon
-                        )
-                        .font(
-                            .body.weight(.semibold)
-                        )
-                        .frame(width: 40, height: 40)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
-                        .overlay {
-                            Circle()
-                                .stroke(
-                                    Color.secondary
-                                        .opacity(0.2),
-                                    lineWidth: 1
-                                )
-                        }
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        "Choose map style"
-                    )
-
-                    if showMapStyleMenu {
-                        mapStyleMenu
-                            .transition(
-                                .move(edge: .leading)
-                                    .combined(
-                                        with: .opacity
-                                    )
-                            )
-                    }
-                }
-
-                Spacer()
-            }
-
-            Spacer()
-        }
-        .padding(.top, 4)
-        .padding(.leading, 14)
     }
 
     private var currentLocationButton: some View {
@@ -332,56 +276,23 @@ struct GeographicMeshMapView: View {
     }
 
     private var mapStyleMenu: some View {
-        VStack(
-            alignment: .leading,
-            spacing: 4
-        ) {
+        Menu {
             ForEach(
                 GeographicMapStyle.allCases
             ) { style in
                 Button {
                     selectedMapStyle = style
-                    showMapStyleMenu = false
                 } label: {
-                    HStack(spacing: 10) {
-                        Image(
-                            systemName: style.icon
-                        )
-                        .frame(width: 22)
-
-                        Text(style.title)
-
-                        Spacer()
-
-                        if selectedMapStyle == style {
-                            Image(
-                                systemName: "checkmark"
-                            )
-                            .fontWeight(.semibold)
-                        }
-                    }
-                    .font(.subheadline)
-                    .foregroundStyle(.primary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .frame(width: 175)
-                    .contentShape(Rectangle())
+                    Label(
+                        style.title,
+                        systemImage: style.icon
+                    )
                 }
-                .buttonStyle(.plain)
             }
+        } label: {
+            Image(systemName: selectedMapStyle.icon)
         }
-        .padding(5)
-        .background(.ultraThinMaterial)
-        .clipShape(
-            RoundedRectangle(cornerRadius: 16)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    Color.secondary.opacity(0.2),
-                    lineWidth: 1
-                )
-        }
+        .accessibilityLabel("Choose map style")
     }
 }
 
