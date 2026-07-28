@@ -59,6 +59,12 @@ final class BluetoothManager:
     
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
+    private var reconnectPeripheral: CBPeripheral?
+    private var reconnectTask: Task<Void, Never>?
+    private var reconnectAttempt = 0
+    private let maximumReconnectAttempts = 4
+    private var manualDisconnectRequested = false
+    private var rssiTimer: Timer?
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
@@ -165,7 +171,12 @@ final class BluetoothManager:
     
     func connect(to device: DiscoveredDevice) {
         stopScanning()
-        
+
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempt = 0
+        manualDisconnectRequested = false
+        reconnectPeripheral = device.peripheral
         connectingDeviceID = device.id
         connectionMessage = "Connecting to \(device.name)…"
         
@@ -179,7 +190,13 @@ final class BluetoothManager:
         guard let connectedPeripheral else {
             return
         }
-        
+
+        manualDisconnectRequested = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempt = 0
+        reconnectPeripheral = nil
+
         centralManager.cancelPeripheralConnection(
             connectedPeripheral
         )
@@ -269,6 +286,9 @@ final class BluetoothManager:
     }
     
     private func clearConnectionState() {
+        rssiTimer?.invalidate()
+        rssiTimer = nil
+
         connectingDeviceID = nil
         connectedDeviceID = nil
         connectedPeripheral = nil
@@ -282,6 +302,56 @@ final class BluetoothManager:
         lastBatteryNotificationPercent = nil
         
         serviceCount = 0
+    }
+
+    private func scheduleReconnect(
+        to peripheral: CBPeripheral
+    ) {
+        guard !manualDisconnectRequested,
+              centralManager.state == .poweredOn,
+              reconnectAttempt <
+                maximumReconnectAttempts else {
+            if reconnectAttempt >=
+                maximumReconnectAttempts {
+                connectionMessage =
+                    "RNode unavailable — reconnect manually"
+            }
+            return
+        }
+
+        reconnectTask?.cancel()
+        reconnectAttempt += 1
+
+        let attempt = reconnectAttempt
+        let delay = min(
+            pow(2.0, Double(attempt - 1)),
+            8.0
+        )
+
+        connectionMessage =
+            "Reconnecting to \(peripheral.name ?? "RNode") in \(Int(delay))s…"
+
+        reconnectTask = Task { @MainActor in
+            try? await Task.sleep(
+                for: .seconds(delay)
+            )
+
+            guard !Task.isCancelled,
+                  !manualDisconnectRequested,
+                  centralManager.state == .poweredOn,
+                  connectedDeviceID == nil else {
+                return
+            }
+
+            connectingDeviceID = peripheral.identifier
+            connectionMessage =
+                "Reconnecting to \(peripheral.name ?? "RNode")…"
+
+            centralManager.connect(
+                peripheral,
+                options: nil
+            )
+        }
     }
     private func sendLowBatteryNotification(percent: Int) {
         for milestone in batteryNotificationMilestones
@@ -598,12 +668,21 @@ final class BluetoothManager:
             bluetoothState = central.state
 
             if central.state != .poweredOn {
+                reconnectTask?.cancel()
+                reconnectTask = nil
                 devices.removeAll()
                 isScanning = false
                 clearConnectionState()
                 connectionMessage = "Bluetooth unavailable"
             } else if connectedDeviceID == nil {
-                connectionMessage = "Bluetooth ready"
+                if let reconnectPeripheral,
+                   !manualDisconnectRequested {
+                    scheduleReconnect(
+                        to: reconnectPeripheral
+                    )
+                } else {
+                    connectionMessage = "Bluetooth ready"
+                }
             }
         }
     }
@@ -622,6 +701,11 @@ final class BluetoothManager:
         }
 
         Task { @MainActor in
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            reconnectAttempt = 0
+            manualDisconnectRequested = false
+            reconnectPeripheral = peripheral
             connectedPeripheral = peripheral
             connectedDeviceID = peripheral.identifier
             connectedDeviceName =
@@ -682,6 +766,11 @@ final class BluetoothManager:
         didConnect peripheral: CBPeripheral
     ) { print("CONNECTED TO:", peripheral.name ?? "Unnamed", peripheral.identifier)
         Task { @MainActor in
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            reconnectAttempt = 0
+            manualDisconnectRequested = false
+            reconnectPeripheral = peripheral
             connectedPeripheral = peripheral
             connectingDeviceID = nil
             connectedDeviceID = peripheral.identifier
@@ -695,7 +784,15 @@ final class BluetoothManager:
             peripheral.discoverServices(nil)
             peripheral.readRSSI()
 
-            Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { _ in
+            rssiTimer?.invalidate()
+            rssiTimer = Timer.scheduledTimer(
+                withTimeInterval: 2.0,
+                repeats: true
+            ) { _ in
+                guard peripheral.state ==
+                        .connected else {
+                    return
+                }
                 peripheral.readRSSI()
             }
         }
@@ -713,9 +810,12 @@ final class BluetoothManager:
         Task { @MainActor in
             clearConnectionState()
 
-            connectionMessage =
-                error?.localizedDescription ??
-                "Connection failed"
+            if manualDisconnectRequested {
+                connectionMessage = "Not connected"
+            } else {
+                reconnectPeripheral = peripheral
+                scheduleReconnect(to: peripheral)
+            }
         }
     }
 
@@ -727,11 +827,13 @@ final class BluetoothManager:
         Task { @MainActor in
             clearConnectionState()
 
-            if let error {
-                connectionMessage =
-                    "Disconnected: \(error.localizedDescription)"
-            } else {
+            if manualDisconnectRequested {
+                manualDisconnectRequested = false
+                reconnectAttempt = 0
                 connectionMessage = "Not connected"
+            } else {
+                reconnectPeripheral = peripheral
+                scheduleReconnect(to: peripheral)
             }
         }
     }

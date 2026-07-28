@@ -36,6 +36,11 @@ struct SettingsView: View {
     @State private var showRadioOffConfirmation = false
     @State private var showSavedConfirmation = false
     @State private var statusMessage: String?
+    @State private var showBackupWarning = false
+    @State private var showBackupExporter = false
+    @State private var backupDocument:
+        iSidebandBackupDocument?
+    @State private var backupStatusMessage: String?
 
     @State private var hasLoadedSettings = false
 
@@ -59,6 +64,54 @@ struct SettingsView: View {
         }
         .onAppear {
             loadSettings()
+        }
+        .confirmationDialog(
+            "Export Sensitive Backup?",
+            isPresented: $showBackupWarning,
+            titleVisibility: .visible
+        ) {
+            Button("Export Backup") {
+                prepareBackup()
+            }
+
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(
+                "This file contains your private Reticulum identity. Anyone with the file can use your identity. Store it securely and do not share it."
+            )
+        }
+        .fileExporter(
+            isPresented: $showBackupExporter,
+            document: backupDocument,
+            contentType: .iSidebandBackup,
+            defaultFilename:
+                "iSideband-Backup"
+        ) { result in
+            switch result {
+            case .success:
+                backupStatusMessage =
+                    "Backup exported successfully."
+            case .failure(let error):
+                backupStatusMessage =
+                    "Backup export failed: \(error.localizedDescription)"
+            }
+        }
+        .alert(
+            "Backup",
+            isPresented: Binding(
+                get: { backupStatusMessage != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        backupStatusMessage = nil
+                    }
+                }
+            )
+        ) {
+            Button("OK", role: .cancel) {
+                backupStatusMessage = nil
+            }
+        } message: {
+            Text(backupStatusMessage ?? "")
         }
         .confirmationDialog(
             "Restart RNode?",
@@ -239,6 +292,33 @@ struct SettingsView: View {
     private var identitySection: some View {
         Section("Sideband Identity") {
             SidebandIdentityImporter()
+
+            Button {
+                showBackupWarning = true
+            } label: {
+                Label(
+                    "Export iSideband Backup",
+                    systemImage:
+                        "externaldrive.badge.plus"
+                )
+            }
+
+            Text(
+                "The backup includes your private identity, contacts, discovered peers, and announcement history."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func prepareBackup() {
+        do {
+            backupDocument =
+                try iSidebandBackupDocument.create()
+            showBackupExporter = true
+        } catch {
+            backupStatusMessage =
+                "Could not create backup: \(error.localizedDescription)"
         }
     }
 
