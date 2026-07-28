@@ -28,7 +28,7 @@ struct MainMenuView: View {
                 }
 
                 NavigationLink {
-                    MeshMapView()
+                    MeshMapView(bluetooth: bluetooth)
                 } label: {
                     menuRow(
                         title: "Mesh Map",

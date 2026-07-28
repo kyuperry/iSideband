@@ -80,6 +80,8 @@ enum GeographicMapStyle: String, CaseIterable, Identifiable {
 }
 
 struct MeshMapView: View {
+    @ObservedObject var bluetooth: BluetoothManager
+
     @AppStorage("selectedMeshMapMode")
     private var selectedMode: MeshMapMode = .geographic
 
@@ -88,7 +90,10 @@ struct MeshMapView: View {
             Group {
                 switch selectedMode {
                 case .geographic:
-                    GeographicMeshMapView()
+                    GeographicMeshMapView(
+                        startsInHawaii:
+                            bluetooth.connectedDeviceID != nil
+                    )
 
                 case .topology:
                     TopologyMeshMapView()
@@ -157,15 +162,33 @@ struct MeshMapView: View {
 }
 
 struct GeographicMeshMapView: View {
+    private static let hawaiiRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(
+            latitude: 20.8,
+            longitude: -156.3
+        ),
+        span: MKCoordinateSpan(
+            latitudeDelta: 5.2,
+            longitudeDelta: 8.0
+        )
+    )
+
     @AppStorage("selectedGeographicMapStyle")
     private var selectedMapStyle:
         GeographicMapStyle = .standard
 
-    @State private var cameraPosition:
-        MapCameraPosition = .automatic
+    @State private var cameraPosition: MapCameraPosition
 
     @State private var showMapStyleMenu = false
     @State private var showInformationBanner = true
+
+    init(startsInHawaii: Bool) {
+        _cameraPosition = State(
+            initialValue: startsInHawaii
+                ? .region(Self.hawaiiRegion)
+                : .automatic
+        )
+    }
 
     var body: some View {
         ZStack {
