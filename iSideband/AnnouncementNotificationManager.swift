@@ -34,7 +34,8 @@ final class AnnouncementNotificationManager {
 
     func notify(
         name: String?,
-        destinationHash: String
+        destinationHash: String,
+        eventID: Data
     ) {
 
         let content =
@@ -47,10 +48,15 @@ final class AnnouncementNotificationManager {
             "\(name ?? "Unknown Node") is nearby."
 
         content.sound = .default
+        content.userInfo = [
+            "destinationHash": destinationHash
+        ]
 
         let request =
             UNNotificationRequest(
-                identifier: UUID().uuidString,
+                identifier: eventID.map {
+                    String(format: "%02x", $0)
+                }.joined(),
                 content: content,
                 trigger: nil
             )

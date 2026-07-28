@@ -6,7 +6,7 @@ struct AnnounceListView: View {
 
     var body: some View {
         Group {
-            if announceStore.announces.isEmpty {
+            if announceStore.history.isEmpty {
                 ContentUnavailableView {
                     Label(
                         "No Announcements",
@@ -21,11 +21,10 @@ struct AnnounceListView: View {
             } else {
                 List {
                     Section(
-                        "\(announceStore.announces.count) Announcements"
+                        "\(announceStore.history.count) Announcements"
                     ) {
                         ForEach(
-                            announceStore.announces,
-                            id: \.destinationHashHex
+                            announceStore.history
                         ) { announce in
                             VStack(
                                 alignment: .leading,

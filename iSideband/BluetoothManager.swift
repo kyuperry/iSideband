@@ -1,6 +1,7 @@
 import Foundation
 @preconcurrency import CoreBluetooth
 import Combine
+import CryptoKit
 import UserNotifications
 
 struct DiscoveredDevice: Identifiable {
@@ -21,6 +22,8 @@ final class BluetoothManager:
     private let frameAssembler = RNodeFrameAssembler()
     private let reticulumDecoder = ReticulumPacketDecoder()
     private let announceDecoder = ReticulumAnnounceDecoder()
+    private var announceEventTracker =
+        ReticulumAnnounceEventTracker()
     
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
@@ -651,9 +654,6 @@ extension BluetoothManager: CBPeripheralDelegate {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
 
-                            packetsReceived += 1
-                            lastPacketTime = Date()
-
                             print("Reticulum packet received")
                             print("Destination:", reticulumPacket.destinationHashHex)
                             print("Type:", reticulumPacket.packetType)
@@ -666,16 +666,56 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         reticulumPacket
                                     )
 
-                                    ReticulumAnnounceStore.shared.save(announce)
-
-                                    if LXMFContactStore.shared.contact(
-                                        for: announce.destinationHashHex
-                                    ) == nil {
-                                        ReticulumDiscoveredPeerStore.shared.discover(
-                                            destinationHash: announce.destinationHashHex,
-                                            displayName: announce.displayName
+                                    let announceID = Data(
+                                        SHA256.hash(
+                                            data: reticulumPacket.raw
                                         )
+                                    )
+
+                                    let localPublicKey = try?
+                                        ReticulumIdentityStore.shared
+                                            .loadIdentity()?.publicKey
+
+                                    let decision =
+                                        announceEventTracker.decision(
+                                            for: announce,
+                                            eventID: announceID,
+                                            localPublicKey: localPublicKey
+                                        )
+
+                                    guard decision != .ownAnnounce else {
+                                        print(
+                                            "Ignored local Reticulum announce"
+                                        )
+                                        continue
                                     }
+
+                                    guard decision != .duplicate else {
+                                        print(
+                                            "Ignored duplicate Reticulum announce"
+                                        )
+                                        continue
+                                    }
+
+                                    packetsReceived += 1
+                                    lastPacketTime = announce.receivedAt
+
+                                    ReticulumAnnounceStore.shared.save(
+                                        announce,
+                                        eventID: announceID
+                                    )
+
+                                    ReticulumDiscoveredPeerStore.shared.discover(
+                                        destinationHash: announce.destinationHashHex,
+                                        displayName: announce.displayName,
+                                        seenAt: announce.receivedAt
+                                    )
+
+                                    AnnouncementNotificationManager.shared.notify(
+                                        name: announce.displayName,
+                                        destinationHash: announce.destinationHashHex,
+                                        eventID: announceID
+                                    )
 
                                     print(
                                         """
@@ -807,7 +847,6 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
         }
     }
-
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
         didWriteValueFor characteristic: CBCharacteristic,

@@ -6,10 +6,20 @@ final class ReticulumAnnounceStore: ObservableObject {
     static let shared = ReticulumAnnounceStore()
 
     @Published private(set) var announces: [ReticulumAnnounce] = []
+    @Published private(set) var history: [ReticulumAnnounce] = []
 
     private init() {}
 
-    func save(_ announce: ReticulumAnnounce) {
+    func save(
+        _ announce: ReticulumAnnounce,
+        eventID: Data
+    ) {
+        guard historyEventIDs.insert(eventID).inserted else {
+            return
+        }
+
+        history.insert(announce, at: 0)
+
         if let existingIndex = announces.firstIndex(
             where: {
                 $0.destinationHash ==
@@ -58,5 +68,9 @@ final class ReticulumAnnounceStore: ObservableObject {
 
     func removeAll() {
         announces.removeAll()
+        history.removeAll()
+        historyEventIDs.removeAll()
     }
+
+    private var historyEventIDs = Set<Data>()
 }

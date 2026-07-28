@@ -11,7 +11,8 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
 
     func discover(
         destinationHash: String,
-        displayName: String?
+        displayName: String?,
+        seenAt: Date = Date()
     ) {
         let cleanedHash = destinationHash
             .trimmingCharacters(
@@ -29,13 +30,15 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
                 destinationHash: existing.destinationHash,
                 displayName: displayName ?? existing.displayName,
                 firstSeenAt: existing.firstSeenAt,
-                lastSeenAt: Date()
+                lastSeenAt: seenAt
             )
         } else {
             peers.insert(
                 ReticulumDiscoveredPeer(
                     destinationHash: cleanedHash,
-                    displayName: displayName
+                    displayName: displayName,
+                    firstSeenAt: seenAt,
+                    lastSeenAt: seenAt
                 ),
                 at: 0
             )
