@@ -1,7 +1,7 @@
 import Combine
 import Foundation
 
-enum NotificationRoute: Equatable {
+enum NotificationRoute: Equatable, Sendable {
     case discoveredPeer(destinationHash: String)
     case message(sourceHash: String)
 }
@@ -14,6 +14,10 @@ final class NotificationNavigationRouter: ObservableObject {
         NotificationRoute?
 
     private init() {}
+
+    func receive(route: NotificationRoute) {
+        pendingRoute = route
+    }
 
     func receive(userInfo: [AnyHashable: Any]) {
         if let sourceHash =

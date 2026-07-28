@@ -77,9 +77,19 @@ struct MainMenuView: View {
 
 struct InterfacesView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var piGateway =
+        PiHaLowInterfaceManager.shared
+
+    @AppStorage("piGatewayHost")
+    private var piGatewayHost =
+        "openmanet-rpi4.local"
+    @AppStorage("piGatewayPort")
+    private var piGatewayPort = "4242"
+    @AppStorage("piGatewayMeshType")
+    private var piGatewayMeshType = "OpenMANET"
 
     var body: some View {
-        List {
+        Form {
             Section("RNode Interface") {
                 LabeledContent(
                     "Connection",
@@ -95,7 +105,65 @@ struct InterfacesView: View {
                         : "Unavailable"
                 )
             }
+
+            Section("Raspberry Pi / Wi-Fi HaLow") {
+                Picker(
+                    "Mesh Platform",
+                    selection: $piGatewayMeshType
+                ) {
+                    Text("OpenMANET")
+                        .tag("OpenMANET")
+                    Text("BATMAN-adv")
+                        .tag("BATMAN-adv")
+                    Text("Other IP Mesh")
+                        .tag("Other IP Mesh")
+                }
+
+                TextField(
+                    "Gateway host",
+                    text: $piGatewayHost
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+
+                TextField(
+                    "TCP port",
+                    text: $piGatewayPort
+                )
+                .keyboardType(.numberPad)
+
+                LabeledContent(
+                    "Gateway",
+                    value: piGateway.state.label
+                )
+
+                if piGateway.state == .connected {
+                    Button(
+                        "Disconnect",
+                        role: .destructive
+                    ) {
+                        piGateway.disconnect()
+                    }
+                } else {
+                    Button("Connect to Pi Gateway") {
+                        piGateway.connect(
+                            host: piGatewayHost,
+                            port: piGatewayPort
+                        )
+                    }
+                    .disabled(
+                        piGateway.state == .connecting
+                    )
+                }
+
+                Text(
+                    "The Pi must be reachable from this iPhone and run a Reticulum TCP server. OpenMANET or BATMAN-adv carries the IP traffic across the HaLow mesh."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Interfaces")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

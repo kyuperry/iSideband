@@ -113,11 +113,26 @@ final class BluetoothManager:
     ) {
         let userInfo =
             response.notification.request.content.userInfo
+        let route: NotificationRoute?
+
+        if let sourceHash =
+                userInfo["sourceHash"] as? String {
+            route = .message(sourceHash: sourceHash)
+        } else if let destinationHash =
+                    userInfo["destinationHash"] as? String {
+            route = .discoveredPeer(
+                destinationHash: destinationHash
+            )
+        } else {
+            route = nil
+        }
 
         Task { @MainActor in
-            NotificationNavigationRouter.shared.receive(
-                userInfo: userInfo
-            )
+            if let route {
+                NotificationNavigationRouter.shared.receive(
+                    route: route
+                )
+            }
             completionHandler()
         }
     }

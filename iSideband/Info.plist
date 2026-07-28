@@ -11,6 +11,9 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>iSideband uses your iPhone location for local GPS telemetry and optional location sharing.</string>
 
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>iSideband uses your local network to connect to Raspberry Pi Reticulum gateways and Wi-Fi HaLow mesh interfaces.</string>
+
     <key>UIBackgroundModes</key>
     <array>
         <string>bluetooth-central</string>
