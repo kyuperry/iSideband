@@ -163,6 +163,17 @@ struct RNodeDetailView: View {
 
             Section("Radio Telemetry") {
                 telemetryRow(
+                    title: "Battery",
+                    value: bluetooth.batteryPercent.map { percent in
+                        let state =
+                            bluetooth.batteryState?.title
+                        return state.map { stateTitle in
+                            "\(percent)% (\(stateTitle))"
+                        } ?? "\(percent)%"
+                    } ?? "Not reported",
+                    systemImage: "battery.50percent"
+                )
+                telemetryRow(
                     title: "Received",
                     value: bluetooth.receivedBytes.map {
                         ByteCountFormatter.string(

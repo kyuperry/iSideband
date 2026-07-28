@@ -1,8 +1,29 @@
 import Foundation
 
+enum RNodeBatteryState: UInt8 {
+    case unknown = 0x00
+    case discharging = 0x01
+    case charging = 0x02
+    case charged = 0x03
+
+    var title: String {
+        switch self {
+        case .unknown:
+            return "Unknown"
+        case .discharging:
+            return "Discharging"
+        case .charging:
+            return "Charging"
+        case .charged:
+            return "Charged"
+        }
+    }
+}
+
 struct RNodeTelemetryUpdate {
     var firmwareVersion: String?
     var batteryPercent: Int?
+    var batteryState: RNodeBatteryState?
     var temperature: Double?
     var radioReady: Bool?
 
@@ -51,7 +72,10 @@ final class RNodePacketRouter {
 
         case .batteryState:
             return RNodeTelemetryUpdate(
-                batteryPercent: decodeBatteryPercent(from: packet)
+                batteryPercent: decodeBatteryPercent(from: packet),
+                batteryState: packet.payload.first.flatMap {
+                    RNodeBatteryState(rawValue: $0)
+                }
             )
 
         case .temperature:

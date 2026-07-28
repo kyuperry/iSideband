@@ -44,6 +44,7 @@ final class BluetoothManager:
     @Published var firmwareVersion = "Unknown"
     @Published var boardName = "Unknown"
     @Published var batteryPercent: Int?
+    @Published var batteryState: RNodeBatteryState?
     @Published var radioFrequency: UInt32?
     @Published var radioBandwidth: UInt32?
     @Published var transmitPower: Int?
@@ -62,6 +63,7 @@ final class BluetoothManager:
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
     private var hasSentLowBatteryNotification = false
+    private var hasRNodeBatteryTelemetry = false
     
     override init() {
         super.init()
@@ -234,6 +236,10 @@ final class BluetoothManager:
         
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
+        batteryPercent = nil
+        batteryState = nil
+        hasRNodeBatteryTelemetry = false
+        hasSentLowBatteryNotification = false
         
         serviceCount = 0
     }
@@ -888,7 +894,15 @@ extension BluetoothManager: CBPeripheralDelegate {
                     }
 
                     if let batteryPercent = telemetry.batteryPercent {
+                        hasRNodeBatteryTelemetry = true
                         self.batteryPercent = batteryPercent
+                        sendLowBatteryNotification(
+                            percent: batteryPercent
+                        )
+                    }
+
+                    if let batteryState = telemetry.batteryState {
+                        self.batteryState = batteryState
                     }
 
                     if let temperature = telemetry.temperature {
@@ -968,14 +982,18 @@ extension BluetoothManager: CBPeripheralDelegate {
                     print("BLE Battery data: \(data as NSData)")
                     print("BLE Battery byte count: \(data.count)")
 
-                    if reportedLevel <= 100 {
+                    if (0...100).contains(reportedLevel),
+                       !hasRNodeBatteryTelemetry {
                         batteryPercent = reportedLevel
-                        sendLowBatteryNotification(percent: reportedLevel)
+                        sendLowBatteryNotification(
+                            percent: reportedLevel
+                        )
                     } else {
-                        let cappedLevel = min(reportedLevel, 100)
-                        print("Capping BLE battery level \(reportedLevel) to \(cappedLevel)")
-                        batteryPercent = cappedLevel
-                        sendLowBatteryNotification(percent: cappedLevel)
+                        print(
+                            hasRNodeBatteryTelemetry
+                                ? "Ignoring BLE battery fallback because RNode telemetry is active"
+                                : "Ignoring invalid BLE battery level \(reportedLevel)"
+                        )
                     }
                 }
             } else if let text = String(

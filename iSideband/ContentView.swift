@@ -20,7 +20,7 @@ enum MainAppPage: String, CaseIterable {
 }
 
 struct ContentView: View {
-    @StateObject private var bluetooth = BluetoothManager()
+    @ObservedObject var bluetooth: BluetoothManager
     @State private var selectedPage: MainAppPage = .rnode
 
     var body: some View {
@@ -103,5 +103,7 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(
+        bluetooth: BluetoothManager()
+    )
 }

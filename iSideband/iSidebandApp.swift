@@ -15,7 +15,9 @@ struct iSidebandApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(
+                bluetooth: bluetooth
+            )
                 .environmentObject(lxmfManager)
                 .task {
                     lxmfManager.start(
