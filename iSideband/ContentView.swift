@@ -42,6 +42,12 @@ struct ContentView: View {
                 mainPageSelector
             }
         }
+        .task {
+            let gpsEnabled = UserDefaults.standard.bool(
+                forKey: "gpsInterfaceEnabled"
+            )
+            LocationTelemetryManager.shared.setEnabled(gpsEnabled)
+        }
     }
 
     private var mainPageSelector: some View {

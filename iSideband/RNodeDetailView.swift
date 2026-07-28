@@ -1,9 +1,12 @@
 import SwiftUI
 import CryptoKit
 import UIKit
+import CoreLocation
 
 struct RNodeDetailView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var locationTelemetry =
+        LocationTelemetryManager.shared
 
     @State private var showDisconnectConfirmation = false
     @State private var identityHash = "Loading…"
@@ -111,6 +114,95 @@ struct RNodeDetailView: View {
                     )
                     .foregroundStyle(.secondary)
                 }
+            }
+
+            Section("iPhone GPS") {
+                if !UserDefaults.standard.bool(
+                    forKey: "gpsInterfaceEnabled"
+                ) {
+                    Label(
+                        "GPS is disabled in iSideband Settings",
+                        systemImage: "location.slash"
+                    )
+                    .foregroundStyle(.secondary)
+                } else if let location = locationTelemetry.location {
+                    telemetryRow(
+                        title: "Coordinates",
+                        value: String(
+                            format: "%.6f, %.6f",
+                            location.coordinate.latitude,
+                            location.coordinate.longitude
+                        ),
+                        systemImage: "location"
+                    )
+                    telemetryRow(
+                        title: "Accuracy",
+                        value: String(
+                            format: "±%.0f m",
+                            location.horizontalAccuracy
+                        ),
+                        systemImage: "scope"
+                    )
+                    telemetryRow(
+                        title: "Altitude",
+                        value: String(
+                            format: "%.0f m",
+                            location.altitude
+                        ),
+                        systemImage: "mountain.2"
+                    )
+                } else {
+                    Label(
+                        locationTelemetry.errorMessage
+                            ?? "Waiting for a location fix",
+                        systemImage: "location.circle"
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("Radio Telemetry") {
+                telemetryRow(
+                    title: "Received",
+                    value: bluetooth.receivedBytes.map {
+                        ByteCountFormatter.string(
+                            fromByteCount: Int64($0),
+                            countStyle: .binary
+                        )
+                    } ?? "Not reported",
+                    systemImage: "arrow.down.circle"
+                )
+                telemetryRow(
+                    title: "Transmitted",
+                    value: bluetooth.transmittedBytes.map {
+                        ByteCountFormatter.string(
+                            fromByteCount: Int64($0),
+                            countStyle: .binary
+                        )
+                    } ?? "Not reported",
+                    systemImage: "arrow.up.circle"
+                )
+                telemetryRow(
+                    title: "Last Packet RSSI",
+                    value: bluetooth.packetRSSI.map {
+                        "\($0) dBm"
+                    } ?? "Not reported",
+                    systemImage: "waveform.path.ecg"
+                )
+                telemetryRow(
+                    title: "Last Packet SNR",
+                    value: bluetooth.packetSNR.map {
+                        String(format: "%.2f dB", $0)
+                    } ?? "Not reported",
+                    systemImage: "chart.bar"
+                )
+                telemetryRow(
+                    title: "Temperature",
+                    value: bluetooth.temperature.map {
+                        String(format: "%.1f °C", $0)
+                    } ?? "Not reported",
+                    systemImage: "thermometer.medium"
+                )
             }
 
             Section("Hardware") {
@@ -327,6 +419,20 @@ struct RNodeDetailView: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    private func telemetryRow(
+        title: String,
+        value: String,
+        systemImage: String
+    ) -> some View {
+        HStack {
+            Label(title, systemImage: systemImage)
+            Spacer()
+            Text(value)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
     }
 
     private func rssiSignalLevel(

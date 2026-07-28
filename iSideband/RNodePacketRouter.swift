@@ -11,6 +11,10 @@ struct RNodeTelemetryUpdate {
     var transmitPower: Int?
     var spreadingFactor: Int?
     var codingRate: Int?
+    var receivedBytes: UInt32?
+    var transmittedBytes: UInt32?
+    var packetRSSI: Int?
+    var packetSNR: Double?
 }
 
 final class RNodePacketRouter {
@@ -53,6 +57,30 @@ final class RNodePacketRouter {
         case .temperature:
             return RNodeTelemetryUpdate(
                 temperature: decodeTemperature(from: packet)
+            )
+
+        case .receivedBytes:
+            return RNodeTelemetryUpdate(
+                receivedBytes: decodeUInt32(from: packet)
+            )
+
+        case .transmittedBytes:
+            return RNodeTelemetryUpdate(
+                transmittedBytes: decodeUInt32(from: packet)
+            )
+
+        case .rssi:
+            return RNodeTelemetryUpdate(
+                packetRSSI: packet.payload.first.map {
+                    Int($0) - 157
+                }
+            )
+
+        case .snr:
+            return RNodeTelemetryUpdate(
+                packetSNR: packet.payload.first.map {
+                    Double(Int8(bitPattern: $0)) * 0.25
+                }
             )
 
         case .radioState:

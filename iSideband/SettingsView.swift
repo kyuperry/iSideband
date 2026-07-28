@@ -1,7 +1,10 @@
 import SwiftUI
+import CoreLocation
 
 struct SettingsView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var locationTelemetry =
+        LocationTelemetryManager.shared
 
     @Environment(\.dismiss) private var dismiss
 
@@ -136,6 +139,42 @@ struct SettingsView: View {
                     "GPS",
                     systemImage: "location.fill"
                 )
+            }
+            .onChange(of: gpsEnabled) { _, enabled in
+                guard hasLoadedSettings else {
+                    return
+                }
+                locationTelemetry.setEnabled(enabled)
+            }
+
+            if gpsEnabled {
+                if let location = locationTelemetry.location {
+                    Label(
+                        String(
+                            format: "%.5f, %.5f (±%.0f m)",
+                            location.coordinate.latitude,
+                            location.coordinate.longitude,
+                            location.horizontalAccuracy
+                        ),
+                        systemImage: "location.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else if let error = locationTelemetry.errorMessage {
+                    Label(
+                        error,
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    Label(
+                        "Waiting for an iPhone location fix",
+                        systemImage: "location.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
 
             Text(
@@ -293,6 +332,7 @@ struct SettingsView: View {
         ) ?? "5"
 
         hasLoadedSettings = true
+        locationTelemetry.setEnabled(gpsEnabled)
     }
 
     private func saveSettings() {
@@ -302,6 +342,7 @@ struct SettingsView: View {
             gpsEnabled,
             forKey: "gpsInterfaceEnabled"
         )
+        locationTelemetry.setEnabled(gpsEnabled)
 
         defaults.set(
             bluetoothEnabled,

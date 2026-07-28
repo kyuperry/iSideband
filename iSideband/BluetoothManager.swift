@@ -51,6 +51,10 @@ final class BluetoothManager:
     @Published var codingRate: Int?
     @Published var temperature: Double?
     @Published var radioReady = false
+    @Published var receivedBytes: UInt32?
+    @Published var transmittedBytes: UInt32?
+    @Published var packetRSSI: Int?
+    @Published var packetSNR: Double?
     
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -334,6 +338,38 @@ final class BluetoothManager:
             Data([
                 0xC0,
                 0x50,
+                0xFF,
+                0xC0
+            ]),
+
+            // Total radio bytes received
+            Data([
+                0xC0,
+                0x21,
+                0xFF,
+                0xC0
+            ]),
+
+            // Total radio bytes transmitted
+            Data([
+                0xC0,
+                0x22,
+                0xFF,
+                0xC0
+            ]),
+
+            // RSSI of the last radio packet
+            Data([
+                0xC0,
+                0x23,
+                0xFF,
+                0xC0
+            ]),
+
+            // SNR of the last radio packet
+            Data([
+                0xC0,
+                0x24,
                 0xFF,
                 0xC0
             ])
@@ -881,6 +917,22 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let codingRate = telemetry.codingRate {
                         self.codingRate = codingRate
+                    }
+
+                    if let receivedBytes = telemetry.receivedBytes {
+                        self.receivedBytes = receivedBytes
+                    }
+
+                    if let transmittedBytes = telemetry.transmittedBytes {
+                        self.transmittedBytes = transmittedBytes
+                    }
+
+                    if let packetRSSI = telemetry.packetRSSI {
+                        self.packetRSSI = packetRSSI
+                    }
+
+                    if let packetSNR = telemetry.packetSNR {
+                        self.packetSNR = packetSNR
                     }
 
                     let commandByte = packet.command.map {
