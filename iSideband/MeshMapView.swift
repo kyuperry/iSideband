@@ -239,10 +239,8 @@ struct GeographicMeshMapView: View {
     private var mapStyleControls: some View {
         VStack {
             HStack {
-                Spacer()
-
                 VStack(
-                    alignment: .trailing,
+                    alignment: .leading,
                     spacing: 10
                 ) {
                     Button {
@@ -275,19 +273,21 @@ struct GeographicMeshMapView: View {
                     if showMapStyleMenu {
                         mapStyleMenu
                             .transition(
-                                .move(edge: .trailing)
+                                .move(edge: .leading)
                                     .combined(
                                         with: .opacity
                                     )
                             )
                     }
                 }
+
+                Spacer()
             }
 
             Spacer()
         }
-        .padding(.top, 14)
-        .padding(.trailing, 14)
+        .padding(.top, 4)
+        .padding(.leading, 14)
     }
 
     private var currentLocationButton: some View {
