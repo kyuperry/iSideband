@@ -433,6 +433,20 @@ final class BluetoothManager:
                 return
             }
 
+            let senderName =
+                LXMFContactStore.shared.contact(
+                    for: message.sourceHashHex
+                )?.displayName ??
+                ReticulumAnnounceStore.shared
+                    .announce(
+                        for: message.sourceHashHex
+                    )?.displayName
+            LXMFMessageNotificationManager.shared
+                .notify(
+                    message: message,
+                    senderName: senderName
+                )
+
             packetsReceived += 1
             lastPacketTime = Date()
 

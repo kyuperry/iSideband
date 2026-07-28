@@ -7,7 +7,12 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
 
     @Published private(set) var peers: [ReticulumDiscoveredPeer] = []
 
-    private init() {}
+    private let storageKey =
+        "isideband.reticulum.discoveredPeers"
+
+    private init() {
+        load()
+    }
 
     func discover(
         destinationHash: String,
@@ -47,6 +52,7 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
         peers.sort {
             $0.lastSeenAt > $1.lastSeenAt
         }
+        persist()
     }
 
     func remove(
@@ -60,9 +66,39 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
                 )
                 .lowercased()
         }
+        persist()
     }
 
     func clear() {
         peers.removeAll()
+        persist()
+    }
+
+    private func persist() {
+        guard let data = try? JSONEncoder().encode(
+            peers
+        ) else {
+            return
+        }
+        UserDefaults.standard.set(
+            data,
+            forKey: storageKey
+        )
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.data(
+                    forKey: storageKey
+              ),
+              let savedPeers = try? JSONDecoder().decode(
+                    [ReticulumDiscoveredPeer].self,
+                    from: data
+              )
+        else {
+            return
+        }
+        peers = savedPeers.sorted {
+            $0.lastSeenAt > $1.lastSeenAt
+        }
     }
 }

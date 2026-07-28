@@ -2,6 +2,10 @@ import SwiftUI
 
 struct ConversationsView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var contactStore =
+        LXMFContactStore.shared
+    @ObservedObject private var messageStore =
+        LXMFIncomingMessageStore.shared
 
     @State private var selectedTab: ConversationTab = .direct
     @State private var showCreateGroup = false
@@ -274,41 +278,72 @@ struct ConversationsView: View {
 
     private var directConversations: some View {
         Group {
-            if bluetooth.connectedDeviceID != nil {
-                let latestPreview =
-                    latestDirectPreview()
-
-                let conversation = Conversation(
-                    title:
-                        bluetooth.connectedDeviceName
-                        ?? "Connected RNode",
-                    lastMessage: latestPreview.text,
-                    lastActivity: latestPreview.date,
-                    unreadCount: 0
-                )
-
-                List {
-                    NavigationLink {
-                        MessagesView(
-                            bluetooth: bluetooth
-                        )
-                    } label: {
-                        directConversationRow(
-                            conversation
-                        )
-                    }
-                }
-                .listStyle(.plain)
-            } else {
+            if contactStore.contacts.isEmpty {
                 emptyState(
                     systemImage:
                         "person.crop.circle.badge.questionmark",
-                    title: "No RNodes",
+                    title: "No Contacts",
                     message:
-                        "Connected RNodes will appear here for direct messaging."
+                        "Add or discover an LXMF contact to start a direct conversation."
                 )
+            } else {
+                List {
+                    ForEach(sortedDirectContacts) {
+                        contact in
+                        NavigationLink {
+                            MessagesView(
+                                bluetooth: bluetooth,
+                                contact: contact
+                            )
+                        } label: {
+                            directConversationRow(
+                                conversation(
+                                    for: contact
+                                )
+                            )
+                        }
+                    }
+                }
+                .listStyle(.plain)
             }
         }
+    }
+
+    private var sortedDirectContacts: [LXMFContact] {
+        contactStore.contacts.sorted {
+            let firstDate = messageStore
+                .latestMessage(
+                    for: $0.destinationHash
+                )?.date ?? $0.dateAdded
+            let secondDate = messageStore
+                .latestMessage(
+                    for: $1.destinationHash
+                )?.date ?? $1.dateAdded
+            return firstDate > secondDate
+        }
+    }
+
+    private func conversation(
+        for contact: LXMFContact
+    ) -> Conversation {
+        let latest = messageStore.latestMessage(
+            for: contact.destinationHash
+        )
+
+        return Conversation(
+            id: contact.id,
+            title: contact.displayName,
+            lastMessage:
+                latest?.text ??
+                "Ready for LXMF messaging",
+            lastActivity:
+                latest?.date ??
+                contact.dateAdded,
+            unreadCount:
+                messageStore.unreadCount(
+                    for: contact.destinationHash
+                )
+        )
     }
 
     private var groupConversations: some View {

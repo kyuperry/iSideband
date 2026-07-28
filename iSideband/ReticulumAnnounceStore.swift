@@ -8,7 +8,13 @@ final class ReticulumAnnounceStore: ObservableObject {
     @Published private(set) var announces: [ReticulumAnnounce] = []
     @Published private(set) var history: [ReticulumAnnounce] = []
 
-    private init() {}
+    private let storageKey =
+        "isideband.reticulum.announces"
+    private var historyEventIDs = Set<Data>()
+
+    private init() {
+        load()
+    }
 
     func save(
         _ announce: ReticulumAnnounce,
@@ -19,6 +25,11 @@ final class ReticulumAnnounceStore: ObservableObject {
         }
 
         history.insert(announce, at: 0)
+        if history.count > 500 {
+            history.removeLast(
+                history.count - 500
+            )
+        }
 
         if let existingIndex = announces.firstIndex(
             where: {
@@ -42,6 +53,7 @@ final class ReticulumAnnounceStore: ObservableObject {
             Name: \(announce.displayName ?? "Unknown")
             """
         )
+        persist()
     }
 
     func announce(
@@ -70,7 +82,48 @@ final class ReticulumAnnounceStore: ObservableObject {
         announces.removeAll()
         history.removeAll()
         historyEventIDs.removeAll()
+        persist()
     }
 
-    private var historyEventIDs = Set<Data>()
+    private func persist() {
+        let snapshot = Snapshot(
+            announces: announces,
+            history: history,
+            historyEventIDs:
+                Array(historyEventIDs)
+        )
+        guard let data = try? JSONEncoder().encode(
+            snapshot
+        ) else {
+            return
+        }
+        UserDefaults.standard.set(
+            data,
+            forKey: storageKey
+        )
+    }
+
+    private func load() {
+        guard let data = UserDefaults.standard.data(
+                    forKey: storageKey
+              ),
+              let snapshot = try? JSONDecoder().decode(
+                    Snapshot.self,
+                    from: data
+              )
+        else {
+            return
+        }
+        announces = snapshot.announces
+        history = snapshot.history
+        historyEventIDs = Set(
+            snapshot.historyEventIDs
+        )
+    }
+
+    private struct Snapshot: Codable {
+        let announces: [ReticulumAnnounce]
+        let history: [ReticulumAnnounce]
+        let historyEventIDs: [Data]
+    }
 }

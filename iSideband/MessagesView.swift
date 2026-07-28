@@ -203,6 +203,20 @@ struct MessagesView: View {
             lxmfManager.start(
                 bluetooth: bluetooth
             )
+            if let contact {
+                incomingStore.markRead(
+                    destinationHash:
+                        contact.destinationHash
+                )
+            }
+        }
+        .onDisappear {
+            if let contact {
+                incomingStore.markRead(
+                    destinationHash:
+                        contact.destinationHash
+                )
+            }
         }
         .confirmationDialog(
             "Add Attachment",
