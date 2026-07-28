@@ -194,31 +194,75 @@ final class LXMFService: ObservableObject {
             return
         }
 
-        bluetooth.sendMessage(
-            message.text
-        )
+        do {
+            let destinationHash =
+                try packetEncoder.destinationHashData(
+                    from:
+                        message.peer.destinationHash
+                )
+            guard let destinationPublicKey =
+                    ReticulumAnnounceStore.shared
+                        .publicKey(
+                            for:
+                                message.peer
+                                    .destinationHash
+                        )
+            else {
+                throw LXMFMessageCodecError.unknownSource
+            }
 
-        statusMessage =
-            "Sending message to \(message.peer.displayName)"
+            let identity =
+                try ReticulumIdentityStore.shared
+                    .loadOrCreateIdentity()
+            let sourceHash =
+                try announceEncoder.destinationHash(
+                    identity: identity,
+                    destinationName: "lxmf.delivery"
+                )
+            let lxmfPayload =
+                try LXMFMessageCodec().encode(
+                    content: message.text,
+                    destinationHash:
+                        destinationHash,
+                    sourceHash: sourceHash,
+                    sourceIdentity: identity
+                )
+            let encryptedPayload =
+                try identity.encrypt(
+                    lxmfPayload,
+                    for: destinationPublicKey
+                )
+            let packet =
+                try packetEncoder.encodeDataPacket(
+                    destinationHash:
+                        destinationHash,
+                    encryptedPayload:
+                        encryptedPayload
+                )
 
-        try? await Task.sleep(
-            for: .seconds(1)
-        )
+            bluetooth.sendRadioPayload(packet)
+            manager?.updateMessageStatus(
+                id: message.id,
+                status: .sent
+            )
+            statusMessage =
+                "Message sent to \(message.peer.displayName)"
 
-        manager?.updateMessageStatus(
-            id: message.id,
-            status: .sent
-        )
-
-        statusMessage =
-            "Message sent to \(message.peer.displayName)"
-
-        print(
-            """
-            RADIO TRANSMISSION HANDED TO RNODE
-            Destination: \(message.peer.destinationHash)
-            Message: \(message.text)
-            """
-        )
+            print(
+                """
+                LXMF PACKET HANDED TO RNODE
+                Destination: \(message.peer.destinationHash)
+                Packet bytes: \(packet.count)
+                """
+            )
+        } catch {
+            manager?.updateMessageStatus(
+                id: message.id,
+                status: .failed
+            )
+            statusMessage =
+                "Message failed: \(error.localizedDescription)"
+            print(statusMessage)
+        }
     }
 }

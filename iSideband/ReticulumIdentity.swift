@@ -164,15 +164,25 @@ struct ReticulumIdentity: Codable {
             throw ReticulumIdentityError.invalidPublicKeyLength
         }
 
-        // Reticulum-compatible destination encryption
-        // requires ephemeral key agreement, key derivation
-        // and token encryption. That layer comes next.
-        throw ReticulumIdentityError.cryptographyFailure
+        return try ReticulumTokenCipher().encrypt(
+            data,
+            recipientPublicKey: Data(
+                destinationPublicKey.prefix(
+                    Self.encryptionKeyByteCount
+                )
+            ),
+            salt: Data(
+                SHA256.hash(data: destinationPublicKey)
+                    .prefix(Self.truncatedHashByteCount)
+            )
+        )
     }
 
     func decrypt(_ data: Data) throws -> Data {
-        // Decryption will be added with the matching
-        // Reticulum token implementation.
-        throw ReticulumIdentityError.cryptographyFailure
+        return try ReticulumTokenCipher().decrypt(
+            data,
+            recipientPrivateKey: encryptionPrivateKey,
+            salt: identityHash
+        )
     }
 }

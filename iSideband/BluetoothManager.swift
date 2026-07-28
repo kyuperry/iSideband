@@ -22,8 +22,10 @@ final class BluetoothManager:
     private let frameAssembler = RNodeFrameAssembler()
     private let reticulumDecoder = ReticulumPacketDecoder()
     private let announceDecoder = ReticulumAnnounceDecoder()
+    private let lxmfMessageCodec = LXMFMessageCodec()
     private var announceEventTracker =
         ReticulumAnnounceEventTracker()
+    private var receivedLXMFMessageIDs = Set<Data>()
     
     @Published private(set) var devices: [DiscoveredDevice] = []
     @Published private(set) var isScanning = false
@@ -374,6 +376,79 @@ final class BluetoothManager:
         sendRadioPayload(payload)
         
         print("Sent raw radio-data test: \(text)")
+    }
+
+    private func handleIncomingLXMF(
+        _ packet: DecodedReticulumPacket
+    ) {
+        guard packet.packetType == .data,
+              packet.destinationType == .single,
+              packet.context ==
+                ReticulumPacketContext.none else {
+            return
+        }
+
+        do {
+            guard let identity =
+                    try ReticulumIdentityStore.shared
+                        .loadIdentity()
+            else {
+                return
+            }
+
+            let localDestinationHash =
+                try ReticulumAnnounceEncoder()
+                    .destinationHash(
+                        identity: identity,
+                        destinationName:
+                            "lxmf.delivery"
+                    )
+            guard packet.destinationHash ==
+                    localDestinationHash else {
+                return
+            }
+
+            let plaintext =
+                try identity.decrypt(packet.payload)
+            let message = try lxmfMessageCodec.decode(
+                plaintext,
+                expectedDestinationHash:
+                    localDestinationHash
+            ) { sourceHash in
+                ReticulumAnnounceStore.shared
+                    .publicKey(for: sourceHash)
+            }
+
+            guard message.sourceHash !=
+                    localDestinationHash,
+                  receivedLXMFMessageIDs
+                    .insert(message.id).inserted
+            else {
+                return
+            }
+
+            guard LXMFIncomingMessageStore.shared
+                    .save(message)
+            else {
+                return
+            }
+
+            packetsReceived += 1
+            lastPacketTime = Date()
+
+            print(
+                """
+                VALID LXMF MESSAGE RECEIVED
+                Source: \(message.sourceHashHex)
+                Content: \(message.content)
+                """
+            )
+        } catch {
+            print(
+                "Incoming LXMF message rejected:",
+                error.localizedDescription
+            )
+        }
     }
 }
     extension BluetoothManager: CBCentralManagerDelegate {
@@ -730,6 +805,10 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         error.localizedDescription
                                     )
                                 }
+                            } else {
+                                handleIncomingLXMF(
+                                    reticulumPacket
+                                )
                             }
 
                         } catch {

@@ -16,6 +16,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     let isOutgoing: Bool
     let status: String?
     let lxmfMessageID: UUID?
+    let lxmfHash: String?
 
     let type: DirectMessageType
     let attachmentName: String?
@@ -29,6 +30,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         isOutgoing: Bool,
         status: String? = nil,
         lxmfMessageID: UUID? = nil,
+        lxmfHash: String? = nil,
         type: DirectMessageType = .text,
         attachmentName: String? = nil,
         attachmentPath: String? = nil,
@@ -40,6 +42,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         self.isOutgoing = isOutgoing
         self.status = status
         self.lxmfMessageID = lxmfMessageID
+        self.lxmfHash = lxmfHash
         self.type = type
         self.attachmentName = attachmentName
         self.attachmentPath = attachmentPath
@@ -53,6 +56,8 @@ struct MessagesView: View {
 
     @EnvironmentObject
     private var lxmfManager: LXMFManager
+    @ObservedObject private var incomingStore =
+        LXMFIncomingMessageStore.shared
 
     @State private var messageText = ""
     @State private var messages: [ChatMessage]
@@ -257,6 +262,11 @@ struct MessagesView: View {
         .onChange(of: messages) {
             saveMessages()
         }
+        .onChange(of: incomingStore.revision) {
+            messages = Self.loadMessages(
+                for: contact
+            )
+        }
     }
 
     private var messageComposer: some View {
@@ -319,15 +329,22 @@ struct MessagesView: View {
             return
         }
 
-        let testPeer = LXMFPeer(
-            displayName: "Test Peer",
-            destinationHash:
-                "0123456789abcdef0123456789abcdef"
-        )
+        guard let peer = contact?.peer else {
+            messages.append(
+                ChatMessage(
+                    text: trimmed,
+                    isOutgoing: true,
+                    status:
+                        "Failed — select an LXMF contact"
+                )
+            )
+            messageText = ""
+            return
+        }
 
         guard let queuedMessage = lxmfManager.send(
             text: trimmed,
-            to: testPeer
+            to: peer
         ) else {
             messages.append(
                 ChatMessage(

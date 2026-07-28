@@ -3,6 +3,7 @@ import Foundation
 enum ReticulumEncodingError: LocalizedError {
     case emptyMessage
     case invalidDestinationHash
+    case packetTooLarge
     case protocolNotImplemented
 
     var errorDescription: String? {
@@ -13,6 +14,9 @@ enum ReticulumEncodingError: LocalizedError {
         case .invalidDestinationHash:
             return "The destination hash must contain exactly 32 hexadecimal characters."
 
+        case .packetTooLarge:
+            return "The encrypted message is too large for one Reticulum packet."
+
         case .protocolNotImplemented:
             return "Real Reticulum packet encoding is not implemented yet."
         }
@@ -21,6 +25,34 @@ enum ReticulumEncodingError: LocalizedError {
 
 struct ReticulumPacketEncoder {
     static let destinationHashByteCount = 16
+
+    func encodeDataPacket(
+        destinationHash: Data,
+        encryptedPayload: Data
+    ) throws -> Data {
+        guard destinationHash.count ==
+                Self.destinationHashByteCount
+        else {
+            throw ReticulumEncodingError
+                .invalidDestinationHash
+        }
+
+        var packet = Data([
+            0x00,
+            0x00
+        ])
+        packet.append(destinationHash)
+        packet.append(
+            ReticulumPacketContext.none.rawValue
+        )
+        packet.append(encryptedPayload)
+
+        guard packet.count <= 500 else {
+            throw ReticulumEncodingError.packetTooLarge
+        }
+
+        return packet
+    }
 
     func destinationHashData(
         from destinationHash: String
@@ -120,8 +152,6 @@ struct ReticulumPacketEncoder {
             from: destinationHash
         )
 
-        // The next stage will implement the actual Reticulum
-        // identity, encryption, signature and packet format.
         throw ReticulumEncodingError.protocolNotImplemented
     }
 }

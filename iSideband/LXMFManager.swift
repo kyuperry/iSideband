@@ -17,6 +17,7 @@ final class LXMFManager: ObservableObject {
         bluetooth: BluetoothManager
     ) {
         ReticulumDecoderSelfTest.run()
+        ReticulumCompatibilitySelfTest.run()
         print("Starting LXMF Manager")
 
         isConnected = true

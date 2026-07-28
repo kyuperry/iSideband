@@ -35,6 +35,10 @@ struct ReticulumAnnounceEncoder {
         destinationName: String,
         appData: Data? = nil
     ) throws -> EncodedReticulumAnnounce {
+        let destinationHash = try destinationHash(
+            identity: identity,
+            destinationName: destinationName
+        )
         let cleanedDestinationName = destinationName
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
@@ -52,22 +56,6 @@ struct ReticulumAnnounceEncoder {
         let nameHash = Data(
             SHA256.hash(data: nameData)
                 .prefix(Self.nameHashByteCount)
-        )
-
-        var destinationHashMaterial = Data()
-        destinationHashMaterial.append(nameHash)
-        destinationHashMaterial.append(
-            identity.identityHash
-        )
-
-        let destinationHash = Data(
-            SHA256.hash(
-                data: destinationHashMaterial
-            )
-            .prefix(
-                ReticulumPacketEncoder
-                    .destinationHashByteCount
-            )
         )
 
         let randomHash = try makeRandomHash()
@@ -99,6 +87,37 @@ struct ReticulumAnnounceEncoder {
         return EncodedReticulumAnnounce(
             destinationHash: destinationHash,
             payload: announcePayload
+        )
+    }
+
+    func destinationHash(
+        identity: ReticulumIdentity,
+        destinationName: String
+    ) throws -> Data {
+        let cleanedDestinationName = destinationName
+            .trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+        guard !cleanedDestinationName.isEmpty else {
+            throw ReticulumAnnounceEncodingError
+                .invalidDestinationName
+        }
+
+        let nameHash = Data(
+            SHA256.hash(
+                data: Data(cleanedDestinationName.utf8)
+            ).prefix(Self.nameHashByteCount)
+        )
+        var material = Data()
+        material.append(nameHash)
+        material.append(identity.identityHash)
+
+        return Data(
+            SHA256.hash(data: material)
+                .prefix(
+                    ReticulumPacketEncoder
+                        .destinationHashByteCount
+                )
         )
     }
 
