@@ -54,6 +54,22 @@ final class LXMFIncomingMessageStore: ObservableObject {
         revision += 1
     }
 
+    func deleteConversation(
+        destinationHash: String
+    ) {
+        UserDefaults.standard.removeObject(
+            forKey: messageStorageKey(
+                destinationHash
+            )
+        )
+        UserDefaults.standard.removeObject(
+            forKey: readStorageKey(
+                destinationHash
+            )
+        )
+        revision += 1
+    }
+
     @discardableResult
     func save(
         _ message: LXMFIncomingMessage

@@ -11,6 +11,8 @@ struct ConversationsView: View {
     @State private var showCreateGroup = false
     @State private var showAddLXMFContact = false
     @State private var showingAnnounceMessage = false
+    @State private var contactPendingDeletion: LXMFContact?
+    @State private var groupPendingDeletion: GroupConversation?
 
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
@@ -61,6 +63,62 @@ struct ConversationsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text("Announcement sent.")
+        }
+        .confirmationDialog(
+            "Delete Direct Chat?",
+            isPresented: Binding(
+                get: { contactPendingDeletion != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        contactPendingDeletion = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Delete Chat",
+                role: .destructive
+            ) {
+                if let contact = contactPendingDeletion {
+                    deleteDirectConversation(contact)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                contactPendingDeletion = nil
+            }
+        } message: {
+            Text(
+                "This removes the contact and all saved messages in this conversation."
+            )
+        }
+        .confirmationDialog(
+            "Delete Group?",
+            isPresented: Binding(
+                get: { groupPendingDeletion != nil },
+                set: { isPresented in
+                    if !isPresented {
+                        groupPendingDeletion = nil
+                    }
+                }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(
+                "Delete Group",
+                role: .destructive
+            ) {
+                if let group = groupPendingDeletion {
+                    deleteGroupConversation(group)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                groupPendingDeletion = nil
+            }
+        } message: {
+            Text(
+                "This removes the group and all of its saved messages."
+            )
         }
         .sheet(
             isPresented: $showCreateGroup
@@ -302,6 +360,16 @@ struct ConversationsView: View {
                                 )
                             )
                         }
+                        .contextMenu {
+                            Button(
+                                "Delete Chat",
+                                systemImage: "trash",
+                                role: .destructive
+                            ) {
+                                contactPendingDeletion =
+                                    contact
+                            }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -356,15 +424,27 @@ struct ConversationsView: View {
                         "Create a group to start messaging."
                 )
             } else {
-                List(groups) { group in
-                    NavigationLink {
-                        GroupChatView(
-                            group: group
-                        )
-                    } label: {
-                        groupConversationRow(
-                            group
-                        )
+                List {
+                    ForEach(groups) { group in
+                        NavigationLink {
+                            GroupChatView(
+                                group: group
+                            )
+                        } label: {
+                            groupConversationRow(
+                                group
+                            )
+                        }
+                        .contextMenu {
+                            Button(
+                                "Delete Group",
+                                systemImage: "trash",
+                                role: .destructive
+                            ) {
+                                groupPendingDeletion =
+                                    group
+                            }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -506,6 +586,36 @@ struct ConversationsView: View {
         showCreateGroup = false
         groupName = ""
         selectedGroupIcon = "person.3.fill"
+    }
+
+    private func deleteDirectConversation(
+        _ contact: LXMFContact
+    ) {
+        messageStore.deleteConversation(
+            destinationHash: contact.destinationHash
+        )
+        contactStore.remove(contact)
+        contactPendingDeletion = nil
+    }
+
+    private func deleteGroupConversation(
+        _ group: GroupConversation
+    ) {
+        groups.removeAll {
+            $0.id == group.id
+        }
+        saveGroups()
+
+        let defaults = UserDefaults.standard
+        defaults.removeObject(
+            forKey:
+                "groupMessages-\(group.id.uuidString)"
+        )
+        defaults.removeObject(
+            forKey:
+                "savedGroupMessages_\(group.id.uuidString)"
+        )
+        groupPendingDeletion = nil
     }
 
     private func groupIconButton(
