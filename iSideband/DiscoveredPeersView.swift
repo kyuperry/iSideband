@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct DiscoveredPeersView: View {
+    let focusedDestinationHash: String?
+
     @ObservedObject private var discoveredStore =
         ReticulumDiscoveredPeerStore.shared
 
@@ -9,27 +11,58 @@ struct DiscoveredPeersView: View {
 
     @State private var errorMessage: String?
 
+    init(focusedDestinationHash: String? = nil) {
+        self.focusedDestinationHash =
+            focusedDestinationHash?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+                .lowercased()
+    }
+
     var body: some View {
-        Group {
-            if discoveredStore.peers.isEmpty {
-                ContentUnavailableView {
-                    Label(
-                        "No Discovered Peers",
-                        systemImage:
-                            "antenna.radiowaves.left.and.right"
-                    )
-                } description: {
-                    Text(
-                        "Nearby Reticulum peers will appear here after iSideband receives their announcements."
-                    )
+        ScrollViewReader { proxy in
+            Group {
+                if discoveredStore.peers.isEmpty {
+                    ContentUnavailableView {
+                        Label(
+                            "No Discovered Peers",
+                            systemImage:
+                                "antenna.radiowaves.left.and.right"
+                        )
+                    } description: {
+                        Text(
+                            "Nearby Reticulum peers will appear here after iSideband receives their announcements."
+                        )
+                    }
+                } else {
+                    List {
+                        ForEach(discoveredStore.peers) { peer in
+                            peerRow(peer)
+                                .id(peer.destinationHash)
+                                .listRowBackground(
+                                    isFocused(peer)
+                                    ? Color.blue.opacity(0.14)
+                                    : Color.clear
+                                )
+                        }
+                    }
+                    .listStyle(.plain)
                 }
-            } else {
-                List {
-                    ForEach(discoveredStore.peers) { peer in
-                        peerRow(peer)
+            }
+            .onAppear {
+                guard let focusedDestinationHash else {
+                    return
+                }
+
+                DispatchQueue.main.async {
+                    withAnimation {
+                        proxy.scrollTo(
+                            focusedDestinationHash,
+                            anchor: .center
+                        )
                     }
                 }
-                .listStyle(.plain)
             }
         }
         .navigationTitle("Discovered Peers")
@@ -56,6 +89,12 @@ struct DiscoveredPeersView: View {
                     ?? "Unknown error"
             )
         }
+    }
+
+    private func isFocused(
+        _ peer: ReticulumDiscoveredPeer
+    ) -> Bool {
+        peer.destinationHash == focusedDestinationHash
     }
 
     private func peerRow(

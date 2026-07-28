@@ -37,6 +37,10 @@ final class AnnouncementNotificationManager {
         destinationHash: String,
         eventID: Data
     ) {
+        guard NotificationPreferences
+                .nearbyNodesEnabled else {
+            return
+        }
 
         let content =
             UNMutableNotificationContent()
@@ -47,7 +51,9 @@ final class AnnouncementNotificationManager {
         content.body =
             "\(name ?? "Unknown Node") is nearby."
 
-        content.sound = .default
+        if NotificationPreferences.soundsEnabled {
+            content.sound = .default
+        }
         content.userInfo = [
             "destinationHash": destinationHash
         ]

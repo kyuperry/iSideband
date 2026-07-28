@@ -13,6 +13,10 @@ struct iSidebandApp: App {
     @StateObject private var lxmfManager = LXMFManager.shared
     @StateObject private var bluetooth = BluetoothManager()
 
+    init() {
+        NotificationPreferences.registerDefaults()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView(

@@ -19,12 +19,23 @@ enum MainAppPage: String, CaseIterable {
     }
 }
 
+private enum AppRoute: Hashable {
+    case discoveredPeer(String)
+    case message(String)
+}
+
 struct ContentView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var notificationRouter =
+        NotificationNavigationRouter.shared
+    @ObservedObject private var contactStore =
+        LXMFContactStore.shared
+
     @State private var selectedPage: MainAppPage = .rnode
+    @State private var navigationPath: [AppRoute] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $navigationPath) {
             Group {
                 switch selectedPage {
                 case .rnode:
@@ -41,12 +52,69 @@ struct ContentView: View {
             .safeAreaInset(edge: .bottom) {
                 mainPageSelector
             }
+            .navigationDestination(for: AppRoute.self) {
+                route in
+                destination(for: route)
+            }
         }
         .task {
             let gpsEnabled = UserDefaults.standard.bool(
                 forKey: "gpsInterfaceEnabled"
             )
             LocationTelemetryManager.shared.setEnabled(gpsEnabled)
+            openPendingNotification()
+        }
+        .onChange(
+            of: notificationRouter.pendingRoute
+        ) {
+            openPendingNotification()
+        }
+    }
+
+    @ViewBuilder
+    private func destination(
+        for route: AppRoute
+    ) -> some View {
+        switch route {
+        case .discoveredPeer(let destinationHash):
+            DiscoveredPeersView(
+                focusedDestinationHash: destinationHash
+            )
+
+        case .message(let sourceHash):
+            if let contact = contactStore.contact(
+                for: sourceHash
+            ) {
+                MessagesView(
+                    bluetooth: bluetooth,
+                    contact: contact
+                )
+            } else {
+                DiscoveredPeersView(
+                    focusedDestinationHash: sourceHash
+                )
+            }
+        }
+    }
+
+    private func openPendingNotification() {
+        guard let route =
+                notificationRouter.consumePendingRoute() else {
+            return
+        }
+
+        selectedPage = .messages
+
+        switch route {
+        case .discoveredPeer(let destinationHash):
+            navigationPath = [
+                .discoveredPeer(destinationHash)
+            ]
+
+        case .message(let sourceHash):
+            navigationPath = [
+                .message(sourceHash)
+            ]
         }
     }
 

@@ -11,12 +11,19 @@ final class LXMFMessageNotificationManager {
         message: LXMFIncomingMessage,
         senderName: String?
     ) {
+        guard NotificationPreferences
+                .lxmfMessagesEnabled else {
+            return
+        }
+
         let content =
             UNMutableNotificationContent()
         content.title =
             senderName ?? "New LXMF Message"
         content.body = message.content
-        content.sound = .default
+        if NotificationPreferences.soundsEnabled {
+            content.sound = .default
+        }
         content.userInfo = [
             "sourceHash": message.sourceHashHex
         ]

@@ -105,6 +105,22 @@ final class BluetoothManager:
         print("Foreground notification delegate called")
         completionHandler([.banner, .list, .sound])
     }
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler:
+        @escaping () -> Void
+    ) {
+        let userInfo =
+            response.notification.request.content.userInfo
+
+        Task { @MainActor in
+            NotificationNavigationRouter.shared.receive(
+                userInfo: userInfo
+            )
+            completionHandler()
+        }
+    }
     func startScanning() {
         guard centralManager.state == .poweredOn else {
             connectionMessage = "Bluetooth is not ready"
@@ -283,11 +299,19 @@ final class BluetoothManager:
 
         sentBatteryMilestones.insert(milestone)
 
+        guard NotificationPreferences.batteryEnabled(
+            at: milestone
+        ) else {
+            return
+        }
+
         let content = UNMutableNotificationContent()
         content.title = "RNode Battery \(milestone)%"
         content.body =
             "Your connected RNode battery has reached \(milestone)%."
-        content.sound = .default
+        if NotificationPreferences.soundsEnabled {
+            content.sound = .default
+        }
         
         let request = UNNotificationRequest(
             identifier: "rnode-low-battery",

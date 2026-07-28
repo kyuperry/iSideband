@@ -10,6 +10,21 @@ struct SettingsView: View {
 
     @State private var gpsEnabled = false
     @State private var bluetoothEnabled = true
+    @AppStorage(
+        NotificationPreferenceKey.nearbyNodes
+    ) private var nearbyNodeNotifications = true
+    @AppStorage(
+        NotificationPreferenceKey.lxmfMessages
+    ) private var lxmfMessageNotifications = true
+    @AppStorage(
+        NotificationPreferenceKey.battery50
+    ) private var battery50Notifications = true
+    @AppStorage(
+        NotificationPreferenceKey.battery25
+    ) private var battery25Notifications = true
+    @AppStorage(
+        NotificationPreferenceKey.sounds
+    ) private var notificationSounds = true
 
     @State private var frequencyMHz = "915.000"
     @State private var bandwidthKHz = "125"
@@ -27,6 +42,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             interfaceSettingsSection
+            notificationSettingsSection
             identitySection
             radioSettingsSection
             rnodeControlsSection
@@ -122,6 +138,41 @@ struct SettingsView: View {
             }
         } message: {
             Text(statusMessage ?? "")
+        }
+    }
+
+    private var notificationSettingsSection: some View {
+        Section("Notifications") {
+            Toggle(
+                "Nearby Reticulum Nodes",
+                isOn: $nearbyNodeNotifications
+            )
+
+            Toggle(
+                "LXMF Messages",
+                isOn: $lxmfMessageNotifications
+            )
+
+            Toggle(
+                "RNode Battery at 50%",
+                isOn: $battery50Notifications
+            )
+
+            Toggle(
+                "RNode Battery at 25%",
+                isOn: $battery25Notifications
+            )
+
+            Toggle(
+                "Notification Sounds",
+                isOn: $notificationSounds
+            )
+
+            Text(
+                "iPhone notification permission must also be enabled for iSideband in Settings."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
