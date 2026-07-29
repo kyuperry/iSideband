@@ -100,7 +100,7 @@ struct MessagesView: View {
                         .font(.title2.bold())
 
                     Text(
-                        "Messages sent here are currently raw radio-data tests."
+                        "Send an encrypted LXMF message to start this conversation."
                     )
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.secondary)
@@ -448,9 +448,7 @@ struct MessagesView: View {
                 let originalImage = UIImage(
                     data: originalData
                 ),
-                let photoData = originalImage.jpegData(
-                    compressionQuality: 0.8
-                ),
+                let photoData = lxmfPhotoData(from: originalImage),
                 let savedURL = savePhotoToDisk(photoData)
             else {
                 await MainActor.run {
@@ -461,11 +459,28 @@ struct MessagesView: View {
             }
 
             await MainActor.run {
+                guard let peer = contact?.peer,
+                      let queued = lxmfManager.sendAttachment(
+                        at: savedURL,
+                        name: savedURL.lastPathComponent,
+                        mimeType: "image/jpeg",
+                        type: .photo,
+                        to: peer
+                      ) else {
+                    messages.append(ChatMessage(
+                        text: "", isOutgoing: true, status: "Failed",
+                        type: .photo, attachmentName: savedURL.lastPathComponent,
+                        attachmentPath: savedURL.path, attachmentSize: photoData.count
+                    ))
+                    self.selectedPhoto = nil
+                    return
+                }
                 messages.append(
                     ChatMessage(
                         text: "",
                         isOutgoing: true,
-                        status: "Saved locally",
+                        status: "Sending",
+                        lxmfMessageID: queued.id,
                         type: .photo,
                         attachmentName:
                             savedURL.lastPathComponent,
@@ -513,11 +528,27 @@ struct MessagesView: View {
             attributes?[.size] as? NSNumber
         )?.intValue
 
+        guard let peer = contact?.peer,
+              let queued = lxmfManager.sendAttachment(
+                at: savedURL,
+                name: sourceURL.lastPathComponent,
+                mimeType: "application/octet-stream",
+                type: .file,
+                to: peer
+              ) else {
+            messages.append(ChatMessage(
+                text: "", isOutgoing: true, status: "Failed", type: .file,
+                attachmentName: sourceURL.lastPathComponent,
+                attachmentPath: savedURL.path, attachmentSize: fileSize
+            ))
+            return
+        }
         messages.append(
             ChatMessage(
                 text: "",
                 isOutgoing: true,
-                status: "Saved locally",
+                status: "Sending",
+                lxmfMessageID: queued.id,
                 type: .file,
                 attachmentName:
                     sourceURL.lastPathComponent,
@@ -607,6 +638,32 @@ struct MessagesView: View {
 
             return nil
         }
+    }
+
+    private func lxmfPhotoData(from image: UIImage) -> Data? {
+        var current = image
+        for maximumDimension in [1280.0, 1024.0, 800.0, 640.0, 480.0] {
+            let scale = min(
+                1,
+                maximumDimension / max(current.size.width, current.size.height)
+            )
+            if scale < 1 {
+                let size = CGSize(
+                    width: current.size.width * scale,
+                    height: current.size.height * scale
+                )
+                current = UIGraphicsImageRenderer(size: size).image { _ in
+                    current.draw(in: CGRect(origin: .zero, size: size))
+                }
+            }
+            for quality in [0.75, 0.6, 0.45, 0.3] {
+                if let data = current.jpegData(compressionQuality: quality),
+                   data.count <= LXMFManager.maximumAttachmentBytes {
+                    return data
+                }
+            }
+        }
+        return nil
     }
 
     private func saveFileToDisk(

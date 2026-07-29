@@ -1,0 +1,498 @@
+package main
+
+/*
+#include <stdint.h>
+ #include <stdlib.h>
+typedef void (*runcore_log_cb)(void* user_data, int32_t level, const char* line);
+typedef void (*runcore_raw_tx_cb)(void* user_data, const uint8_t* data, int32_t len);
+typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type);
+typedef void (*runcore_status_cb)(void* user_data, const char* client_id, const char* status);
+
+static inline void runcore_log_cb_call(runcore_log_cb cb, void* user_data, int32_t level, const char* line) {
+  cb(user_data, level, line);
+}
+static inline void runcore_raw_tx_cb_call(runcore_raw_tx_cb cb, void* user_data, const uint8_t* data, int32_t len) {
+  cb(user_data, data, len);
+}
+static inline void runcore_inbound_cb_call(runcore_inbound_cb cb, void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type) {
+  cb(user_data, source, title, content, timestamp, message_id, attachment_path, attachment_name, attachment_mime, attachment_type);
+}
+static inline void runcore_status_cb_call(runcore_status_cb cb, void* user_data, const char* client_id, const char* status) {
+  cb(user_data, client_id, status);
+}
+*/
+import "C"
+
+import (
+	"encoding/hex"
+	"fmt"
+	"mime"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"unsafe"
+
+	"github.com/svanichkin/go-lxmf/lxmf"
+	"github.com/svanichkin/go-reticulum/rns"
+
+	"runcore"
+)
+
+type nodeHandle struct {
+	node         *runcore.Node
+	rawInterface *rns.Interface
+	rawTxCB      C.runcore_raw_tx_cb
+	rawTxUser    unsafe.Pointer
+	inboundCB    C.runcore_inbound_cb
+	inboundUser  unsafe.Pointer
+	statusCB     C.runcore_status_cb
+	statusUser   unsafe.Pointer
+}
+
+var (
+	nextID  uint64 = 1
+	nodes          = map[uint64]*nodeHandle{}
+	nodesMu sync.RWMutex
+
+	logMu       sync.RWMutex
+	logCB       C.runcore_log_cb
+	logUserData unsafe.Pointer
+)
+
+func main() {}
+
+func allocCString(s string) *C.char { return C.CString(s) }
+
+//export runcore_free_string
+func runcore_free_string(p *C.char) {
+	if p == nil {
+		return
+	}
+	C.free(unsafe.Pointer(p))
+}
+
+//export runcore_default_lxmd_config
+func runcore_default_lxmd_config() *C.char {
+	return allocCString(runcore.DefaultLXMDConfigText(""))
+}
+
+const defaultRNSConfigLogLevel = 4
+
+//export runcore_default_rns_config
+func runcore_default_rns_config() *C.char {
+	return allocCString(runcore.DefaultRNSConfigText(defaultRNSConfigLogLevel))
+}
+
+//export runcore_start
+func runcore_start(contactsDir *C.char, sendDir *C.char, messagesDir *C.char, loglevel C.int32_t) C.uint64_t {
+	contacts := ""
+	if contactsDir != nil {
+		contacts = C.GoString(contactsDir)
+	}
+	send := ""
+	if sendDir != nil {
+		send = C.GoString(sendDir)
+	}
+	messages := ""
+	if messagesDir != nil {
+		messages = C.GoString(messagesDir)
+	}
+	level := int(loglevel)
+	rootDir := ""
+	if contacts != "" {
+		rootDir = filepath.Dir(strings.TrimSpace(contacts))
+	}
+
+	checkDirReadableWritable(contacts)
+	checkDirReadableWritable(send)
+	checkDirReadableWritable(messages)
+	checkDirReadableWritable(rootDir)
+
+	n, err := runcore.Start(runcore.Options{
+		Dir:         rootDir,
+		ContactsDir: contacts,
+		SendDir:     send,
+		MessagesDir: messages,
+		LogLevel:    level,
+	})
+	if err != nil {
+		rns.Log(fmt.Sprintf("runcore_start failed: %v", err), rns.LOG_ERROR)
+		return 0
+	}
+
+	h := &nodeHandle{node: n}
+
+	nodesMu.Lock()
+	id := nextID
+	nodes[id] = h
+	nodesMu.Unlock()
+
+	return C.uint64_t(id)
+}
+
+func checkDirReadableWritable(dir string) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return
+	}
+
+	p := filepath.Join(dir, ".rwcheck")
+	want := []byte("ok")
+	if err := os.WriteFile(p, want, 0o644); err != nil {
+		return
+	}
+	got, err := os.ReadFile(p)
+	_ = os.Remove(p)
+	if err != nil {
+		return
+	}
+	if string(got) != string(want) {
+		return
+	}
+}
+
+func getHandle(id C.uint64_t) *nodeHandle {
+	nodesMu.RLock()
+	h := nodes[uint64(id)]
+	nodesMu.RUnlock()
+	return h
+}
+
+//export runcore_stop
+func runcore_stop(handle C.uint64_t) C.int32_t {
+	nodesMu.Lock()
+	h := nodes[uint64(handle)]
+	delete(nodes, uint64(handle))
+	nodesMu.Unlock()
+	if h == nil {
+		return 0
+	}
+	if h.rawInterface != nil {
+		h.rawInterface.Detach()
+	}
+	_ = h.node.Close()
+	return 0
+}
+
+//export runcore_attach_raw_interface
+func runcore_attach_raw_interface(handle C.uint64_t, cb C.runcore_raw_tx_cb, userData unsafe.Pointer, bitrate C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || rns.Owner == nil || cb == nil {
+		return 1
+	}
+	if h.rawInterface != nil {
+		return 0
+	}
+	ifc := &rns.Interface{Name: "iSideband RNode", Type: "iSidebandRaw", IN: true, OUT: true, Online: true, Bitrate: int(bitrate), HWMTU: 500, AutoconfigureMTU: true, DriverImplemented: true}
+	ifc.FinalInit()
+	h.rawTxCB, h.rawTxUser = cb, userData
+	ifc.SetProcessOutgoingFunc(func(data []byte) error {
+		if len(data) == 0 {
+			return nil
+		}
+		nodesMu.RLock()
+		current := nodes[uint64(handle)]
+		nodesMu.RUnlock()
+		if current == nil || current.rawTxCB == nil {
+			return fmt.Errorf("raw interface callback unavailable")
+		}
+		C.runcore_raw_tx_cb_call(current.rawTxCB, current.rawTxUser, (*C.uint8_t)(unsafe.Pointer(&data[0])), C.int32_t(len(data)))
+		return nil
+	})
+	rns.Owner.AddInterface(ifc, rns.InterfaceModeFull, nil, nil, nil, nil, nil, nil, nil, nil)
+	h.rawInterface = ifc
+	return 0
+}
+
+//export runcore_raw_interface_receive
+func runcore_raw_interface_receive(handle C.uint64_t, data *C.uint8_t, length C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.rawInterface == nil || data == nil || length <= 0 {
+		return 1
+	}
+	rns.Inbound(C.GoBytes(unsafe.Pointer(data), C.int(length)), h.rawInterface)
+	return 0
+}
+
+//export runcore_announce
+func runcore_announce(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	h.node.AnnounceDelivery()
+	return 0
+}
+
+//export runcore_send_text
+func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, direct C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || destination == nil || content == nil {
+		return 1
+	}
+	method := byte(lxmf.MethodOpportunistic)
+	if direct != 0 {
+		method = lxmf.MethodDirect
+	}
+	_, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: method, Content: C.GoString(content)})
+	if err != nil {
+		rns.Log(fmt.Sprintf("runcore_send_text failed: %v", err), rns.LOG_ERROR)
+		return 2
+	}
+	return 0
+}
+
+func notifyStatus(h *nodeHandle, clientID, status string) {
+	if h == nil || h.statusCB == nil || strings.TrimSpace(clientID) == "" {
+		return
+	}
+	cid, state := C.CString(clientID), C.CString(status)
+	C.runcore_status_cb_call(h.statusCB, h.statusUser, cid, state)
+	C.free(unsafe.Pointer(cid))
+	C.free(unsafe.Pointer(state))
+}
+
+//export runcore_set_status_cb
+func runcore_set_status_cb(handle C.uint64_t, cb C.runcore_status_cb, userData unsafe.Pointer) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || cb == nil {
+		return 1
+	}
+	h.statusCB, h.statusUser = cb, userData
+	return 0
+}
+
+//export runcore_send_attachment
+func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.char, filePath *C.char, fileName *C.char, mimeType *C.char, clientID *C.char) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || destination == nil || filePath == nil || clientID == nil {
+		return 1
+	}
+	path := C.GoString(filePath)
+	data, err := os.ReadFile(path)
+	if err != nil || len(data) == 0 {
+		return 2
+	}
+	name := filepath.Base(path)
+	if fileName != nil && strings.TrimSpace(C.GoString(fileName)) != "" {
+		name = filepath.Base(C.GoString(fileName))
+	}
+	_ = mimeType // The standard LXMF file field carries filename and bytes.
+	fields := map[any]any{lxmf.FieldFileAttachments: []any{[]any{[]byte(name), data}}}
+	text := ""
+	if content != nil {
+		text = C.GoString(content)
+	}
+	id := C.GoString(clientID)
+	notifyStatus(h, id, "sending")
+	msg, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: lxmf.MethodDirect, Content: text, Fields: fields})
+	if err != nil {
+		notifyStatus(h, id, "failed")
+		return 3
+	}
+	msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) { notifyStatus(h, id, "sent") })
+	msg.RegisterFailedCallback(func(*lxmf.LXMessage) { notifyStatus(h, id, "failed") })
+	return 0
+}
+
+func messageIDHex(m *lxmf.LXMessage) string {
+	if m == nil {
+		return ""
+	}
+	if len(m.MessageID) > 0 {
+		return hex.EncodeToString(m.MessageID)
+	}
+	return hex.EncodeToString(m.Hash)
+}
+
+func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachmentType int32) {
+	if m == nil {
+		return
+	}
+	value, ok := m.Fields[lxmf.FieldFileAttachments]
+	if !ok {
+		return
+	}
+	items, ok := value.([]any)
+	if !ok || len(items) == 0 {
+		return
+	}
+	pair, ok := items[0].([]any)
+	if !ok || len(pair) < 2 {
+		return
+	}
+	nameBytes, ok1 := pair[0].([]byte)
+	data, ok2 := pair[1].([]byte)
+	if !ok1 || !ok2 || len(data) == 0 {
+		return
+	}
+	name = filepath.Base(string(nameBytes))
+	if name == "." || name == "" {
+		name = "attachment.bin"
+	}
+	mimeName = mime.TypeByExtension(filepath.Ext(name))
+	if mimeName == "" {
+		mimeName = "application/octet-stream"
+	}
+	dir := filepath.Join(os.TempDir(), "iSidebandIncomingAttachments")
+	if os.MkdirAll(dir, 0o755) != nil {
+		return "", "", "", 0
+	}
+	path = filepath.Join(dir, messageIDHex(m)+"-"+name)
+	if os.WriteFile(path, data, 0o600) != nil {
+		return "", "", "", 0
+	}
+	if strings.HasPrefix(mimeName, "image/") {
+		attachmentType = 1
+	} else {
+		attachmentType = 2
+	}
+	return
+}
+
+//export runcore_set_inbound_cb
+func runcore_set_inbound_cb(handle C.uint64_t, cb C.runcore_inbound_cb, userData unsafe.Pointer) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || cb == nil {
+		return 1
+	}
+	h.inboundCB, h.inboundUser = cb, userData
+	h.node.SetInboundHandler(func(m *lxmf.LXMessage) {
+		if m == nil {
+			return
+		}
+		source := C.CString(fmt.Sprintf("%x", m.SourceHash))
+		title := C.CString(m.TitleAsString())
+		content := C.CString(m.ContentAsString())
+		messageID := C.CString(messageIDHex(m))
+		pathValue, nameValue, mimeValue, attachmentType := inboundAttachment(m)
+		path := C.CString(pathValue)
+		name := C.CString(nameValue)
+		mimeName := C.CString(mimeValue)
+		C.runcore_inbound_cb_call(h.inboundCB, h.inboundUser, source, title, content, C.double(m.Timestamp), messageID, path, name, mimeName, C.int32_t(attachmentType))
+		C.free(unsafe.Pointer(source))
+		C.free(unsafe.Pointer(title))
+		C.free(unsafe.Pointer(content))
+		C.free(unsafe.Pointer(messageID))
+		C.free(unsafe.Pointer(path))
+		C.free(unsafe.Pointer(name))
+		C.free(unsafe.Pointer(mimeName))
+	})
+	return 0
+}
+
+//export runcore_set_log_cb
+func runcore_set_log_cb(cb C.runcore_log_cb, userData unsafe.Pointer) {
+	logMu.Lock()
+	logCB = cb
+	logUserData = userData
+	logMu.Unlock()
+
+	if cb == nil {
+		rns.SetLogDestCallback(nil)
+		return
+	}
+	rns.SetLogDestCallback(func(level int, msg string) {
+		logMu.RLock()
+		c := logCB
+		ud := logUserData
+		logMu.RUnlock()
+		if c == nil {
+			return
+		}
+		cLine := allocCString(msg)
+		C.runcore_log_cb_call(c, ud, C.int32_t(level), cLine)
+		C.free(unsafe.Pointer(cLine))
+	})
+
+	// Emit a marker so clients can verify the hook works without waiting for network activity.
+	rns.Log("runcore: log callback enabled", rns.LOG_NOTICE)
+}
+
+//export runcore_set_loglevel
+func runcore_set_loglevel(level C.int32_t) {
+	rns.SetLogLevel(int(level))
+}
+
+//export runcore_config_dir
+func runcore_config_dir(handle C.uint64_t) *C.char {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return nil
+	}
+	return allocCString(h.node.ConfigDir())
+}
+
+//export runcore_destination_hash_hex
+func runcore_destination_hash_hex(handle C.uint64_t) *C.char {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return nil
+	}
+	return allocCString(h.node.DestinationHashHex())
+}
+
+//export runcore_set_display_name
+func runcore_set_display_name(handle C.uint64_t, displayName *C.char) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	name := ""
+	if displayName != nil {
+		name = C.GoString(displayName)
+	}
+	if err := h.node.SetDisplayName(name); err != nil {
+		return 2
+	}
+	return 0
+}
+
+//export runcore_restart
+func runcore_restart(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	if err := h.node.Restart(); err != nil {
+		return 2
+	}
+	return 0
+}
+
+//export runcore_reset_profile
+func runcore_reset_profile(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	if err := h.node.ResetProfile(); err != nil {
+		return 2
+	}
+	return 0
+}
+
+//export runcore_interface_stats_json
+func runcore_interface_stats_json(handle C.uint64_t) *C.char {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return nil
+	}
+	return allocCString(h.node.InterfaceStatsJSON())
+}
+
+//export runcore_set_interface_enabled
+func runcore_set_interface_enabled(handle C.uint64_t, name *C.char, enabled C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	if name == nil {
+		return 2
+	}
+	if err := h.node.SetInterfaceEnabled(C.GoString(name), enabled != 0); err != nil {
+		return 3
+	}
+	return 0
+}

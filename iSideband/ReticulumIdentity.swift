@@ -156,7 +156,8 @@ struct ReticulumIdentity: Codable {
 
     func encrypt(
         _ data: Data,
-        for destinationPublicKey: Data
+        for destinationPublicKey: Data,
+        ratchet: Data? = nil
     ) throws -> Data {
         guard destinationPublicKey.count ==
                 Self.combinedKeyByteCount
@@ -166,11 +167,12 @@ struct ReticulumIdentity: Codable {
 
         return try ReticulumTokenCipher().encrypt(
             data,
-            recipientPublicKey: Data(
-                destinationPublicKey.prefix(
-                    Self.encryptionKeyByteCount
-                )
-            ),
+            recipientPublicKey: ratchet ??
+                Data(
+                    destinationPublicKey.prefix(
+                        Self.encryptionKeyByteCount
+                    )
+                ),
             salt: Data(
                 SHA256.hash(data: destinationPublicKey)
                     .prefix(Self.truncatedHashByteCount)

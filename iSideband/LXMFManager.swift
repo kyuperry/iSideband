@@ -10,8 +10,20 @@ final class LXMFManager: ObservableObject {
     @Published private(set) var outgoingMessages: [LXMFOutgoingMessage] = []
 
     private let service = LXMFService()
+    static let maximumAttachmentBytes = 120_000
 
-    private init() { }
+    private static let storageKey = "isideband.lxmf.outgoing"
+
+    private init() {
+        if let data = UserDefaults.standard.data(forKey: Self.storageKey),
+           let saved = try? JSONDecoder().decode([LXMFOutgoingMessage].self, from: data) {
+            outgoingMessages = saved.map { message in
+                var restored = message
+                if restored.status == .sending { restored.status = .queued }
+                return restored
+            }
+        }
+    }
 
     func start(
         bluetooth: BluetoothManager
@@ -20,6 +32,10 @@ final class LXMFManager: ObservableObject {
         ReticulumCompatibilitySelfTest.run()
         print("Starting LXMF Manager")
 
+        ReticulumCoreBridge.shared.start(
+            bluetooth: bluetooth
+        )
+
         isConnected = true
         identityReady = true
 
@@ -27,6 +43,7 @@ final class LXMFManager: ObservableObject {
             manager: self,
             bluetooth: bluetooth
         )
+        service.processQueue()
     }
 
     func stop() {
@@ -79,8 +96,41 @@ final class LXMFManager: ObservableObject {
 
         return message
     }
+
+    @discardableResult
+    func sendAttachment(
+        at fileURL: URL,
+        name: String,
+        mimeType: String,
+        type: LXMFOutgoingAttachmentType,
+        caption: String = "",
+        to peer: LXMFPeer
+    ) -> LXMFOutgoingMessage? {
+        guard peer.isDestinationValid,
+              FileManager.default.fileExists(atPath: fileURL.path),
+              let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
+              let byteCount = (attributes[.size] as? NSNumber)?.intValue,
+              byteCount <= Self.maximumAttachmentBytes else { return nil }
+        let message = LXMFOutgoingMessage(
+            text: caption,
+            peer: peer,
+            status: .queued,
+            attachment: LXMFOutgoingAttachment(
+                path: fileURL.path,
+                name: name,
+                mimeType: mimeType,
+                type: type
+            )
+        )
+        outgoingMessages.append(message)
+        persistQueue()
+        service.processQueue()
+        return message
+    }
     func announceIdentity() {
-        service.announceIdentity()
+        if !ReticulumCoreBridge.shared.announce() {
+            service.announceIdentity()
+        }
     }
 
     func nextQueuedMessage() -> LXMFOutgoingMessage? {
@@ -100,11 +150,26 @@ final class LXMFManager: ObservableObject {
         }
 
         outgoingMessages[index].status = status
+        persistQueue()
 
         print(
             "LXMF message \(id) status changed to \(status.rawValue)"
         )
     }
+
+    private func persistQueue() {
+        guard let data = try? JSONEncoder().encode(outgoingMessages) else { return }
+        UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+}
+
+enum LXMFOutgoingAttachmentType: String, Codable, Hashable { case photo, file }
+
+struct LXMFOutgoingAttachment: Codable, Hashable {
+    let path: String
+    let name: String
+    let mimeType: String
+    let type: LXMFOutgoingAttachmentType
 }
 
 struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
@@ -113,19 +178,22 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
     let peer: LXMFPeer
     let createdAt: Date
     var status: LXMFOutgoingStatus
+    let attachment: LXMFOutgoingAttachment?
 
     init(
         id: UUID = UUID(),
         text: String,
         peer: LXMFPeer,
         createdAt: Date = Date(),
-        status: LXMFOutgoingStatus
+        status: LXMFOutgoingStatus,
+        attachment: LXMFOutgoingAttachment? = nil
     ) {
         self.id = id
         self.text = text
         self.peer = peer
         self.createdAt = createdAt
         self.status = status
+        self.attachment = attachment
     }
 }
 

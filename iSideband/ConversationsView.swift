@@ -14,6 +14,7 @@ struct ConversationsView: View {
     @State private var showAddLXMFContact = false
     @State private var showingAnnounceMessage = false
     @State private var contactPendingDeletion: LXMFContact?
+    @State private var contactPendingEdit: LXMFContact?
     @State private var groupPendingDeletion: GroupConversation?
 
     @State private var groupName = ""
@@ -148,6 +149,22 @@ struct ConversationsView: View {
                 } catch {
                     print(
                         "Failed to save LXMF contact: " +
+                        error.localizedDescription
+                    )
+                }
+            }
+        }
+        .sheet(item: $contactPendingEdit) { contact in
+            AddLXMFContactView(
+                contact: contact
+            ) { updatedContact in
+                do {
+                    try contactStore.update(
+                        updatedContact
+                    )
+                } catch {
+                    print(
+                        "Failed to update LXMF contact: " +
                         error.localizedDescription
                     )
                 }
@@ -366,6 +383,14 @@ struct ConversationsView: View {
                             )
                         }
                         .contextMenu {
+                            Button(
+                                "Edit Contact",
+                                systemImage: "pencil"
+                            ) {
+                                contactPendingEdit =
+                                    contact
+                            }
+
                             Button(
                                 "Delete Chat",
                                 systemImage: "trash",

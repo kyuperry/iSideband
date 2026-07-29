@@ -7,6 +7,8 @@ struct RNodeDetailView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject private var locationTelemetry =
         LocationTelemetryManager.shared
+    @ObservedObject private var reticulumCore =
+        ReticulumCoreBridge.shared
 
     @State private var showDisconnectConfirmation = false
     @State private var identityHash = "Loading…"
@@ -66,6 +68,23 @@ struct RNodeDetailView: View {
             }
 
             Section("Reticulum Identity") {
+                identityRow(
+                    title: "Link Destination",
+                    value:
+                        reticulumCore.destinationHash.isEmpty
+                            ? "Unavailable"
+                            : reticulumCore.destinationHash,
+                    systemImage: "link",
+                    copyLabel:
+                        "Copy Link Destination Hash"
+                )
+
+                telemetryRow(
+                    title: "Link Core",
+                    value: reticulumCore.status,
+                    systemImage: "network"
+                )
+
                 identityRow(
                     title: "Destination Hash",
                     value: destinationHash,
@@ -192,6 +211,23 @@ struct RNodeDetailView: View {
                         )
                     } ?? "Not reported",
                     systemImage: "arrow.up.circle"
+                )
+                telemetryRow(
+                    title: "Bluetooth Written",
+                    value:
+                        "\(bluetooth.bluetoothBytesWritten) bytes",
+                    systemImage: "bolt.horizontal.circle"
+                )
+                telemetryRow(
+                    title: "Bluetooth Received",
+                    value:
+                        "\(bluetooth.bluetoothBytesReceived) bytes",
+                    systemImage: "antenna.radiowaves.left.and.right"
+                )
+                telemetryRow(
+                    title: "Inbound Diagnostic",
+                    value: bluetooth.lastInboundDiagnostic,
+                    systemImage: "stethoscope"
                 )
                 telemetryRow(
                     title: "Last Packet RSSI",

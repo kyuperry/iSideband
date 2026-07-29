@@ -78,6 +78,14 @@ final class ReticulumAnnounceStore: ObservableObject {
         )?.publicKey
     }
 
+    func ratchet(
+        for destinationHash: String
+    ) -> Data? {
+        announce(
+            for: destinationHash
+        )?.ratchet
+    }
+
     func removeAll() {
         announces.removeAll()
         history.removeAll()

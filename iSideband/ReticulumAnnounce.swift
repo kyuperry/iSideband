@@ -5,6 +5,7 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
 
     let destinationHash: Data
     let publicKey: Data
+    let ratchet: Data?
     let appData: Data?
     let receivedAt: Date
 
@@ -12,6 +13,7 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
         id: UUID = UUID(),
         destinationHash: Data,
         publicKey: Data,
+        ratchet: Data? = nil,
         appData: Data? = nil,
         receivedAt: Date = Date()
     ) throws {
@@ -27,9 +29,16 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
             throw ReticulumAnnounceError.invalidPublicKey
         }
 
+        guard ratchet == nil ||
+                ratchet?.count == 32
+        else {
+            throw ReticulumAnnounceError.invalidPublicKey
+        }
+
         self.id = id
         self.destinationHash = destinationHash
         self.publicKey = publicKey
+        self.ratchet = ratchet
         self.appData = appData
         self.receivedAt = receivedAt
     }
@@ -57,22 +66,12 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
     }
 
     var displayName: String? {
-        guard let appData,
-              let name = String(
-                data: appData,
-                encoding: .utf8
-              )
-        else {
+        guard let appData else {
             return nil
         }
 
-        let trimmedName = name.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-
-        return trimmedName.isEmpty
-            ? nil
-            : trimmedName
+        return LXMFMessageCodec()
+            .decodeAnnounceDisplayName(appData)
     }
 }
 

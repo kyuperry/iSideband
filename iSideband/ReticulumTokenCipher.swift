@@ -9,6 +9,31 @@ enum ReticulumTokenCipherError: Error {
     case encryptionFailed
 }
 
+final class ReticulumRatchet {
+    static let shared = ReticulumRatchet()
+
+    private let privateKey =
+        Curve25519.KeyAgreement.PrivateKey()
+
+    private init() {}
+
+    var publicKey: Data {
+        privateKey.publicKey.rawRepresentation
+    }
+
+    func decrypt(
+        _ ciphertextToken: Data,
+        identityHash: Data
+    ) throws -> Data {
+        try ReticulumTokenCipher().decrypt(
+            ciphertextToken,
+            recipientPrivateKey:
+                privateKey.rawRepresentation,
+            salt: identityHash
+        )
+    }
+}
+
 struct ReticulumTokenCipher {
     private static let ephemeralKeyByteCount = 32
     private static let ivByteCount = kCCBlockSizeAES128

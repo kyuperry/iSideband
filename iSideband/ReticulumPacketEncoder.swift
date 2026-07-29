@@ -92,7 +92,8 @@ struct ReticulumPacketEncoder {
     }
     func encodeAnnouncePacket(
         destinationHash: Data,
-        payload: Data
+        payload: Data,
+        contextFlag: Bool = false
     ) throws -> Data {
         guard destinationHash.count ==
                 Self.destinationHashByteCount
@@ -112,7 +113,8 @@ struct ReticulumPacketEncoder {
 
          Combined flags byte: 0x01
          */
-        let flags: UInt8 = 0x01
+        let flags: UInt8 =
+            0x01 | (contextFlag ? 0x20 : 0x00)
         let hops: UInt8 = 0x00
         let context = ReticulumPacketContext.none.rawValue
 

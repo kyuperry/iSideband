@@ -46,6 +46,9 @@ struct DiscoveredPeersView: View {
                                     : Color.clear
                                 )
                         }
+                        .onDelete(
+                            perform: deletePeers
+                        )
                     }
                     .listStyle(.plain)
                 }
@@ -67,6 +70,21 @@ struct DiscoveredPeersView: View {
         }
         .navigationTitle("Discovered Peers")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if !discoveredStore.peers.isEmpty {
+                ToolbarItem(
+                    placement:
+                        .topBarTrailing
+                ) {
+                    Button(
+                        "Clear",
+                        role: .destructive
+                    ) {
+                        discoveredStore.clear()
+                    }
+                }
+            }
+        }
         .alert(
             "Could Not Save Contact",
             isPresented: Binding(
@@ -246,6 +264,24 @@ struct DiscoveredPeersView: View {
         } catch {
             errorMessage =
                 error.localizedDescription
+        }
+    }
+
+    private func deletePeers(
+        at offsets: IndexSet
+    ) {
+        let hashes = offsets.compactMap {
+            index in
+            discoveredStore.peers.indices
+                .contains(index)
+                ? discoveredStore.peers[index]
+                    .destinationHash
+                : nil
+        }
+        for hash in hashes {
+            discoveredStore.remove(
+                destinationHash: hash
+            )
         }
     }
 }

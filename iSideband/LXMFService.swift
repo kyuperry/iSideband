@@ -54,6 +54,9 @@ final class LXMFService: ObservableObject {
     private let packetEncoder =
         ReticulumPacketEncoder()
 
+    private let lxmfMessageCodec =
+        LXMFMessageCodec()
+
     func start(
         manager: LXMFManager,
         bluetooth: BluetoothManager
@@ -97,10 +100,18 @@ final class LXMFService: ObservableObject {
                 try ReticulumIdentityStore.shared
                     .loadOrCreateIdentity()
 
+            let announceAppData =
+                lxmfMessageCodec.encodeAnnounceAppData(
+                    displayName: "iSideband"
+                )
+
             let encodedAnnounce =
                 try announceEncoder.encode(
                     identity: identity,
-                    destinationName: "lxmf.delivery"
+                    destinationName: "lxmf.delivery",
+                    ratchet:
+                        ReticulumRatchet.shared.publicKey,
+                    appData: announceAppData
                 )
 
             let packet =
@@ -108,7 +119,9 @@ final class LXMFService: ObservableObject {
                     destinationHash:
                         encodedAnnounce.destinationHash,
                     payload:
-                        encodedAnnounce.payload
+                        encodedAnnounce.payload,
+                    contextFlag:
+                        encodedAnnounce.containsRatchet
                 )
 
             bluetooth.sendRadioPayload(packet)
@@ -194,6 +207,37 @@ final class LXMFService: ObservableObject {
             return
         }
 
+        if let attachment = message.attachment {
+            let accepted = ReticulumCoreBridge.shared.sendAttachment(
+                at: URL(fileURLWithPath: attachment.path),
+                name: attachment.name,
+                mimeType: attachment.mimeType,
+                caption: message.text,
+                destinationHash: message.peer.destinationHash,
+                clientID: message.id
+            )
+            if !accepted {
+                manager?.updateMessageStatus(id: message.id, status: .failed)
+                statusMessage = "Attachment failed to enter Reticulum delivery"
+            }
+            return
+        }
+
+        if ReticulumCoreBridge.shared.send(
+            text: message.text,
+            destinationHash:
+                message.peer.destinationHash,
+            direct: false
+        ) {
+            manager?.updateMessageStatus(
+                id: message.id,
+                status: .sent
+            )
+            statusMessage =
+                "Message handed to Reticulum delivery"
+            return
+        }
+
         do {
             let destinationHash =
                 try packetEncoder.destinationHashData(
@@ -229,8 +273,20 @@ final class LXMFService: ObservableObject {
                 )
             let encryptedPayload =
                 try identity.encrypt(
-                    lxmfPayload,
-                    for: destinationPublicKey
+                    Data(
+                        lxmfPayload.dropFirst(
+                            ReticulumPacketEncoder
+                                .destinationHashByteCount
+                        )
+                    ),
+                    for: destinationPublicKey,
+                    ratchet:
+                        ReticulumAnnounceStore.shared
+                            .ratchet(
+                                for:
+                                    message.peer
+                                        .destinationHash
+                            )
                 )
             let packet =
                 try packetEncoder.encodeDataPacket(

@@ -6,9 +6,14 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* ThirdParty/Runcore/Runcore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		0B11BCE6300DC37B00FC94FB /* iSideband.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iSideband.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BCE33C130154A54001470C4 /* Untitled.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Untitled.swift; sourceTree = "<group>"; };
+		A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/Runcore/Runcore.xcframework; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -37,6 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000010000000000000001 /* ThirdParty/Runcore/Runcore.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -47,6 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				0B11BCE8300DC37B00FC94FB /* iSideband */,
+				A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */,
 				0B11BCE7300DC37B00FC94FB /* Products */,
 				0BCE33C0301549EE001470C4 /* New Group */,
 			);
@@ -208,6 +215,7 @@
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OBJC_BRIDGING_HEADER = "iSideband/iSideband-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
 			name = Debug;
@@ -265,6 +273,7 @@
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OBJC_BRIDGING_HEADER = "iSideband/iSideband-Bridging-Header.h";
 				VALIDATE_PRODUCT = YES;
 			};
 			name = Release;

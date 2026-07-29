@@ -5,6 +5,7 @@ import Security
 struct EncodedReticulumAnnounce {
     let destinationHash: Data
     let payload: Data
+    let containsRatchet: Bool
 }
 
 enum ReticulumAnnounceEncodingError: LocalizedError {
@@ -33,6 +34,7 @@ struct ReticulumAnnounceEncoder {
     func encode(
         identity: ReticulumIdentity,
         destinationName: String,
+        ratchet: Data? = nil,
         appData: Data? = nil
     ) throws -> EncodedReticulumAnnounce {
         let destinationHash = try destinationHash(
@@ -65,6 +67,9 @@ struct ReticulumAnnounceEncoder {
         signedData.append(identity.publicKey)
         signedData.append(nameHash)
         signedData.append(randomHash)
+        if let ratchet {
+            signedData.append(ratchet)
+        }
 
         if let appData {
             signedData.append(appData)
@@ -78,6 +83,9 @@ struct ReticulumAnnounceEncoder {
         announcePayload.append(identity.publicKey)
         announcePayload.append(nameHash)
         announcePayload.append(randomHash)
+        if let ratchet {
+            announcePayload.append(ratchet)
+        }
         announcePayload.append(signature)
 
         if let appData {
@@ -86,7 +94,8 @@ struct ReticulumAnnounceEncoder {
 
         return EncodedReticulumAnnounce(
             destinationHash: destinationHash,
-            payload: announcePayload
+            payload: announcePayload,
+            containsRatchet: ratchet != nil
         )
     }
 

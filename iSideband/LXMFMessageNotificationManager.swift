@@ -20,7 +20,15 @@ final class LXMFMessageNotificationManager {
             UNMutableNotificationContent()
         content.title =
             senderName ?? "New LXMF Message"
-        content.body = message.content
+        if !message.content.isEmpty {
+            content.body = message.content
+        } else if message.attachmentType == .photo {
+            content.body = "Photo"
+        } else if message.attachmentType == .file {
+            content.body = "File: \(message.attachmentName ?? "Attachment")"
+        } else {
+            content.body = "New encrypted message"
+        }
         if NotificationPreferences.soundsEnabled {
             content.sound = .default
         }

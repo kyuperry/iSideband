@@ -89,13 +89,21 @@ final class LXMFIncomingMessageStore: ObservableObject {
             return false
         }
 
+        let savedAttachment = persistAttachment(from: message)
         messages.append(
             ChatMessage(
                 text: message.content,
                 date: message.timestamp,
                 isOutgoing: false,
                 status: "Received",
-                lxmfHash: messageHash
+                lxmfHash: messageHash,
+                type: message.attachmentType == .photo ? .photo :
+                    (message.attachmentType == .file ? .file : .text),
+                attachmentName: savedAttachment?.lastPathComponent ?? message.attachmentName,
+                attachmentPath: savedAttachment?.path,
+                attachmentSize: savedAttachment.flatMap {
+                    (try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? NSNumber)?.intValue
+                }
             )
         )
         messages.sort { $0.date < $1.date }
@@ -109,6 +117,35 @@ final class LXMFIncomingMessageStore: ObservableObject {
         UserDefaults.standard.set(data, forKey: key)
         revision += 1
         return true
+    }
+
+    private func persistAttachment(from message: LXMFIncomingMessage) -> URL? {
+        guard let sourcePath = message.attachmentPath else { return nil }
+        let source = URL(fileURLWithPath: sourcePath)
+        guard FileManager.default.fileExists(atPath: source.path),
+              let documents = FileManager.default.urls(
+                for: .documentDirectory, in: .userDomainMask
+              ).first else { return nil }
+        let directory = documents.appendingPathComponent(
+            "DirectAttachments/Incoming", isDirectory: true
+        )
+        do {
+            try FileManager.default.createDirectory(
+                at: directory, withIntermediateDirectories: true
+            )
+            let rawName = message.attachmentName ?? source.lastPathComponent
+            let safeName = URL(fileURLWithPath: rawName).lastPathComponent
+            let destination = directory.appendingPathComponent(
+                message.id.prefix(8).map { String(format: "%02x", $0) }.joined() + "-" + safeName
+            )
+            if !FileManager.default.fileExists(atPath: destination.path) {
+                try FileManager.default.copyItem(at: source, to: destination)
+            }
+            return destination
+        } catch {
+            print("Could not persist incoming attachment: \(error)")
+            return nil
+        }
     }
 
     private func load(

@@ -8,6 +8,7 @@ struct ReticulumAnnounceDecoder {
     private static let nameHashByteCount = 10
     private static let randomHashByteCount = 10
     private static let signatureByteCount = 64
+    private static let ratchetByteCount = 32
 
     private static let minimumPayloadByteCount =
         publicKeyByteCount
@@ -46,6 +47,16 @@ struct ReticulumAnnounceDecoder {
 
         cursor += Self.nameHashByteCount
 
+        let lxmfDeliveryNameHash = Data(
+            SHA256.hash(
+                data: Data("lxmf.delivery".utf8)
+            ).prefix(Self.nameHashByteCount)
+        )
+        guard nameHash == lxmfDeliveryNameHash else {
+            throw ReticulumAnnounceError
+                .malformedPacket
+        }
+
         let randomHash = Data(
             packet.payload[
                 cursor..<(cursor + Self.randomHashByteCount)
@@ -53,6 +64,27 @@ struct ReticulumAnnounceDecoder {
         )
 
         cursor += Self.randomHashByteCount
+
+        let ratchet: Data
+        if packet.contextFlag {
+            guard packet.payload.count >=
+                    cursor +
+                    Self.ratchetByteCount +
+                    Self.signatureByteCount
+            else {
+                throw ReticulumAnnounceError
+                    .malformedPacket
+            }
+
+            ratchet = Data(
+                packet.payload[
+                    cursor..<(cursor + Self.ratchetByteCount)
+                ]
+            )
+            cursor += Self.ratchetByteCount
+        } else {
+            ratchet = Data()
+        }
 
         let signature = Data(
             packet.payload[
@@ -109,6 +141,7 @@ struct ReticulumAnnounceDecoder {
         signedData.append(publicKey)
         signedData.append(nameHash)
         signedData.append(randomHash)
+        signedData.append(ratchet)
 
         if let appData {
             signedData.append(appData)
@@ -142,6 +175,7 @@ struct ReticulumAnnounceDecoder {
         return try ReticulumAnnounce(
             destinationHash: packet.destinationHash,
             publicKey: publicKey,
+            ratchet: ratchet.isEmpty ? nil : ratchet,
             appData: appData
         )
     }

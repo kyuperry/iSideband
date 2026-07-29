@@ -39,7 +39,35 @@ struct RNodePacket {
             return []
         }
 
-        return Array(bytes[payloadStart..<payloadEnd])
+        let encoded = Array(
+            bytes[payloadStart..<payloadEnd]
+        )
+        var decoded: [UInt8] = []
+        decoded.reserveCapacity(encoded.count)
+
+        var index = 0
+        while index < encoded.count {
+            if encoded[index] == 0xDB,
+               index + 1 < encoded.count {
+                switch encoded[index + 1] {
+                case 0xDC:
+                    decoded.append(0xC0)
+                    index += 2
+                    continue
+                case 0xDD:
+                    decoded.append(0xDB)
+                    index += 2
+                    continue
+                default:
+                    break
+                }
+            }
+
+            decoded.append(encoded[index])
+            index += 1
+        }
+
+        return decoded
     }
 
     var payloadHexString: String {

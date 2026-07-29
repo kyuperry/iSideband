@@ -8,7 +8,25 @@ struct AddLXMFContactView: View {
     @State private var destinationHash = ""
     @State private var notes = ""
 
+    private let editingContact: LXMFContact?
     let onSave: (LXMFContact) -> Void
+
+    init(
+        contact: LXMFContact? = nil,
+        onSave: @escaping (LXMFContact) -> Void
+    ) {
+        editingContact = contact
+        self.onSave = onSave
+        _displayName = State(
+            initialValue: contact?.displayName ?? ""
+        )
+        _destinationHash = State(
+            initialValue: contact?.destinationHash ?? ""
+        )
+        _notes = State(
+            initialValue: contact?.notes ?? ""
+        )
+    }
 
     private var trimmedName: String {
         displayName.trimmingCharacters(
@@ -26,9 +44,12 @@ struct AddLXMFContactView: View {
 
     private var contactToSave: LXMFContact {
         LXMFContact(
+            id: editingContact?.id ?? UUID(),
             displayName: trimmedName,
             destinationHash: cleanedDestinationHash,
-            notes: notes
+            notes: notes,
+            dateAdded:
+                editingContact?.dateAdded ?? Date()
         )
     }
 
@@ -90,7 +111,11 @@ struct AddLXMFContactView: View {
                     }
                 }
             }
-            .navigationTitle("Add LXMF Contact")
+            .navigationTitle(
+                editingContact == nil
+                    ? "Add LXMF Contact"
+                    : "Edit Contact"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(

@@ -54,6 +54,10 @@ final class BluetoothManager:
     @Published var radioReady = false
     @Published var receivedBytes: UInt32?
     @Published var transmittedBytes: UInt32?
+    @Published private(set) var bluetoothBytesWritten = 0
+    @Published private(set) var bluetoothBytesReceived = 0
+    @Published private(set) var lastInboundDiagnostic =
+        "No inbound packet inspected"
     @Published var packetRSSI: Int?
     @Published var packetSNR: Double?
     @Published var satelliteCount: Int?
@@ -215,18 +219,57 @@ final class BluetoothManager:
             return
         }
         
-        let writeType: CBCharacteristicWriteType =
-        rnodeWriteCharacteristic.properties.contains(.write)
-        ? .withResponse
-        : .withoutResponse
-        
         let escaped = escapeKISSFrame(data)
-        
-        connectedPeripheral.writeValue(
-            escaped,
-            for: rnodeWriteCharacteristic,
-            type: writeType
-        )
+        let writeType: CBCharacteristicWriteType =
+            .withoutResponse
+        let maximumLength =
+            connectedPeripheral.maximumWriteValueLength(
+                for: writeType
+            )
+
+        guard maximumLength > 0 else {
+            connectionMessage =
+                "RNode BLE write size is unavailable"
+            return
+        }
+
+        var offset = 0
+        var chunkIndex = 0
+
+        while offset < escaped.count {
+            let end = min(
+                offset + maximumLength,
+                escaped.count
+            )
+            let chunk = escaped.subdata(
+                in: offset..<end
+            )
+
+            DispatchQueue.main.asyncAfter(
+                deadline:
+                    .now() + (Double(chunkIndex) * 0.02)
+            ) {
+                guard connectedPeripheral.state ==
+                        .connected else {
+                    return
+                }
+
+                connectedPeripheral.writeValue(
+                    chunk,
+                    for: rnodeWriteCharacteristic,
+                    type: writeType
+                )
+                self.bluetoothBytesWritten +=
+                    chunk.count
+
+                print(
+                    "Wrote \(chunk.count) bytes to RNode BLE stream"
+                )
+            }
+
+            offset = end
+            chunkIndex += 1
+        }
     }
     private func escapeKISSFrame(_ frame: Data) -> Data {
         guard frame.count >= 2 else {
@@ -455,6 +498,15 @@ final class BluetoothManager:
         sendToRNode(frame)
     }
     func requestRNodeDetails() {
+        // Put the firmware into an active host session before configuring
+        // the radio. RNode's BLE interface requires this detection handshake.
+        sendToRNode(Data([
+            0xC0,
+            0x08,
+            0x73,
+            0xC0
+        ]))
+
         let frames: [Data] = [
             // Frequency: 915,000,000 Hz
             Data([
@@ -493,6 +545,14 @@ final class BluetoothManager:
                 0xC0,
                 0x05,
                 0x05,
+                0xC0
+            ]),
+
+            // Enable the radio after all physical parameters are set.
+            Data([
+                0xC0,
+                0x06,
+                0x01,
                 0xC0
             ]),
             
@@ -555,7 +615,7 @@ final class BluetoothManager:
         
         for (index, frame) in frames.enumerated() {
             DispatchQueue.main.asyncAfter(
-                deadline: .now() + (Double(index) * 0.2)
+                deadline: .now() + 0.5 + (Double(index) * 0.2)
             ) {
                 self.sendToRNode(frame)
             }
@@ -595,10 +655,20 @@ final class BluetoothManager:
     private func handleIncomingLXMF(
         _ packet: DecodedReticulumPacket
     ) {
-        guard packet.packetType == .data,
-              packet.destinationType == .single,
-              packet.context ==
+        guard packet.packetType == .data else {
+            lastInboundDiagnostic =
+                "Ignored non-data Reticulum packet"
+            return
+        }
+        guard packet.destinationType == .single else {
+            lastInboundDiagnostic =
+                "Unsupported Direct/link packet; use Opportunistic"
+            return
+        }
+        guard packet.context ==
                 ReticulumPacketContext.none else {
+            lastInboundDiagnostic =
+                "Unsupported packet context \(packet.contextRawValue)"
             return
         }
 
@@ -619,13 +689,30 @@ final class BluetoothManager:
                     )
             guard packet.destinationHash ==
                     localDestinationHash else {
+                lastInboundDiagnostic =
+                    "Packet addressed to a different identity"
                 return
             }
 
-            let plaintext =
-                try identity.decrypt(packet.payload)
+            let plaintext: Data
+            do {
+                plaintext =
+                    try identity.decrypt(packet.payload)
+            } catch {
+                plaintext =
+                    try ReticulumRatchet.shared.decrypt(
+                        packet.payload,
+                        identityHash:
+                            identity.identityHash
+                    )
+            }
+            var packedLXMF = Data()
+            packedLXMF.append(
+                localDestinationHash
+            )
+            packedLXMF.append(plaintext)
             let message = try lxmfMessageCodec.decode(
-                plaintext,
+                packedLXMF,
                 expectedDestinationHash:
                     localDestinationHash
             ) { sourceHash in
@@ -638,14 +725,21 @@ final class BluetoothManager:
                   receivedLXMFMessageIDs
                     .insert(message.id).inserted
             else {
+                lastInboundDiagnostic =
+                    "Duplicate or self-originated message"
                 return
             }
 
             guard LXMFIncomingMessageStore.shared
                     .save(message)
             else {
+                lastInboundDiagnostic =
+                    "Message was already saved"
                 return
             }
+
+            lastInboundDiagnostic =
+                "Valid LXMF message received"
 
             let senderName =
                 LXMFContactStore.shared.contact(
@@ -672,6 +766,8 @@ final class BluetoothManager:
                 """
             )
         } catch {
+            lastInboundDiagnostic =
+                "LXMF rejected: \(error)"
             print(
                 "Incoming LXMF message rejected:",
                 error.localizedDescription
@@ -926,10 +1022,6 @@ extension BluetoothManager: CBPeripheralDelegate {
                     rnodeWriteCharacteristic = characteristic
                     print("Saved RNode write characteristic")
 
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        self.requestRNodeDetails()
-                    }
-
                 case "6E400003-B5A3-F393-E0A9-E50E24DCCA9E":
                     rnodeNotifyCharacteristic = characteristic
 
@@ -963,6 +1055,20 @@ extension BluetoothManager: CBPeripheralDelegate {
                     }
                 }
             }
+
+            if rnodeWriteCharacteristic != nil,
+               rnodeNotifyCharacteristic != nil {
+                Task { @MainActor in
+                    try? await Task.sleep(
+                        for: .seconds(1)
+                    )
+                    guard peripheral.state == .connected else {
+                        return
+                    }
+                    ReticulumCoreBridge.shared
+                        .radioDataChannelReady()
+                }
+            }
         }
     }
 
@@ -980,10 +1086,17 @@ extension BluetoothManager: CBPeripheralDelegate {
                 return
             }
 
-            if characteristic.isNotifying {
+            if characteristic.isNotifying,
+               characteristic.uuid ==
+                    rnodeNotifyCharacteristic?.uuid {
                 connectionMessage = "RNode data channel ready"
                 print("RNode notification channel is active")
-                
+
+                DispatchQueue.main.asyncAfter(
+                    deadline: .now() + 0.5
+                ) {
+                    self.requestRNodeDetails()
+                }
             }
         }
     }
@@ -1008,6 +1121,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             if characteristic.uuid ==
                 rnodeNotifyCharacteristic?.uuid {
+                bluetoothBytesReceived += data.count
                 receivedData.append(data)
 
                 let frames = frameAssembler.append(data)
@@ -1021,6 +1135,10 @@ extension BluetoothManager: CBPeripheralDelegate {
                         do {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
+
+                            ReticulumCoreBridge.shared.feed(
+                                reticulumPacket.raw
+                            )
 
                             print("Reticulum packet received")
                             print("Destination:", reticulumPacket.destinationHashHex)
@@ -1039,6 +1157,19 @@ extension BluetoothManager: CBPeripheralDelegate {
                                             data: reticulumPacket.raw
                                         )
                                     )
+
+                                    let linkDestination =
+                                        ReticulumCoreBridge.shared
+                                            .destinationHash
+                                            .lowercased()
+                                    guard linkDestination.isEmpty ||
+                                            announce.destinationHashHex !=
+                                            linkDestination else {
+                                        print(
+                                            "Ignored local Link-core announce"
+                                        )
+                                        continue
+                                    }
 
                                     let localPublicKey = try?
                                         ReticulumIdentityStore.shared
@@ -1079,11 +1210,20 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         seenAt: announce.receivedAt
                                     )
 
-                                    AnnouncementNotificationManager.shared.notify(
-                                        name: announce.displayName,
-                                        destinationHash: announce.destinationHashHex,
-                                        eventID: announceID
-                                    )
+                                    if !LXMFContactStore.shared.contains(
+                                        destinationHash:
+                                            announce.destinationHashHex
+                                    ) {
+                                        AnnouncementNotificationManager.shared.notify(
+                                            name: announce.displayName,
+                                            destinationHash: announce.destinationHashHex,
+                                            eventID: announceID
+                                        )
+                                    } else {
+                                        print(
+                                            "Known contact announce updated without nearby notification"
+                                        )
+                                    }
 
                                     print(
                                         """
@@ -1203,7 +1343,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                     Length: \(packet.length) bytes
                     Starts with C0: \(packet.startsWithFrame)
                     Ends with C0: \(packet.endsWithFrame)
-                    print("Command byte: \(commandByte)")
+                    Command byte: \(commandByte)
                     Raw: \(packet.hexString)
                     """)
                 }

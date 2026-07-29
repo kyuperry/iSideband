@@ -8,12 +8,21 @@ struct LXMFIncomingMessage: Identifiable, Hashable {
     let timestamp: Date
     let title: String
     let content: String
+    let attachmentPath: String?
+    let attachmentName: String?
+    let attachmentMIME: String?
+    let attachmentType: LXMFIncomingAttachmentType?
 
     var sourceHashHex: String {
         sourceHash.map {
             String(format: "%02x", $0)
         }.joined()
     }
+}
+
+enum LXMFIncomingAttachmentType: String, Hashable {
+    case photo
+    case file
 }
 
 enum LXMFMessageCodecError: Error {
@@ -27,6 +36,50 @@ enum LXMFMessageCodecError: Error {
 struct LXMFMessageCodec {
     private static let hashByteCount = 16
     private static let signatureByteCount = 64
+
+    func encodeAnnounceAppData(
+        displayName: String
+    ) -> Data {
+        MessagePackWriter.pack(
+            .array([
+                .binary(Data(displayName.utf8)),
+                .null,
+                .array([
+                    .integer(0)
+                ])
+            ])
+        )
+    }
+
+    func decodeAnnounceDisplayName(
+        _ appData: Data
+    ) -> String? {
+        var reader = MessagePackReader(data: appData)
+
+        guard
+            let value = try? reader.read(),
+            case .array(let peerData) = value,
+            let first = peerData.first,
+            let nameData = first.dataValue,
+            let name = String(
+                data: nameData,
+                encoding: .utf8
+            )
+        else {
+            return String(
+                data: appData,
+                encoding: .utf8
+            )?
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+        }
+
+        let trimmed = name.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        return trimmed.isEmpty ? nil : trimmed
+    }
 
     func decode(
         _ data: Data,
@@ -127,7 +180,11 @@ struct LXMFMessageCodec {
                 timeIntervalSince1970: timestamp
             ),
             title: title,
-            content: content
+            content: content,
+            attachmentPath: nil,
+            attachmentName: nil,
+            attachmentMIME: nil,
+            attachmentType: nil
         )
     }
 
