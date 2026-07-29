@@ -181,37 +181,42 @@ struct RNodeDetailView: View {
             }
 
             Section("Radio Telemetry") {
-                telemetryRow(
-                    title: "Battery",
-                    value: bluetooth.batteryPercent.map { percent in
+                if let batteryPercent = bluetooth.batteryPercent {
+                    telemetryRow(
+                        title: "Battery",
+                        value: {
+                            let percent = batteryPercent
                         if bluetooth.batteryState == .charging {
                             return "\(percent)% (Charging)"
                         }
 
                         return "\(percent)%"
-                    } ?? "Not reported",
-                    systemImage: "battery.50percent"
-                )
-                telemetryRow(
-                    title: "Received",
-                    value: bluetooth.receivedBytes.map {
+                        }(),
+                        systemImage: "battery.50percent"
+                    )
+                }
+                if let receivedBytes = bluetooth.receivedBytes {
+                    telemetryRow(
+                        title: "Received",
+                        value:
                         ByteCountFormatter.string(
-                            fromByteCount: Int64($0),
+                            fromByteCount: Int64(receivedBytes),
                             countStyle: .binary
-                        )
-                    } ?? "Not reported",
-                    systemImage: "arrow.down.circle"
-                )
-                telemetryRow(
-                    title: "Transmitted",
-                    value: bluetooth.transmittedBytes.map {
+                        ),
+                        systemImage: "arrow.down.circle"
+                    )
+                }
+                if let transmittedBytes = bluetooth.transmittedBytes {
+                    telemetryRow(
+                        title: "Transmitted",
+                        value:
                         ByteCountFormatter.string(
-                            fromByteCount: Int64($0),
+                            fromByteCount: Int64(transmittedBytes),
                             countStyle: .binary
-                        )
-                    } ?? "Not reported",
-                    systemImage: "arrow.up.circle"
-                )
+                        ),
+                        systemImage: "arrow.up.circle"
+                    )
+                }
                 telemetryRow(
                     title: "Bluetooth Written",
                     value:
@@ -229,40 +234,41 @@ struct RNodeDetailView: View {
                     value: bluetooth.lastInboundDiagnostic,
                     systemImage: "stethoscope"
                 )
-                telemetryRow(
-                    title: "Last Packet RSSI",
-                    value: bluetooth.packetRSSI.map {
-                        "\($0) dBm"
-                    } ?? "Not reported",
-                    systemImage: "waveform.path.ecg"
-                )
-                telemetryRow(
-                    title: "Last Packet SNR",
-                    value: bluetooth.packetSNR.map {
-                        String(format: "%.2f dB", $0)
-                    } ?? "Not reported",
-                    systemImage: "chart.bar"
-                )
-                telemetryRow(
-                    title: "Temperature",
-                    value: bluetooth.temperature.map {
-                        String(format: "%.1f °C", $0)
-                    } ?? "Not reported",
-                    systemImage: "thermometer.medium"
-                )
-                telemetryRow(
-                    title: "Satellites",
-                    value: bluetooth.satelliteCount.map(String.init)
-                        ?? "Not reported",
-                    systemImage: "location.north.circle"
-                )
-                telemetryRow(
-                    title: "Uptime",
-                    value: bluetooth.uptimeSeconds.map {
-                        Self.formatUptime(seconds: $0)
-                    } ?? "Not reported",
-                    systemImage: "clock"
-                )
+                if let packetRSSI = bluetooth.packetRSSI {
+                    telemetryRow(
+                        title: "Last Packet RSSI",
+                        value: "\(packetRSSI) dBm",
+                        systemImage: "waveform.path.ecg"
+                    )
+                }
+                if let packetSNR = bluetooth.packetSNR {
+                    telemetryRow(
+                        title: "Last Packet SNR",
+                        value: String(format: "%.2f dB", packetSNR),
+                        systemImage: "chart.bar"
+                    )
+                }
+                if let temperature = bluetooth.temperature {
+                    telemetryRow(
+                        title: "Temperature",
+                        value: String(format: "%.1f °C", temperature),
+                        systemImage: "thermometer.medium"
+                    )
+                }
+                if let satelliteCount = bluetooth.satelliteCount {
+                    telemetryRow(
+                        title: "Satellites",
+                        value: String(satelliteCount),
+                        systemImage: "location.north.circle"
+                    )
+                }
+                if let uptimeSeconds = bluetooth.uptimeSeconds {
+                    telemetryRow(
+                        title: "Uptime",
+                        value: Self.formatUptime(seconds: uptimeSeconds),
+                        systemImage: "clock"
+                    )
+                }
             }
 
             Section("Hardware") {
