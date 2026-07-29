@@ -56,6 +56,8 @@ final class BluetoothManager:
     @Published var transmittedBytes: UInt32?
     @Published var packetRSSI: Int?
     @Published var packetSNR: Double?
+    @Published var satelliteCount: Int?
+    @Published var uptimeSeconds: UInt32?
     
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
@@ -297,6 +299,8 @@ final class BluetoothManager:
         rnodeNotifyCharacteristic = nil
         batteryPercent = nil
         batteryState = nil
+        satelliteCount = nil
+        uptimeSeconds = nil
         hasRNodeBatteryTelemetry = false
         sentBatteryMilestones.removeAll()
         lastBatteryNotificationPercent = nil
@@ -528,6 +532,22 @@ final class BluetoothManager:
             Data([
                 0xC0,
                 0x24,
+                0xFF,
+                0xC0
+            ]),
+
+            // GPS satellite count (custom firmware extension)
+            Data([
+                0xC0,
+                0x2A,
+                0xFF,
+                0xC0
+            ]),
+
+            // Device uptime in seconds (custom firmware extension)
+            Data([
+                0xC0,
+                0x2B,
                 0xFF,
                 0xC0
             ])
@@ -1164,6 +1184,14 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let packetSNR = telemetry.packetSNR {
                         self.packetSNR = packetSNR
+                    }
+
+                    if let satelliteCount = telemetry.satelliteCount {
+                        self.satelliteCount = satelliteCount
+                    }
+
+                    if let uptimeSeconds = telemetry.uptimeSeconds {
+                        self.uptimeSeconds = uptimeSeconds
                     }
 
                     let commandByte = packet.command.map {

@@ -76,6 +76,8 @@ enum RNodeCommand: UInt8 {
     case physicalParameters = 0x26
     case batteryState = 0x27
     case temperature = 0x29
+    case satelliteCount = 0x2A
+    case uptime = 0x2B
     
     case firmwareVersion = 0x50
     case unknown = 0xFE
@@ -136,6 +138,12 @@ enum RNodeCommand: UInt8 {
             
         case .temperature:
             return "Temperature"
+
+        case .satelliteCount:
+            return "Satellite Count"
+
+        case .uptime:
+            return "Uptime"
             
         case .firmwareVersion:
             return "Firmware Version"
@@ -145,4 +153,3 @@ enum RNodeCommand: UInt8 {
         }
     }
 }
-

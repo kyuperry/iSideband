@@ -36,6 +36,8 @@ struct RNodeTelemetryUpdate {
     var transmittedBytes: UInt32?
     var packetRSSI: Int?
     var packetSNR: Double?
+    var satelliteCount: Int?
+    var uptimeSeconds: UInt32?
 }
 
 final class RNodePacketRouter {
@@ -105,6 +107,16 @@ final class RNodePacketRouter {
                 packetSNR: packet.payload.first.map {
                     Double(Int8(bitPattern: $0)) * 0.25
                 }
+            )
+
+        case .satelliteCount:
+            return RNodeTelemetryUpdate(
+                satelliteCount: packet.payload.first.map(Int.init)
+            )
+
+        case .uptime:
+            return RNodeTelemetryUpdate(
+                uptimeSeconds: decodeUInt32(from: packet)
             )
 
         case .radioState:

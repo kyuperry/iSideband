@@ -214,6 +214,19 @@ struct RNodeDetailView: View {
                     } ?? "Not reported",
                     systemImage: "thermometer.medium"
                 )
+                telemetryRow(
+                    title: "Satellites",
+                    value: bluetooth.satelliteCount.map(String.init)
+                        ?? "Not reported",
+                    systemImage: "location.north.circle"
+                )
+                telemetryRow(
+                    title: "Uptime",
+                    value: bluetooth.uptimeSeconds.map {
+                        Self.formatUptime(seconds: $0)
+                    } ?? "Not reported",
+                    systemImage: "clock"
+                )
             }
 
             Section("Hardware") {
@@ -444,6 +457,22 @@ struct RNodeDetailView: View {
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.trailing)
         }
+    }
+
+    private static func formatUptime(seconds: UInt32) -> String {
+        let days = seconds / 86_400
+        let hours = (seconds % 86_400) / 3_600
+        let minutes = (seconds % 3_600) / 60
+
+        if days > 0 {
+            return "\(days)d \(hours)h \(minutes)m"
+        }
+
+        if hours > 0 {
+            return "\(hours)h \(minutes)m"
+        }
+
+        return "\(minutes)m"
     }
 
     private func rssiSignalLevel(
