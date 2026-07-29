@@ -28,16 +28,6 @@ struct MainMenuView: View {
                 }
 
                 NavigationLink {
-                    MeshMapView(bluetooth: bluetooth)
-                } label: {
-                    menuRow(
-                        title: "Mesh Map",
-                        subtitle: "View geographic and topology maps",
-                        icon: "map.fill"
-                    )
-                }
-
-                NavigationLink {
                     AnnounceListView()
                 } label: {
                     menuRow(

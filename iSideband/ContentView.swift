@@ -4,6 +4,7 @@ enum MainAppPage: String, CaseIterable {
     case rnode = "RNode"
     case menu = "Menu"
     case messages = "Messages"
+    case map = "Map"
 
     var icon: String {
         switch self {
@@ -15,6 +16,9 @@ enum MainAppPage: String, CaseIterable {
 
         case .messages:
             return "message.fill"
+
+        case .map:
+            return "map.fill"
         }
     }
 }
@@ -46,6 +50,9 @@ struct ContentView: View {
 
                 case .messages:
                     ConversationsView(bluetooth: bluetooth)
+
+                case .map:
+                    MeshMapView(bluetooth: bluetooth)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -153,7 +160,7 @@ struct ContentView: View {
             }
         }
         .padding(5)
-        .frame(maxWidth: 330)
+        .frame(maxWidth: 380)
         .background(.ultraThinMaterial)
         .clipShape(Capsule())
         .overlay {
