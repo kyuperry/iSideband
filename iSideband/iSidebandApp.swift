@@ -27,6 +27,10 @@ struct iSidebandApp: App {
                     lxmfManager.start(
                         bluetooth: bluetooth
                     )
+                    LXMFDiscoveryMode.shared.configure(
+                        manager: lxmfManager,
+                        bluetooth: bluetooth
+                    )
                 }
         }
     }
