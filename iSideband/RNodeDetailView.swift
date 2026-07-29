@@ -165,11 +165,11 @@ struct RNodeDetailView: View {
                 telemetryRow(
                     title: "Battery",
                     value: bluetooth.batteryPercent.map { percent in
-                        let state =
-                            bluetooth.batteryState?.title
-                        return state.map { stateTitle in
-                            "\(percent)% (\(stateTitle))"
-                        } ?? "\(percent)%"
+                        if bluetooth.batteryState == .charging {
+                            return "\(percent)% (Charging)"
+                        }
+
+                        return "\(percent)%"
                     } ?? "Not reported",
                     systemImage: "battery.50percent"
                 )
