@@ -146,6 +146,10 @@ final class ReticulumCoreBridge: ObservableObject {
         "Reticulum core not started"
 
     private var handle: runcore_handle_t = 0
+    private let inboundPacketQueue = DispatchQueue(
+        label: "com.kyleperry.iSideband.reticulum.inbound",
+        qos: .userInitiated
+    )
     private weak var bluetooth: BluetoothManager?
     private var routeRefreshTimer: Timer?
     private var lastAutomaticAnnounce: Date?
@@ -259,19 +263,24 @@ final class ReticulumCoreBridge: ObservableObject {
         guard handle != 0, !packet.isEmpty else {
             return
         }
-        packet.withUnsafeBytes { rawBuffer in
-            guard let baseAddress =
-                    rawBuffer.bindMemory(
-                        to: UInt8.self
-                    ).baseAddress else {
-                return
+
+        let activeHandle = handle
+        inboundPacketQueue.async {
+            packet.withUnsafeBytes { rawBuffer in
+                guard let baseAddress =
+                        rawBuffer.bindMemory(
+                            to: UInt8.self
+                        ).baseAddress else {
+                    return
+                }
+                _ = runcore_raw_interface_receive(
+                    activeHandle,
+                    baseAddress,
+                    Int32(packet.count)
+                )
             }
-            _ = runcore_raw_interface_receive(
-                handle,
-                baseAddress,
-                Int32(packet.count)
-            )
         }
+
         // BLE traffic can wake the app after iOS suspended its timers.
         // Use that opportunity to send an overdue scheduled announce.
         checkScheduledAutomaticAnnounce()
