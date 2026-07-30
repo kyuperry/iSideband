@@ -100,3 +100,56 @@ func TestResourceAdvertisement_RoundTrip_LargeIntegersAndHashmap(t *testing.T) {
 		t.Fatalf("hashmap segment mismatch: got len=%d want %d", len(b.M), hashmapLen*MapHashLen)
 	}
 }
+
+func TestResourceAcceptInitializesReceiverRetryPolicy(t *testing.T) {
+	link := &Link{
+		MTU:                  500,
+		MDU:                  431,
+		TrafficTimeoutFactor: 6,
+	}
+	adv := ResourceAdvertisement{
+		T: 100,
+		D: 100,
+		N: 1,
+		H: make([]byte, 32),
+		R: make([]byte, RandomHashSize),
+		O: make([]byte, 32),
+		I: 1,
+		L: 1,
+		M: make([]byte, MapHashLen),
+	}
+	packet := &Packet{
+		Plaintext: adv.Pack(0),
+		Link:      link,
+	}
+
+	resource, err := ResourceAccept(packet, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("ResourceAccept: %v", err)
+	}
+	if resource == nil {
+		t.Fatal("ResourceAccept returned nil")
+	}
+	if resource.maxRetries != MaxRetries ||
+		resource.retriesLeft != MaxRetries {
+		t.Fatalf(
+			"incoming retry policy not initialized: max=%d left=%d",
+			resource.maxRetries,
+			resource.retriesLeft,
+		)
+	}
+	if resource.partTimeoutFactor != PartTimeoutFactor {
+		t.Fatalf(
+			"incoming part timeout factor=%v want=%v",
+			resource.partTimeoutFactor,
+			PartTimeoutFactor,
+		)
+	}
+	if resource.timeoutFactor != link.TrafficTimeoutFactor {
+		t.Fatalf(
+			"incoming timeout factor=%v want=%v",
+			resource.timeoutFactor,
+			link.TrafficTimeoutFactor,
+		)
+	}
+}

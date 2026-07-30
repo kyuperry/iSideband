@@ -375,6 +375,12 @@ func ResourceAccept(advPkt *Packet, cb func(*Resource), progCb func(*Resource), 
 		windowMin:         ResourceWindowMin,
 		windowFlexibility: ResourceWindowFlexibility,
 		consecutiveHeight: -1,
+		maxRetries:         MaxRetries,
+		maxAdvRetries:      MaxAdvRetries,
+		retriesLeft:        MaxRetries,
+		timeoutFactor:      advPkt.Link.TrafficTimeoutFactor,
+		partTimeoutFactor:  PartTimeoutFactor,
+		senderGraceTime:    SenderGraceTime,
 	}
 
 	res.totalParts = int(math.Ceil(float64(res.size) / float64(res.sduValue())))
