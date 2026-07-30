@@ -302,7 +302,7 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 		fields[lxmf.FieldImage] = []any{format, data}
 	} else {
 		fields[lxmf.FieldFileAttachments] =
-			[]any{[]any{[]byte(name), data}}
+			[]any{[]any{name, data}}
 	}
 	text := ""
 	if content != nil {
@@ -386,12 +386,12 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 	if !ok || len(pair) < 2 {
 		return
 	}
-	nameBytes, ok1 := pair[0].([]byte)
-	data, ok2 := pair[1].([]byte)
-	if !ok1 || !ok2 || len(data) == 0 {
+	nameValue := attachmentString(pair[0])
+	data, ok := pair[1].([]byte)
+	if nameValue == "" || !ok || len(data) == 0 {
 		return
 	}
-	name = filepath.Base(string(nameBytes))
+	name = filepath.Base(nameValue)
 	if name == "." || name == "" {
 		name = "attachment.bin"
 	}

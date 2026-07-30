@@ -64,3 +64,30 @@ func TestInboundAttachmentAcceptsCompactNumericFieldKey(t *testing.T) {
 		t.Fatal("compact numeric image field key was not decoded")
 	}
 }
+
+func TestInboundFileAttachmentAcceptsSidebandStringName(t *testing.T) {
+	message := &lxmf.LXMessage{
+		MessageID: []byte{0x05, 0x06},
+		Fields: map[any]any{
+			int8(lxmf.FieldFileAttachments): []any{
+				[]any{"notes.txt", []byte("hello")},
+			},
+		},
+	}
+
+	path, name, mimeName, attachmentType := inboundAttachment(message)
+	if path == "" {
+		t.Fatal("Sideband string-named file was not persisted")
+	}
+	t.Cleanup(func() { _ = os.Remove(path) })
+	if name != "notes.txt" {
+		t.Fatalf("name=%q want notes.txt", name)
+	}
+	if mimeName != "text/plain; charset=utf-8" &&
+		mimeName != "text/plain" {
+		t.Fatalf("mime=%q want text/plain", mimeName)
+	}
+	if attachmentType != 2 {
+		t.Fatalf("attachment type=%d want file", attachmentType)
+	}
+}
