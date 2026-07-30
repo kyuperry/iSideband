@@ -375,6 +375,7 @@ struct MessagesView: View {
         messages.append(
             ChatMessage(
                 text: trimmed,
+                date: nextConversationDate,
                 isOutgoing: true,
                 status: "Queued for LXMF",
                 lxmfMessageID: queuedMessage.id
@@ -382,6 +383,16 @@ struct MessagesView: View {
         )
 
         messageText = ""
+    }
+
+    private var nextConversationDate: Date {
+        guard let latest = messages.map(\.date).max() else {
+            return Date()
+        }
+        return max(
+            Date(),
+            latest.addingTimeInterval(0.001)
+        )
     }
 
     @ViewBuilder

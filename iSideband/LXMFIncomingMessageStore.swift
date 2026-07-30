@@ -110,10 +110,11 @@ final class LXMFIncomingMessageStore: ObservableObject {
         }
 
         let savedAttachment = persistAttachment(from: message)
+        let displayDate = nextConversationDate(after: messages)
         messages.append(
             ChatMessage(
                 text: message.content,
-                date: message.timestamp,
+                date: displayDate,
                 isOutgoing: false,
                 status: "Received",
                 lxmfHash: messageHash,
@@ -126,7 +127,6 @@ final class LXMFIncomingMessageStore: ObservableObject {
                 }
             )
         )
-        messages.sort { $0.date < $1.date }
 
         return persist(messages, key: key)
     }
@@ -226,6 +226,18 @@ final class LXMFIncomingMessageStore: ObservableObject {
         (try? FileManager.default.attributesOfItem(
             atPath: url.path
         )[.size] as? NSNumber)?.intValue
+    }
+
+    private func nextConversationDate(
+        after messages: [ChatMessage]
+    ) -> Date {
+        guard let latest = messages.map(\.date).max() else {
+            return Date()
+        }
+        return max(
+            Date(),
+            latest.addingTimeInterval(0.001)
+        )
     }
 
     private func persist(
