@@ -198,10 +198,8 @@ struct RNodeDetailView: View {
                 if let receivedBytes = bluetooth.receivedBytes {
                     telemetryRow(
                         title: "Received",
-                        value:
-                        ByteCountFormatter.string(
-                            fromByteCount: Int64(receivedBytes),
-                            countStyle: .binary
+                        value: kilobyteString(
+                            byteCount: Int64(receivedBytes)
                         ),
                         systemImage: "arrow.down.circle"
                     )
@@ -209,24 +207,26 @@ struct RNodeDetailView: View {
                 if let transmittedBytes = bluetooth.transmittedBytes {
                     telemetryRow(
                         title: "Transmitted",
-                        value:
-                        ByteCountFormatter.string(
-                            fromByteCount: Int64(transmittedBytes),
-                            countStyle: .binary
+                        value: kilobyteString(
+                            byteCount: Int64(transmittedBytes)
                         ),
                         systemImage: "arrow.up.circle"
                     )
                 }
                 telemetryRow(
                     title: "Bluetooth Written",
-                    value:
-                        "\(bluetooth.bluetoothBytesWritten) bytes",
+                    value: kilobyteString(
+                        byteCount:
+                            Int64(bluetooth.bluetoothBytesWritten)
+                    ),
                     systemImage: "bolt.horizontal.circle"
                 )
                 telemetryRow(
                     title: "Bluetooth Received",
-                    value:
-                        "\(bluetooth.bluetoothBytesReceived) bytes",
+                    value: kilobyteString(
+                        byteCount:
+                            Int64(bluetooth.bluetoothBytesReceived)
+                    ),
                     systemImage: "antenna.radiowaves.left.and.right"
                 )
                 telemetryRow(
@@ -706,6 +706,15 @@ struct RNodeDetailView: View {
         }
 
         UIPasteboard.general.string = value
+    }
+
+    private func kilobyteString(
+        byteCount: Int64
+    ) -> String {
+        String(
+            format: "%.2f KB",
+            Double(byteCount) / 1_000
+        )
     }
 }
 
