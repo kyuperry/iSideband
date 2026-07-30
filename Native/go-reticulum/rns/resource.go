@@ -56,6 +56,10 @@ const (
 	RetryGraceTime            = 0.25
 	PerRetryDelay             = 0.5
 	WatchdogMaxSleep          = 1 * time.Second
+	// A slow LoRa estimate can otherwise postpone a missing-part request until
+	// after the direct link's stale window. Keep receiver recovery traffic
+	// frequent enough to preserve the link while a resource is active.
+	ReceiverRetryMaxWait = 10 * time.Second
 
 	HashmapNotExhausted byte = 0x00
 	HashmapExhausted    byte = 0xFF
@@ -179,6 +183,7 @@ type Resource struct {
 	preparingNext bool
 	nextSegment   *Resource
 	receiveLock   sync.Mutex
+	requestLock   sync.Mutex
 	watchdogMu    sync.Mutex
 }
 
@@ -1036,6 +1041,12 @@ func (r *Resource) watchdog() {
 							RetryGraceTime*float64(time.Second)))
 				}
 				exp := base.Add(extraWait)
+				retryDeadline := r.lastActivity.Add(
+					ReceiverRetryMaxWait,
+				)
+				if exp.After(retryDeadline) {
+					exp = retryDeadline
+				}
 				if now.After(exp) {
 					if r.retriesLeft > 0 {
 						ms := ""
@@ -1529,6 +1540,9 @@ func (r *Resource) ReceivePart(packet *Packet) {
 
 // RequestNext requests subsequent parts from the initiator.
 func (r *Resource) RequestNext() {
+	r.requestLock.Lock()
+	defer r.requestLock.Unlock()
+
 	if r.status == ResourceFailed || r.waitingForHMU {
 		return
 	}

@@ -153,3 +153,16 @@ func TestResourceAcceptInitializesReceiverRetryPolicy(t *testing.T) {
 		)
 	}
 }
+
+func TestReceiverRetryFitsInsideMinimumLinkStaleWindow(t *testing.T) {
+	minimumStaleWindow :=
+		linkKeepaliveMin*linkStaleFactor +
+			linkStaleGrace
+	if ReceiverRetryMaxWait >= minimumStaleWindow {
+		t.Fatalf(
+			"receiver retry wait %v must be shorter than minimum link stale window %v",
+			ReceiverRetryMaxWait,
+			minimumStaleWindow,
+		)
+	}
+}
