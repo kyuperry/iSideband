@@ -1521,12 +1521,14 @@ func prepareRNSConfigDir(opts Options) (string, error) {
 			return "", fmt.Errorf("overwrite rns config: %w", err)
 		}
 		_ = ensureRNSAutoInterfaceDefaults(cfgPath)
+		_ = ensureSafeTCPClientDefaults(cfgPath)
 		return cfgDir, nil
 	}
 
 	if _, err := os.Stat(cfgPath); err == nil {
 		// Config exists: treat it as user-owned; only fill missing defaults.
 		_ = ensureRNSAutoInterfaceDefaults(cfgPath)
+		_ = ensureSafeTCPClientDefaults(cfgPath)
 		return cfgDir, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("stat rns config: %w", err)
@@ -1536,8 +1538,42 @@ func prepareRNSConfigDir(opts Options) (string, error) {
 		return "", fmt.Errorf("write rns config: %w", err)
 	}
 	_ = ensureRNSAutoInterfaceDefaults(cfgPath)
+	_ = ensureSafeTCPClientDefaults(cfgPath)
 
 	return cfgDir, nil
+}
+
+// ensureSafeTCPClientDefaults removes the legacy public TCP connection that
+// older generated configs enabled automatically. Explicitly configured hosts
+// (for example a user's Raspberry Pi) are left exactly as configured.
+func ensureSafeTCPClientDefaults(cfgPath string) error {
+	cfg, err := configobj.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+	if !cfg.HasSection("interfaces") {
+		return nil
+	}
+	ifc := cfg.Section("interfaces").Subsection("TCP Client Interface")
+	typ, _ := ifc.Get("type")
+	if !strings.EqualFold(strings.TrimSpace(typ), "TCPClientInterface") {
+		return nil
+	}
+
+	host, _ := ifc.Get("target_host")
+	normalizedHost := strings.ToLower(strings.TrimSpace(host))
+	if normalizedHost != "" &&
+		normalizedHost != "reticulum.betweentheborders.com" {
+		return nil
+	}
+
+	ifc.Set("interface_enabled", "No")
+	if normalizedHost == "" {
+		// Keep the disabled configuration syntactically valid until a Pi
+		// address is supplied by the user.
+		ifc.Set("target_host", "127.0.0.1")
+	}
+	return cfg.Save(cfgPath)
 }
 
 // ensureRNSAutoInterfaceDefaults fills in safe defaults for the generated AutoInterface
@@ -1653,8 +1689,8 @@ func defaultInlineRNSConfig(logLevel int) string {
 
 	  [[TCP Client Interface]]
 	    type = TCPClientInterface
-	    interface_enabled = Yes
-	    target_host = reticulum.betweentheborders.com
+	    interface_enabled = No
+	    target_host = 127.0.0.1
 	    target_port = 4242
 	`, logLevel)
 }
