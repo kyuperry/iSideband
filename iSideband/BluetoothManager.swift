@@ -638,6 +638,7 @@ final class BluetoothManager:
         frame.append(0xC0)
         
         reticulumBytesTransmitted += payload.count
+        lastPacketTime = Date()
         sendToRNode(frame)
         
         print(
@@ -1141,6 +1142,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                             reticulumBytesReceived +=
                                 reticulumPacket.raw.count
+                            lastPacketTime = Date()
                             ReticulumCoreBridge.shared.feed(
                                 reticulumPacket.raw
                             )
