@@ -166,3 +166,21 @@ func TestReceiverRetryFitsInsideMinimumLinkStaleWindow(t *testing.T) {
 		)
 	}
 }
+
+func TestReceiverImmediatelyRequestsGapsAfterWindowTail(t *testing.T) {
+	resource := &Resource{
+		outstanding:      2,
+		highestRequested: 11,
+	}
+	if resource.shouldRequestAfterPart(10) {
+		t.Fatal("requested gaps before the window tail arrived")
+	}
+	if !resource.shouldRequestAfterPart(11) {
+		t.Fatal("did not request known gaps after the window tail arrived")
+	}
+
+	resource.outstanding = 0
+	if !resource.shouldRequestAfterPart(7) {
+		t.Fatal("did not advance after a complete window")
+	}
+}

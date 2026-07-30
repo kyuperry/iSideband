@@ -114,6 +114,7 @@ type Resource struct {
 	sentParts             int
 	receivedCount         int
 	outstanding           int
+	highestRequested      int
 
 	// window
 	window            int
@@ -380,12 +381,13 @@ func ResourceAccept(advPkt *Packet, cb func(*Resource), progCb func(*Resource), 
 		windowMin:         ResourceWindowMin,
 		windowFlexibility: ResourceWindowFlexibility,
 		consecutiveHeight: -1,
-		maxRetries:         MaxRetries,
-		maxAdvRetries:      MaxAdvRetries,
-		retriesLeft:        MaxRetries,
-		timeoutFactor:      advPkt.Link.TrafficTimeoutFactor,
-		partTimeoutFactor:  PartTimeoutFactor,
-		senderGraceTime:    SenderGraceTime,
+		highestRequested:  -1,
+		maxRetries:        MaxRetries,
+		maxAdvRetries:     MaxAdvRetries,
+		retriesLeft:       MaxRetries,
+		timeoutFactor:     advPkt.Link.TrafficTimeoutFactor,
+		partTimeoutFactor: PartTimeoutFactor,
+		senderGraceTime:   SenderGraceTime,
 	}
 
 	res.totalParts = int(math.Ceil(float64(res.size) / float64(res.sduValue())))
@@ -495,6 +497,7 @@ func NewResource(
 		autoCompressOption: autoCompress,
 		receiverMinHeight:  0,
 		consecutiveHeight:  -1,
+		highestRequested:   -1,
 	}
 
 	// Python parity: if data is large bytes, wrap in a temp file so we can segment.
@@ -1457,6 +1460,7 @@ func (r *Resource) ReceivePart(packet *Packet) {
 	}
 
 	updated := false
+	receivedIndex := -1
 	for idx := start; idx < windowEnd; idx++ {
 		mapHash := r.hashmap[idx]
 		if mapHash == nil || !bytes.Equal(mapHash, partHash) {
@@ -1480,6 +1484,7 @@ func (r *Resource) ReceivePart(packet *Packet) {
 			}
 
 			updated = true
+			receivedIndex = idx
 		}
 		break
 	}
@@ -1496,7 +1501,9 @@ func (r *Resource) ReceivePart(packet *Packet) {
 		return
 	}
 
-	shouldRequest := r.outstanding == 0
+	shouldRequest := r.shouldRequestAfterPart(
+		receivedIndex,
+	)
 	r.receivingPart = false
 	r.receiveLock.Unlock()
 
@@ -1548,6 +1555,7 @@ func (r *Resource) RequestNext() {
 	}
 
 	r.outstanding = 0
+	r.highestRequested = -1
 	hashmapState := HashmapNotExhausted
 	requested := make([]byte, 0, r.window*MapHashLen)
 
@@ -1562,6 +1570,7 @@ func (r *Resource) RequestNext() {
 			if r.hashmap[idx] != nil {
 				requested = append(requested, r.hashmap[idx]...)
 				r.outstanding++
+				r.highestRequested = idx
 			} else {
 				hashmapState = HashmapExhausted
 				break
@@ -1609,6 +1618,19 @@ func (r *Resource) RequestNext() {
 		r.reqSentBytes = len(requestData)
 	}
 	r.reqResp = time.Time{}
+}
+
+func (r *Resource) shouldRequestAfterPart(
+	receivedIndex int,
+) bool {
+	if r.outstanding == 0 {
+		return true
+	}
+	// Parts are transmitted in request order. If the tail of the requested
+	// window arrived while earlier entries are still absent, those gaps are
+	// already known losses and can be requested immediately.
+	return receivedIndex >= 0 &&
+		receivedIndex == r.highestRequested
 }
 
 // Request handles an incoming request for parts on the receiver side.
@@ -1944,7 +1966,7 @@ func (r *Resource) String() string {
 }
 
 func NewResourceAdvertisementFromResource(r *Resource) ResourceAdvertisement {
-		// flags
+	// flags
 	var f byte
 	if r.encr {
 		f |= 0x01
