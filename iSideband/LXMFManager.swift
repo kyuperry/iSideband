@@ -139,6 +139,35 @@ final class LXMFManager: ObservableObject {
         }
     }
 
+    @discardableResult
+    func resendMessage(id: UUID) -> Bool {
+        guard let index = outgoingMessages.firstIndex(
+            where: { $0.id == id && $0.status == .failed }
+        ) else {
+            return false
+        }
+
+        if let attachment = outgoingMessages[index].attachment {
+            guard FileManager.default.fileExists(
+                atPath: attachment.path
+            ),
+            let attributes = try? FileManager.default
+                .attributesOfItem(atPath: attachment.path),
+            let byteCount = (
+                attributes[.size] as? NSNumber
+            )?.intValue,
+            byteCount > 0,
+            byteCount <= Self.maximumAttachmentBytes else {
+                return false
+            }
+        }
+
+        outgoingMessages[index].status = .queued
+        persistQueue()
+        service.processQueue()
+        return true
+    }
+
     func updateMessageStatus(
         id: UUID,
         status: LXMFOutgoingStatus

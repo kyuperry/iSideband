@@ -13,9 +13,34 @@ struct MessageBubble: View {
     let attachmentName: String?
     let attachmentPath: String?
     let attachmentSize: Int?
+    let onResend: (() -> Void)?
 
     @State private var selectedImage: UIImage?
     @State private var selectedFileURL: URL?
+
+    init(
+        text: String,
+        date: Date,
+        isOutgoing: Bool,
+        status: String?,
+        isPhoto: Bool,
+        isFile: Bool,
+        attachmentName: String?,
+        attachmentPath: String?,
+        attachmentSize: Int?,
+        onResend: (() -> Void)? = nil
+    ) {
+        self.text = text
+        self.date = date
+        self.isOutgoing = isOutgoing
+        self.status = status
+        self.isPhoto = isPhoto
+        self.isFile = isFile
+        self.attachmentName = attachmentName
+        self.attachmentPath = attachmentPath
+        self.attachmentSize = attachmentSize
+        self.onResend = onResend
+    }
 
     var body: some View {
         HStack {
@@ -42,6 +67,20 @@ struct MessageBubble: View {
                     if let status {
                         Text("•")
                         Text(status)
+                    }
+
+                    if let onResend {
+                        Button(action: onResend) {
+                            Label(
+                                "Resend",
+                                systemImage: "arrow.clockwise"
+                            )
+                        }
+                        .buttonStyle(.borderless)
+                        .fontWeight(.semibold)
+                        .accessibilityHint(
+                            "Attempts to send this message again"
+                        )
                     }
                 }
                 .font(.caption2)

@@ -397,8 +397,33 @@ struct MessagesView: View {
             isFile: message.type == .file,
             attachmentName: message.attachmentName,
             attachmentPath: message.attachmentPath,
-            attachmentSize: message.attachmentSize
+            attachmentSize: message.attachmentSize,
+            onResend: canResend(message) ? {
+                resend(message)
+            } : nil
         )
+    }
+
+    private func canResend(
+        _ message: ChatMessage
+    ) -> Bool {
+        guard message.isOutgoing,
+              let id = message.lxmfMessageID else {
+            return false
+        }
+
+        return lxmfManager.outgoingMessages.contains {
+            $0.id == id && $0.status == .failed
+        }
+    }
+
+    private func resend(
+        _ message: ChatMessage
+    ) {
+        guard let id = message.lxmfMessageID,
+              lxmfManager.resendMessage(id: id) else {
+            return
+        }
     }
 
     private func displayStatus(
