@@ -45,3 +45,22 @@ func TestAttachmentStringAcceptsMsgpackBinaryFormat(t *testing.T) {
 		t.Fatalf("format=%q want jpg", got)
 	}
 }
+
+func TestInboundAttachmentAcceptsCompactNumericFieldKey(t *testing.T) {
+	message := &lxmf.LXMessage{
+		MessageID: []byte{0x03, 0x04},
+		Fields: map[any]any{
+			int8(lxmf.FieldImage): []any{
+				[]byte("webp"),
+				[]byte{4, 5, 6},
+			},
+		},
+	}
+
+	path, _, _, attachmentType := inboundAttachment(message)
+	t.Cleanup(func() { _ = os.Remove(path) })
+
+	if path == "" || attachmentType != 1 {
+		t.Fatal("compact numeric image field key was not decoded")
+	}
+}

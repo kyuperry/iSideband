@@ -343,7 +343,7 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 	if m == nil {
 		return
 	}
-	if value, ok := m.Fields[lxmf.FieldImage]; ok {
+	if value, ok := lxmfFieldValue(m.Fields, lxmf.FieldImage); ok {
 		pair, ok := value.([]any)
 		if !ok || len(pair) < 2 {
 			return
@@ -371,7 +371,10 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 		return path, name, mimeName, 1
 	}
 
-	value, ok := m.Fields[lxmf.FieldFileAttachments]
+	value, ok := lxmfFieldValue(
+		m.Fields,
+		lxmf.FieldFileAttachments,
+	)
 	if !ok {
 		return
 	}
@@ -406,6 +409,46 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 		attachmentType = 2
 	}
 	return
+}
+
+func lxmfFieldValue(
+	fields map[any]any,
+	wanted int,
+) (any, bool) {
+	for key, value := range fields {
+		if numericFieldKey(key) == wanted {
+			return value, true
+		}
+	}
+	return nil, false
+}
+
+func numericFieldKey(value any) int {
+	switch typed := value.(type) {
+	case int:
+		return typed
+	case int8:
+		return int(typed)
+	case int16:
+		return int(typed)
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case uint:
+		return int(typed)
+	case uint8:
+		return int(typed)
+	case uint16:
+		return int(typed)
+	case uint32:
+		return int(typed)
+	case uint64:
+		if typed <= uint64(^uint(0)>>1) {
+			return int(typed)
+		}
+	}
+	return -1
 }
 
 func attachmentString(value any) string {
