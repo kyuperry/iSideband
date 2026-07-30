@@ -61,6 +61,10 @@ type Options struct {
 	// ResetRNSConfig overwrites generated Dir/rns/config with the embedded template.
 	// Has no effect if RNSConfigDir is set.
 	ResetRNSConfig bool
+
+	// DisablePeriodicAnnounce leaves announcement scheduling to the embedding app.
+	// Startup, manual, path-response and configuration-change announces still work.
+	DisablePeriodicAnnounce bool
 }
 
 type Node struct {
@@ -248,8 +252,11 @@ func Start(opts Options) (*Node, error) {
 		}
 	})
 
-	// Best-effort periodic announce (helps peers discover us even if multicast is flaky).
-	n.startPeriodicAnnounce(60 * time.Second)
+	// Standalone users retain the native periodic announcement. Embedded clients
+	// can own the schedule so two independent timers do not compete for airtime.
+	if !opts.DisablePeriodicAnnounce {
+		n.startPeriodicAnnounce(60 * time.Second)
+	}
 	n.startStateWatchdog()
 	n.startSendWatchdog()
 	n.startInterfaceWatchdog()

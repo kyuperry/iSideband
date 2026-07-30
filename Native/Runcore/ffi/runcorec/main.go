@@ -110,11 +110,12 @@ func runcore_start(contactsDir *C.char, sendDir *C.char, messagesDir *C.char, lo
 	checkDirReadableWritable(rootDir)
 
 	n, err := runcore.Start(runcore.Options{
-		Dir:         rootDir,
-		ContactsDir: contacts,
-		SendDir:     send,
-		MessagesDir: messages,
-		LogLevel:    level,
+		Dir:                     rootDir,
+		ContactsDir:             contacts,
+		SendDir:                 send,
+		MessagesDir:             messages,
+		LogLevel:                level,
+		DisablePeriodicAnnounce: true,
 	})
 	if err != nil {
 		rns.Log(fmt.Sprintf("runcore_start failed: %v", err), rns.LOG_ERROR)
