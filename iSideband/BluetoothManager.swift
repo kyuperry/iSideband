@@ -76,6 +76,8 @@ final class BluetoothManager:
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
+    private var pendingRNodeWriteChunks: [Data] = []
+    private var isRNodeWriteDrainScheduled = false
     private let batteryNotificationMilestones = [50, 25]
     private var sentBatteryMilestones = Set<Int>()
     private var lastBatteryNotificationPercent: Int?
@@ -241,7 +243,6 @@ final class BluetoothManager:
         }
 
         var offset = 0
-        var chunkIndex = 0
 
         while offset < escaped.count {
             let end = min(
@@ -252,30 +253,36 @@ final class BluetoothManager:
                 in: offset..<end
             )
 
-            DispatchQueue.main.asyncAfter(
-                deadline:
-                    .now() + (Double(chunkIndex) * 0.02)
-            ) {
-                guard connectedPeripheral.state ==
-                        .connected else {
-                    return
-                }
-
-                connectedPeripheral.writeValue(
-                    chunk,
-                    for: rnodeWriteCharacteristic,
-                    type: writeType
-                )
-                self.bluetoothBytesWritten +=
-                    chunk.count
-
-                print(
-                    "Wrote \(chunk.count) bytes to RNode BLE stream"
-                )
-            }
-
+            pendingRNodeWriteChunks.append(chunk)
             offset = end
-            chunkIndex += 1
+        }
+        drainRNodeWriteQueue()
+    }
+
+    private func drainRNodeWriteQueue() {
+        guard !isRNodeWriteDrainScheduled,
+              !pendingRNodeWriteChunks.isEmpty,
+              let connectedPeripheral,
+              let rnodeWriteCharacteristic,
+              connectedPeripheral.state == .connected,
+              connectedPeripheral.canSendWriteWithoutResponse
+        else {
+            return
+        }
+
+        let chunk = pendingRNodeWriteChunks.removeFirst()
+        connectedPeripheral.writeValue(
+            chunk,
+            for: rnodeWriteCharacteristic,
+            type: .withoutResponse
+        )
+        bluetoothBytesWritten += chunk.count
+        print("Wrote \(chunk.count) bytes to RNode BLE stream")
+
+        isRNodeWriteDrainScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+            self.isRNodeWriteDrainScheduled = false
+            self.drainRNodeWriteQueue()
         }
     }
     private func escapeKISSFrame(_ frame: Data) -> Data {
@@ -347,6 +354,8 @@ final class BluetoothManager:
         
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
+        pendingRNodeWriteChunks.removeAll()
+        isRNodeWriteDrainScheduled = false
         batteryPercent = nil
         batteryState = nil
         satelliteCount = nil
@@ -969,6 +978,14 @@ final class BluetoothManager:
 }
 
 extension BluetoothManager: CBPeripheralDelegate {
+
+    nonisolated func peripheralIsReady(
+        toSendWriteWithoutResponse peripheral: CBPeripheral
+    ) {
+        Task { @MainActor in
+            drainRNodeWriteQueue()
+        }
+    }
 
     nonisolated func peripheral(
         _ peripheral: CBPeripheral,
