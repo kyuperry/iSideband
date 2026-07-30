@@ -195,39 +195,23 @@ struct RNodeDetailView: View {
                         systemImage: "battery.50percent"
                     )
                 }
-                if let receivedBytes = bluetooth.receivedBytes {
-                    telemetryRow(
-                        title: "Received",
-                        value: kilobyteString(
-                            byteCount: Int64(receivedBytes)
-                        ),
-                        systemImage: "arrow.down.circle"
-                    )
-                }
-                if let transmittedBytes = bluetooth.transmittedBytes {
-                    telemetryRow(
-                        title: "Transmitted",
-                        value: kilobyteString(
-                            byteCount: Int64(transmittedBytes)
-                        ),
-                        systemImage: "arrow.up.circle"
-                    )
-                }
                 telemetryRow(
-                    title: "Bluetooth Written",
+                    title: "Reticulum Received",
                     value: kilobyteString(
                         byteCount:
-                            Int64(bluetooth.bluetoothBytesWritten)
+                            Int64(bluetooth.reticulumBytesReceived)
                     ),
-                    systemImage: "bolt.horizontal.circle"
+                    systemImage: "arrow.down.circle"
                 )
                 telemetryRow(
-                    title: "Bluetooth Received",
+                    title: "Reticulum Transmitted",
                     value: kilobyteString(
                         byteCount:
-                            Int64(bluetooth.bluetoothBytesReceived)
+                            Int64(
+                                bluetooth.reticulumBytesTransmitted
+                            )
                     ),
-                    systemImage: "antenna.radiowaves.left.and.right"
+                    systemImage: "arrow.up.circle"
                 )
                 telemetryRow(
                     title: "Inbound Diagnostic",

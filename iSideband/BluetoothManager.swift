@@ -54,6 +54,8 @@ final class BluetoothManager:
     @Published var radioReady = false
     @Published var receivedBytes: UInt32?
     @Published var transmittedBytes: UInt32?
+    @Published private(set) var reticulumBytesReceived = 0
+    @Published private(set) var reticulumBytesTransmitted = 0
     @Published private(set) var bluetoothBytesWritten = 0
     @Published private(set) var bluetoothBytesReceived = 0
     @Published private(set) var lastInboundDiagnostic =
@@ -635,6 +637,7 @@ final class BluetoothManager:
         frame.append(payload)
         frame.append(0xC0)
         
+        reticulumBytesTransmitted += payload.count
         sendToRNode(frame)
         
         print(
@@ -1136,6 +1139,8 @@ extension BluetoothManager: CBPeripheralDelegate {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
 
+                            reticulumBytesReceived +=
+                                reticulumPacket.raw.count
                             ReticulumCoreBridge.shared.feed(
                                 reticulumPacket.raw
                             )
