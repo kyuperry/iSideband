@@ -291,8 +291,17 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 		notifyStatus(h, id, "failed")
 		return 3
 	}
-	msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) { notifyStatus(h, id, "sent") })
-	msg.RegisterFailedCallback(func(*lxmf.LXMessage) { notifyStatus(h, id, "failed") })
+	var terminalStatus sync.Once
+	msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) {
+		terminalStatus.Do(func() {
+			notifyStatus(h, id, "sent")
+		})
+	})
+	msg.RegisterFailedCallback(func(*lxmf.LXMessage) {
+		terminalStatus.Do(func() {
+			notifyStatus(h, id, "failed")
+		})
+	})
 	return 0
 }
 
