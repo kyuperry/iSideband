@@ -184,3 +184,20 @@ func TestReceiverImmediatelyRequestsGapsAfterWindowTail(t *testing.T) {
 		t.Fatal("did not advance after a complete window")
 	}
 }
+
+func TestVerySlowWindowDoesNotThrottleBelowInitialBatch(t *testing.T) {
+	if ResourceWindowMaxVerySlow < ResourceWindow {
+		t.Fatalf(
+			"very-slow window %d throttles below initial batch %d",
+			ResourceWindowMaxVerySlow,
+			ResourceWindow,
+		)
+	}
+	if ResourceWindowMin > ResourceWindow {
+		t.Fatalf(
+			"minimum window %d exceeds initial batch %d",
+			ResourceWindowMin,
+			ResourceWindow,
+		)
+	}
+}

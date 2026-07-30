@@ -25,10 +25,10 @@ import (
 
 const (
 	// window
-	ResourceWindow            = 6
-	ResourceWindowMin         = 2
-	ResourceWindowMaxSlow     = 16
-	ResourceWindowMaxVerySlow = 4
+	ResourceWindow            = 8
+	ResourceWindowMin         = 4
+	ResourceWindowMaxSlow     = 20
+	ResourceWindowMaxVerySlow = 8
 	ResourceWindowMaxFast     = 75
 	ResourceWindowMax         = ResourceWindowMaxFast
 
