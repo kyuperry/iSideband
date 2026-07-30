@@ -678,6 +678,13 @@ func (l *Link) ResourceConcluded(res *Resource) {
 	cb = l.callbacks.ResourceConcluded
 	l.mu.Unlock()
 
+	// Completion can arrive through both Resource.Assemble() and the resource's
+	// registered callback. Only the call that actually removes the active
+	// resource may notify consumers; otherwise LXMF delivery can run twice
+	// concurrently for the same message.
+	if !removedIncoming && !removedOutgoing {
+		return
+	}
 	if cb != nil {
 		go func() {
 			defer func() {

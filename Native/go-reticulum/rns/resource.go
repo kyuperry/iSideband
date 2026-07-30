@@ -25,9 +25,9 @@ import (
 
 const (
 	// window
-	ResourceWindow            = 4
+	ResourceWindow            = 6
 	ResourceWindowMin         = 2
-	ResourceWindowMaxSlow     = 10
+	ResourceWindowMaxSlow     = 16
 	ResourceWindowMaxVerySlow = 4
 	ResourceWindowMaxFast     = 75
 	ResourceWindowMax         = ResourceWindowMaxFast
@@ -59,7 +59,7 @@ const (
 	// A slow LoRa estimate can otherwise postpone a missing-part request until
 	// after the direct link's stale window. Keep receiver recovery traffic
 	// frequent enough to preserve the link while a resource is active.
-	ReceiverRetryMaxWait = 10 * time.Second
+	ReceiverRetryMaxWait = 8 * time.Second
 
 	HashmapNotExhausted byte = 0x00
 	HashmapExhausted    byte = 0xFF
