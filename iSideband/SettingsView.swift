@@ -5,6 +5,8 @@ struct SettingsView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject private var locationTelemetry =
         LocationTelemetryManager.shared
+    @ObservedObject private var discoveryMode =
+        LXMFDiscoveryMode.shared
 
     @Environment(\.dismiss) private var dismiss
 
@@ -47,6 +49,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             interfaceSettingsSection
+            nearbyDiscoverySection
             notificationSettingsSection
             identitySection
             radioSettingsSection
@@ -226,6 +229,62 @@ struct SettingsView: View {
             )
             .font(.caption)
             .foregroundStyle(.secondary)
+        }
+    }
+
+    private var nearbyDiscoverySection: some View {
+        Section("Nearby Users") {
+            Toggle(
+                isOn: Binding(
+                    get: {
+                        discoveryMode.isEnabled
+                    },
+                    set: { enabled in
+                        if enabled {
+                            discoveryMode.start()
+                        } else {
+                            discoveryMode.stop()
+                        }
+                    }
+                )
+            ) {
+                Label(
+                    "Find Nearby Users",
+                    systemImage:
+                        "antenna.radiowaves.left.and.right"
+                )
+            }
+
+            Text(
+                discoveryMode.isEnabled
+                    ? discoveryMode.statusText
+                    : "Automatically announce every 10 minutes and listen for nearby LXMF users."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if let lastAnnouncedAt =
+                    discoveryMode.lastAnnouncedAt,
+               discoveryMode.isEnabled {
+                Text(
+                    "Last announcement " +
+                    lastAnnouncedAt.formatted(
+                        date: .omitted,
+                        time: .shortened
+                    )
+                )
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            NavigationLink {
+                DiscoveredPeersView()
+            } label: {
+                Label(
+                    "View Discovered Peers",
+                    systemImage: "person.2.fill"
+                )
+            }
         }
     }
 

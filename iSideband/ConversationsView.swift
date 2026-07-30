@@ -6,9 +6,6 @@ struct ConversationsView: View {
         LXMFContactStore.shared
     @ObservedObject private var messageStore =
         LXMFIncomingMessageStore.shared
-    @ObservedObject private var discoveryMode =
-        LXMFDiscoveryMode.shared
-
     @State private var selectedTab: ConversationTab = .direct
     @State private var showCreateGroup = false
     @State private var showAddLXMFContact = false
@@ -355,8 +352,6 @@ struct ConversationsView: View {
 
     private var directConversations: some View {
         VStack(spacing: 0) {
-            discoveryModeCard
-
             Group {
                 if contactStore.contacts.isEmpty {
                     emptyState(
@@ -406,66 +401,6 @@ struct ConversationsView: View {
                 }
             }
         }
-    }
-
-    private var discoveryModeCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle(
-                isOn: Binding(
-                    get: {
-                        discoveryMode.isEnabled
-                    },
-                    set: { enabled in
-                        if enabled {
-                            discoveryMode.start()
-                        } else {
-                            discoveryMode.stop()
-                        }
-                    }
-                )
-            ) {
-                Label(
-                    "Find Nearby Users",
-                    systemImage:
-                        "antenna.radiowaves.left.and.right"
-                )
-                .font(.headline)
-            }
-
-            Text(
-                discoveryMode.isEnabled
-                    ? discoveryMode.statusText
-                    : "Automatically announce every 10 minutes and listen for nearby LXMF users."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            if let lastAnnouncedAt =
-                    discoveryMode.lastAnnouncedAt,
-               discoveryMode.isEnabled {
-                Text(
-                    "Last announcement " +
-                    lastAnnouncedAt.formatted(
-                        date: .omitted,
-                        time: .shortened
-                    )
-                )
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            }
-
-            NavigationLink {
-                DiscoveredPeersView()
-            } label: {
-                Label(
-                    "View Discovered Peers",
-                    systemImage: "person.2.fill"
-                )
-                .font(.subheadline.weight(.semibold))
-            }
-        }
-        .padding()
-        .background(Color.secondary.opacity(0.08))
     }
 
     private var sortedDirectContacts: [LXMFContact] {
