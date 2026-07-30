@@ -83,10 +83,30 @@ final class LXMFIncomingMessageStore: ObservableObject {
             String(format: "%02x", $0)
         }.joined()
 
-        guard !messages.contains(
+        if let existingIndex = messages.firstIndex(
             where: { $0.lxmfHash == messageHash }
-        ) else {
-            return false
+        ) {
+            guard messages[existingIndex].attachmentPath == nil,
+                  message.attachmentPath != nil,
+                  let savedAttachment = persistAttachment(from: message)
+            else {
+                return false
+            }
+            let existing = messages[existingIndex]
+            messages[existingIndex] = ChatMessage(
+                id: existing.id,
+                text: message.content.isEmpty ? existing.text : message.content,
+                date: existing.date,
+                isOutgoing: false,
+                status: "Received",
+                lxmfMessageID: existing.lxmfMessageID,
+                lxmfHash: existing.lxmfHash,
+                type: message.attachmentType == .photo ? .photo : .file,
+                attachmentName: savedAttachment.lastPathComponent,
+                attachmentPath: savedAttachment.path,
+                attachmentSize: attachmentSize(at: savedAttachment)
+            )
+            return persist(messages, key: key)
         }
 
         let savedAttachment = persistAttachment(from: message)
@@ -102,21 +122,13 @@ final class LXMFIncomingMessageStore: ObservableObject {
                 attachmentName: savedAttachment?.lastPathComponent ?? message.attachmentName,
                 attachmentPath: savedAttachment?.path,
                 attachmentSize: savedAttachment.flatMap {
-                    (try? FileManager.default.attributesOfItem(atPath: $0.path)[.size] as? NSNumber)?.intValue
+                    attachmentSize(at: $0)
                 }
             )
         )
         messages.sort { $0.date < $1.date }
 
-        guard let data = try? JSONEncoder().encode(
-            messages
-        ) else {
-            return false
-        }
-
-        UserDefaults.standard.set(data, forKey: key)
-        revision += 1
-        return true
+        return persist(messages, key: key)
     }
 
     private func persistAttachment(from message: LXMFIncomingMessage) -> URL? {
@@ -161,7 +173,71 @@ final class LXMFIncomingMessageStore: ObservableObject {
         else {
             return []
         }
-        return messages
+        let repaired = messages.map(repairAttachmentPath)
+        if repaired != messages,
+           let repairedData = try? JSONEncoder().encode(repaired) {
+            UserDefaults.standard.set(repairedData, forKey: key)
+        }
+        return repaired
+    }
+
+    private func repairAttachmentPath(_ message: ChatMessage) -> ChatMessage {
+        guard let storedPath = message.attachmentPath,
+              !FileManager.default.fileExists(atPath: storedPath),
+              let documents = FileManager.default.urls(
+                for: .documentDirectory,
+                in: .userDomainMask
+              ).first
+        else {
+            return message
+        }
+
+        let fileName = URL(fileURLWithPath: storedPath).lastPathComponent
+        let candidates = [
+            documents.appendingPathComponent(
+                "DirectAttachments/Incoming/\(fileName)"
+            ),
+            documents.appendingPathComponent(
+                "DirectAttachments/\(fileName)"
+            )
+        ]
+        guard let repairedURL = candidates.first(
+            where: { FileManager.default.fileExists(atPath: $0.path) }
+        ) else {
+            return message
+        }
+
+        return ChatMessage(
+            id: message.id,
+            text: message.text,
+            date: message.date,
+            isOutgoing: message.isOutgoing,
+            status: message.status,
+            lxmfMessageID: message.lxmfMessageID,
+            lxmfHash: message.lxmfHash,
+            type: message.type,
+            attachmentName: message.attachmentName,
+            attachmentPath: repairedURL.path,
+            attachmentSize: message.attachmentSize
+        )
+    }
+
+    private func attachmentSize(at url: URL) -> Int? {
+        (try? FileManager.default.attributesOfItem(
+            atPath: url.path
+        )[.size] as? NSNumber)?.intValue
+    }
+
+    private func persist(
+        _ messages: [ChatMessage],
+        key: String
+    ) -> Bool {
+        guard let data = try? JSONEncoder().encode(messages) else {
+            return false
+        }
+        UserDefaults.standard.set(data, forKey: key)
+        revision += 1
+        return true
     }
 
     private func messageStorageKey(
