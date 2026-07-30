@@ -279,8 +279,31 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 	if fileName != nil && strings.TrimSpace(C.GoString(fileName)) != "" {
 		name = filepath.Base(C.GoString(fileName))
 	}
-	_ = mimeType // The standard LXMF file field carries filename and bytes.
-	fields := map[any]any{lxmf.FieldFileAttachments: []any{[]any{[]byte(name), data}}}
+	mimeName := ""
+	if mimeType != nil {
+		mimeName = strings.ToLower(strings.TrimSpace(C.GoString(mimeType)))
+	}
+	fields := map[any]any{}
+	if strings.HasPrefix(mimeName, "image/") {
+		format := strings.TrimPrefix(mimeName, "image/")
+		if format == "" {
+			format = strings.TrimPrefix(
+				strings.ToLower(filepath.Ext(name)),
+				".",
+			)
+		}
+		if format == "jpeg" {
+			format = "jpg"
+		}
+		if format == "" {
+			format = "jpg"
+		}
+		// Sideband and other LXMF clients encode photos as [format, bytes].
+		fields[lxmf.FieldImage] = []any{format, data}
+	} else {
+		fields[lxmf.FieldFileAttachments] =
+			[]any{[]any{[]byte(name), data}}
+	}
 	text := ""
 	if content != nil {
 		text = C.GoString(content)
@@ -320,6 +343,34 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 	if m == nil {
 		return
 	}
+	if value, ok := m.Fields[lxmf.FieldImage]; ok {
+		pair, ok := value.([]any)
+		if !ok || len(pair) < 2 {
+			return
+		}
+		format := attachmentString(pair[0])
+		data, ok := pair[1].([]byte)
+		if !ok || len(data) == 0 {
+			return "", "", "", 0
+		}
+		format = strings.ToLower(
+			strings.TrimPrefix(strings.TrimSpace(format), "."),
+		)
+		if format == "jpeg" {
+			format = "jpg"
+		}
+		if format == "" {
+			format = "jpg"
+		}
+		name = "photo." + format
+		mimeName = "image/" + format
+		path = persistInboundAttachment(m, name, data)
+		if path == "" {
+			return "", "", "", 0
+		}
+		return path, name, mimeName, 1
+	}
+
 	value, ok := m.Fields[lxmf.FieldFileAttachments]
 	if !ok {
 		return
@@ -345,12 +396,8 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 	if mimeName == "" {
 		mimeName = "application/octet-stream"
 	}
-	dir := filepath.Join(os.TempDir(), "iSidebandIncomingAttachments")
-	if os.MkdirAll(dir, 0o755) != nil {
-		return "", "", "", 0
-	}
-	path = filepath.Join(dir, messageIDHex(m)+"-"+name)
-	if os.WriteFile(path, data, 0o600) != nil {
+	path = persistInboundAttachment(m, name, data)
+	if path == "" {
 		return "", "", "", 0
 	}
 	if strings.HasPrefix(mimeName, "image/") {
@@ -359,6 +406,33 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 		attachmentType = 2
 	}
 	return
+}
+
+func attachmentString(value any) string {
+	switch typed := value.(type) {
+	case string:
+		return typed
+	case []byte:
+		return string(typed)
+	default:
+		return ""
+	}
+}
+
+func persistInboundAttachment(
+	m *lxmf.LXMessage,
+	name string,
+	data []byte,
+) string {
+	dir := filepath.Join(os.TempDir(), "iSidebandIncomingAttachments")
+	if os.MkdirAll(dir, 0o755) != nil {
+		return ""
+	}
+	path := filepath.Join(dir, messageIDHex(m)+"-"+filepath.Base(name))
+	if os.WriteFile(path, data, 0o600) != nil {
+		return ""
+	}
+	return path
 }
 
 //export runcore_set_inbound_cb
