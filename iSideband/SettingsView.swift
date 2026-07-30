@@ -27,6 +27,13 @@ struct SettingsView: View {
     @AppStorage(
         NotificationPreferenceKey.sounds
     ) private var notificationSounds = true
+    @AppStorage(
+        AutomaticAnnouncePreferenceKey.enabled
+    ) private var automaticAnnounceEnabled = false
+    @AppStorage(
+        AutomaticAnnouncePreferenceKey.intervalMinutes
+    ) private var automaticAnnounceIntervalMinutes =
+        AutomaticAnnounceInterval.thirtyMinutes.rawValue
 
     @State private var frequencyMHz = "915.000"
     @State private var bandwidthKHz = "125"
@@ -50,6 +57,7 @@ struct SettingsView: View {
         Form {
             interfaceSettingsSection
             nearbyDiscoverySection
+            automaticAnnouncementsSection
             notificationSettingsSection
             identitySection
             radioSettingsSection
@@ -285,6 +293,48 @@ struct SettingsView: View {
                     systemImage: "person.2.fill"
                 )
             }
+        }
+    }
+
+    private var automaticAnnouncementsSection:
+        some View {
+        Section("Automatic Announcements") {
+            Toggle(
+                "Auto-Announce Identity",
+                isOn: $automaticAnnounceEnabled
+            )
+
+            Picker(
+                "Interval",
+                selection:
+                    $automaticAnnounceIntervalMinutes
+            ) {
+                ForEach(
+                    AutomaticAnnounceInterval.allCases
+                ) { interval in
+                    Text(interval.title)
+                        .tag(interval.rawValue)
+                }
+            }
+            .disabled(!automaticAnnounceEnabled)
+
+            Text(
+                "iSideband announces on this schedule while running. If iOS suspends the app, an overdue announcement is sent the next time RNode Bluetooth activity wakes it."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .onChange(
+            of: automaticAnnounceEnabled
+        ) { _, _ in
+            ReticulumCoreBridge.shared
+                .automaticAnnounceSettingsDidChange()
+        }
+        .onChange(
+            of: automaticAnnounceIntervalMinutes
+        ) { _, _ in
+            ReticulumCoreBridge.shared
+                .automaticAnnounceSettingsDidChange()
         }
     }
 

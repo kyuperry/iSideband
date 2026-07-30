@@ -2,6 +2,47 @@ import CryptoKit
 import Combine
 import Foundation
 
+enum AutomaticAnnouncePreferenceKey {
+    static let enabled =
+        "isideband.reticulum.autoAnnounce.enabled"
+    static let intervalMinutes =
+        "isideband.reticulum.autoAnnounce.intervalMinutes"
+    static let lastAnnouncedAt =
+        "isideband.reticulum.autoAnnounce.lastAnnouncedAt"
+}
+
+enum AutomaticAnnounceInterval:
+    Int,
+    CaseIterable,
+    Identifiable
+{
+    case tenMinutes = 10
+    case thirtyMinutes = 30
+    case oneHour = 60
+    case threeHours = 180
+    case sixHours = 360
+    case twelveHours = 720
+    case twentyFourHours = 1_440
+
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .tenMinutes: "10 Minutes"
+        case .thirtyMinutes: "30 Minutes"
+        case .oneHour: "1 Hour"
+        case .threeHours: "3 Hours"
+        case .sixHours: "6 Hours"
+        case .twelveHours: "12 Hours"
+        case .twentyFourHours: "24 Hours"
+        }
+    }
+
+    var timeInterval: TimeInterval {
+        TimeInterval(rawValue * 60)
+    }
+}
+
 nonisolated private func reticulumRawTransmit(
     _ userData: UnsafeMutableRawPointer?,
     _ bytes: UnsafePointer<UInt8>?,
@@ -109,7 +150,23 @@ final class ReticulumCoreBridge: ObservableObject {
     private var routeRefreshTimer: Timer?
     private var lastAutomaticAnnounce: Date?
 
-    private init() {}
+    private init() {
+        UserDefaults.standard.register(
+            defaults: [
+                AutomaticAnnouncePreferenceKey.enabled:
+                    false,
+                AutomaticAnnouncePreferenceKey
+                    .intervalMinutes:
+                    AutomaticAnnounceInterval
+                        .thirtyMinutes.rawValue
+            ]
+        )
+        lastAutomaticAnnounce =
+            UserDefaults.standard.object(
+                forKey: AutomaticAnnouncePreferenceKey
+                    .lastAnnouncedAt
+            ) as? Date
+    }
 
     func start(bluetooth: BluetoothManager) {
         self.bluetooth = bluetooth
@@ -215,6 +272,9 @@ final class ReticulumCoreBridge: ObservableObject {
                 Int32(packet.count)
             )
         }
+        // BLE traffic can wake the app after iOS suspended its timers.
+        // Use that opportunity to send an overdue scheduled announce.
+        checkScheduledAutomaticAnnounce()
     }
 
     func announce() -> Bool {
@@ -222,8 +282,12 @@ final class ReticulumCoreBridge: ObservableObject {
               runcore_announce(handle) == 0 else {
             return false
         }
-        lastAutomaticAnnounce = Date()
+        recordAnnounce(at: Date())
         return true
+    }
+
+    func automaticAnnounceSettingsDidChange() {
+        checkScheduledAutomaticAnnounce()
     }
 
     func radioDataChannelReady() {
@@ -361,16 +425,35 @@ final class ReticulumCoreBridge: ObservableObject {
     private func startRouteMaintenance() {
         routeRefreshTimer?.invalidate()
         routeRefreshTimer = Timer.scheduledTimer(
-            withTimeInterval: 45,
+            withTimeInterval: 30,
             repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor in
-                self?.requestAutomaticAnnounce(
-                    reason: "Return route refreshed",
-                    minimumInterval: 40
-                )
+        ) { _ in
+            Task { @MainActor [weak self] in
+                self?.checkScheduledAutomaticAnnounce()
             }
         }
+        checkScheduledAutomaticAnnounce()
+    }
+
+    private func checkScheduledAutomaticAnnounce() {
+        let defaults = UserDefaults.standard
+        guard defaults.bool(
+            forKey: AutomaticAnnouncePreferenceKey.enabled
+        ) else {
+            return
+        }
+        let storedMinutes = defaults.integer(
+            forKey: AutomaticAnnouncePreferenceKey
+                .intervalMinutes
+        )
+        let interval =
+            AutomaticAnnounceInterval(
+                rawValue: storedMinutes
+            ) ?? .thirtyMinutes
+        requestAutomaticAnnounce(
+            reason: "Scheduled identity announcement sent",
+            minimumInterval: interval.timeInterval
+        )
     }
 
     private func requestAutomaticAnnounce(
@@ -389,8 +472,17 @@ final class ReticulumCoreBridge: ObservableObject {
         guard runcore_announce(handle) == 0 else {
             return
         }
-        lastAutomaticAnnounce = Date()
+        recordAnnounce(at: Date())
         status = reason
+    }
+
+    private func recordAnnounce(at date: Date) {
+        lastAutomaticAnnounce = date
+        UserDefaults.standard.set(
+            date,
+            forKey: AutomaticAnnouncePreferenceKey
+                .lastAnnouncedAt
+        )
     }
 
     private func coreDirectory() throws -> URL {
