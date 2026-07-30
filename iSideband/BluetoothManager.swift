@@ -109,6 +109,11 @@ final class BluetoothManager:
                     true
             ]
         )
+
+        // Do not wait for a SwiftUI view to appear. iOS may create this
+        // manager solely to restore an RNode connection in the background.
+        // The LXMF receiver must already exist when restored BLE bytes arrive.
+        LXMFManager.shared.start(bluetooth: self)
     }
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
@@ -821,6 +826,10 @@ final class BluetoothManager:
         }
 
         Task { @MainActor in
+            // State restoration can be the app's first callback after iOS
+            // launches it in the background. This is intentionally idempotent.
+            LXMFManager.shared.start(bluetooth: self)
+
             reconnectTask?.cancel()
             reconnectTask = nil
             reconnectAttempt = 0

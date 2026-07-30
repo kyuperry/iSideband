@@ -10,6 +10,7 @@ final class LXMFManager: ObservableObject {
     @Published private(set) var outgoingMessages: [LXMFOutgoingMessage] = []
 
     private let service = LXMFService()
+    private var hasStarted = false
     static let maximumAttachmentBytes = 120_000
 
     private static let storageKey = "isideband.lxmf.outgoing"
@@ -28,13 +29,21 @@ final class LXMFManager: ObservableObject {
     func start(
         bluetooth: BluetoothManager
     ) {
-        ReticulumDecoderSelfTest.run()
-        ReticulumCompatibilitySelfTest.run()
-        print("Starting LXMF Manager")
-
+        // CoreBluetooth can relaunch the app directly into state restoration,
+        // before a SwiftUI view task runs. Always give the native bridge the
+        // current radio, but only start the queue/service once.
         ReticulumCoreBridge.shared.start(
             bluetooth: bluetooth
         )
+
+        guard !hasStarted else {
+            return
+        }
+        hasStarted = true
+
+        ReticulumDecoderSelfTest.run()
+        ReticulumCompatibilitySelfTest.run()
+        print("Starting LXMF Manager")
 
         isConnected = true
         identityReady = true
