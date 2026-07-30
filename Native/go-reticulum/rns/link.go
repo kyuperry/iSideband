@@ -868,11 +868,12 @@ func (l *Link) responseResourceProgress(res *Resource) {
 
 func LinkValidateRequest(owner *Destination, data []byte, packet *Packet) *Link {
 	if owner == nil {
+		Log("Rejected inbound link request without destination owner", LogNotice)
 		return nil
 	}
 
 	if len(data) != linkEcPubSize && len(data) != linkEcPubSize+linkSignalSize {
-		Log(fmt.Sprintf("Invalid link request payload size of %d bytes, dropping request", len(data)), LOG_DEBUG)
+		Log(fmt.Sprintf("Invalid link request payload size of %d bytes, dropping request", len(data)), LogNotice)
 		return nil
 	}
 
@@ -881,7 +882,7 @@ func LinkValidateRequest(owner *Destination, data []byte, packet *Packet) *Link 
 
 	link, err := NewIncomingLink(owner, peerPub, peerSig, linkDefaultMode)
 	if err != nil {
-		Log(fmt.Sprintf("Validating link request failed: %v", err), LOG_VERBOSE)
+		Log(fmt.Sprintf("Validating link request failed: %v", err), LogNotice)
 		return nil
 	}
 
@@ -915,7 +916,7 @@ func LinkValidateRequest(owner *Destination, data []byte, packet *Packet) *Link 
 	link.estTimeout = linkDefaultPerHop*time.Duration(hops) + linkKeepaliveMax
 
 	if err := link.Handshake(); err != nil {
-		Log(fmt.Sprintf("Handshake failed: %v", err), LOG_ERROR)
+		Log(fmt.Sprintf("Incoming link handshake failed: %v", err), LogNotice)
 		return nil
 	}
 	if packet != nil {
@@ -927,7 +928,7 @@ func LinkValidateRequest(owner *Destination, data []byte, packet *Packet) *Link 
 	link.updatePhyStatsForce(packet)
 
 	link.startWatchdog()
-	Log(fmt.Sprintf("Incoming link request %s accepted", link), LOG_DEBUG)
+	Log(fmt.Sprintf("Incoming link request %s accepted", link), LogNotice)
 	return link
 }
 

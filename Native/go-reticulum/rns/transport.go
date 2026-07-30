@@ -2733,6 +2733,10 @@ func Inbound(raw []byte, ifc *Interface) {
 
 	p.ReceivingInterface = ifc
 	p.Hops++
+	if p.PacketType == PacketTypeLinkRequest {
+		Logf(LogNotice, "Inbound link request dest=%s payload=%d hops=%d",
+			PrettyHexRep(p.DestinationHash), len(p.Data), p.Hops)
+	}
 
 	// Record reverse table entry for transport-direct packets (minimal parity).
 	if p.HeaderType == HeaderType2 && ifc != nil {
@@ -2758,6 +2762,9 @@ func Inbound(raw []byte, ifc *Interface) {
 	}
 
 	if !PacketFilter(p) {
+		if p.PacketType == PacketTypeLinkRequest {
+			Logf(LogNotice, "Filtered inbound link request dest=%s", PrettyHexRep(p.DestinationHash))
+		}
 		return
 	}
 
@@ -2908,8 +2915,15 @@ func Inbound(raw []byte, ifc *Interface) {
 
 	// Deliver to a registered destination (including control destinations).
 	if dst := destinationByHash(p.DestinationHash); dst != nil {
+		if p.PacketType == PacketTypeLinkRequest {
+			Logf(LogNotice, "Delivering inbound link request to %s", dst.String())
+		}
 		_ = dst.Receive(p)
 		return
+	}
+	if p.PacketType == PacketTypeLinkRequest {
+		Logf(LogNotice, "No registered destination for inbound link request dest=%s",
+			PrettyHexRep(p.DestinationHash))
 	}
 
 	// Minimal routing pipeline: forward packets not for local system along a known path.
