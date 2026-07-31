@@ -3,8 +3,10 @@ import CoreLocation
 
 struct SettingsView: View {
     @ObservedObject var bluetooth: BluetoothManager
+
     @ObservedObject private var locationTelemetry =
         LocationTelemetryManager.shared
+
     @ObservedObject private var discoveryMode =
         LXMFDiscoveryMode.shared
 
@@ -12,28 +14,44 @@ struct SettingsView: View {
 
     @State private var gpsEnabled = false
     @State private var bluetoothEnabled = true
+
     @AppStorage(
         NotificationPreferenceKey.nearbyNodes
-    ) private var nearbyNodeNotifications = true
+    )
+    private var nearbyNodeNotifications = true
+
     @AppStorage(
         NotificationPreferenceKey.lxmfMessages
-    ) private var lxmfMessageNotifications = true
+    )
+    private var lxmfMessageNotifications = true
+
     @AppStorage(
         NotificationPreferenceKey.battery50
-    ) private var battery50Notifications = true
+    )
+    private var battery50Notifications = true
+
     @AppStorage(
         NotificationPreferenceKey.battery25
-    ) private var battery25Notifications = true
+    )
+    private var battery25Notifications = true
+
     @AppStorage(
         NotificationPreferenceKey.sounds
-    ) private var notificationSounds = true
+    )
+    private var notificationSounds = true
+
     @AppStorage(
         AutomaticAnnouncePreferenceKey.enabled
-    ) private var automaticAnnounceEnabled = false
+    )
+    private var automaticAnnounceEnabled = false
+
     @AppStorage(
         AutomaticAnnouncePreferenceKey.intervalMinutes
-    ) private var automaticAnnounceIntervalMinutes =
-        AutomaticAnnounceInterval.thirtyMinutes.rawValue
+    )
+    private var automaticAnnounceIntervalMinutes =
+        AutomaticAnnounceInterval
+            .thirtyMinutes
+            .rawValue
 
     @State private var frequencyMHz = "915.000"
     @State private var bandwidthKHz = "125"
@@ -45,12 +63,14 @@ struct SettingsView: View {
     @State private var showRadioOffConfirmation = false
     @State private var showSavedConfirmation = false
     @State private var statusMessage: String?
+
     @State private var showBackupWarning = false
     @State private var showBackupExporter = false
+
     @State private var backupDocument:
         iSidebandBackupDocument?
-    @State private var backupStatusMessage: String?
 
+    @State private var backupStatusMessage: String?
     @State private var hasLoadedSettings = false
 
     var body: some View {
@@ -66,7 +86,9 @@ struct SettingsView: View {
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(
+                placement: .topBarTrailing
+            ) {
                 Button("Save") {
                     saveSettings()
                 }
@@ -85,10 +107,15 @@ struct SettingsView: View {
                 prepareBackup()
             }
 
-            Button("Cancel", role: .cancel) {}
+            Button(
+                "Cancel",
+                role: .cancel
+            ) { }
         } message: {
             Text(
-                "This file contains your private Reticulum identity. Anyone with the file can use your identity. Store it securely and do not share it."
+                """
+                This file contains your private Reticulum identity. Anyone with the file can use your identity. Store it securely and do not share it.
+                """
             )
         }
         .fileExporter(
@@ -102,15 +129,21 @@ struct SettingsView: View {
             case .success:
                 backupStatusMessage =
                     "Backup exported successfully."
+
             case .failure(let error):
                 backupStatusMessage =
-                    "Backup export failed: \(error.localizedDescription)"
+                    """
+                    Backup export failed: \
+                    \(error.localizedDescription)
+                    """
             }
         }
         .alert(
             "Backup",
             isPresented: Binding(
-                get: { backupStatusMessage != nil },
+                get: {
+                    backupStatusMessage != nil
+                },
                 set: { isPresented in
                     if !isPresented {
                         backupStatusMessage = nil
@@ -118,33 +151,47 @@ struct SettingsView: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
+            Button(
+                "OK",
+                role: .cancel
+            ) {
                 backupStatusMessage = nil
             }
         } message: {
-            Text(backupStatusMessage ?? "")
+            Text(
+                backupStatusMessage ?? ""
+            )
         }
         .confirmationDialog(
             "Restart RNode?",
             isPresented: $showRestartConfirmation,
             titleVisibility: .visible
         ) {
-            Button("Restart RNode", role: .destructive) {
+            Button(
+                "Restart RNode",
+                role: .destructive
+            ) {
                 bluetooth.restartRNode()
 
                 DispatchQueue.main.asyncAfter(
                     deadline: .now() + 0.5
                 ) {
                     statusMessage =
-                        "RNode restarting — reconnect when available."
+                        """
+                        RNode restarting — reconnect when available.
+                        """
                 }
             }
 
-            Button("Cancel", role: .cancel) {
-            }
+            Button(
+                "Cancel",
+                role: .cancel
+            ) { }
         } message: {
             Text(
-                "The Bluetooth connection will briefly disconnect while the RNode restarts."
+                """
+                The Bluetooth connection will briefly disconnect while the RNode restarts.
+                """
             )
         }
         .confirmationDialog(
@@ -166,22 +213,30 @@ struct SettingsView: View {
                 }
             }
 
-            Button("Cancel", role: .cancel) {
-            }
+            Button(
+                "Cancel",
+                role: .cancel
+            ) { }
         } message: {
             Text(
-                "This disables the RNode’s LoRa radio. It does not turn off Bluetooth or completely power off the RNode."
+                """
+                This disables the RNode’s LoRa radio. It does not turn off Bluetooth or completely power off the RNode.
+                """
             )
         }
         .alert(
             "Settings Saved",
             isPresented: $showSavedConfirmation
         ) {
-            Button("OK", role: .cancel) {
-            }
+            Button(
+                "OK",
+                role: .cancel
+            ) { }
         } message: {
             Text(
-                "Your iSideband settings were saved."
+                """
+                Your iSideband settings were saved.
+                """
             )
         }
         .alert(
@@ -197,15 +252,21 @@ struct SettingsView: View {
                 }
             )
         ) {
-            Button("OK", role: .cancel) {
+            Button(
+                "OK",
+                role: .cancel
+            ) {
                 statusMessage = nil
             }
         } message: {
-            Text(statusMessage ?? "")
+            Text(
+                statusMessage ?? ""
+            )
         }
     }
 
-    private var notificationSettingsSection: some View {
+    private var notificationSettingsSection:
+        some View {
         Section("Notifications") {
             Toggle(
                 "Nearby Reticulum Nodes",
@@ -233,14 +294,17 @@ struct SettingsView: View {
             )
 
             Text(
-                "iPhone notification permission must also be enabled for iSideband in Settings."
+                """
+                iPhone notification permission must also be enabled for iSideband in Settings.
+                """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
     }
 
-    private var nearbyDiscoverySection: some View {
+    private var nearbyDiscoverySection:
+        some View {
         Section("Nearby Users") {
             Toggle(
                 isOn: Binding(
@@ -266,14 +330,18 @@ struct SettingsView: View {
             Text(
                 discoveryMode.isEnabled
                     ? discoveryMode.statusText
-                    : "Automatically announce every 10 minutes and listen for nearby LXMF users."
+                    : """
+                      Automatically announce every 10 minutes and listen for nearby LXMF users.
+                      """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
 
-            if let lastAnnouncedAt =
+            if
+                let lastAnnouncedAt =
                     discoveryMode.lastAnnouncedAt,
-               discoveryMode.isEnabled {
+                discoveryMode.isEnabled
+            {
                 Text(
                     "Last announcement " +
                     lastAnnouncedAt.formatted(
@@ -290,7 +358,8 @@ struct SettingsView: View {
             } label: {
                 Label(
                     "View Discovered Peers",
-                    systemImage: "person.2.fill"
+                    systemImage:
+                        "person.2.fill"
                 )
             }
         }
@@ -316,10 +385,14 @@ struct SettingsView: View {
                         .tag(interval.rawValue)
                 }
             }
-            .disabled(!automaticAnnounceEnabled)
+            .disabled(
+                !automaticAnnounceEnabled
+            )
 
             Text(
-                "iSideband announces on this schedule while running. If iOS suspends the app, an overdue announcement is sent the next time RNode Bluetooth activity wakes it."
+                """
+                iSideband announces on this schedule while running. If iOS suspends the app, an overdue announcement is sent the next time RNode Bluetooth activity wakes it.
+                """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -338,52 +411,68 @@ struct SettingsView: View {
         }
     }
 
-    private var interfaceSettingsSection: some View {
+    private var interfaceSettingsSection:
+        some View {
         Section("Interfaces") {
-            Toggle(isOn: $bluetoothEnabled) {
+            Toggle(
+                isOn: $bluetoothEnabled
+            ) {
                 Label(
                     "Bluetooth",
                     systemImage: "bluetooth"
                 )
             }
 
-            Toggle(isOn: $gpsEnabled) {
+            Toggle(
+                isOn: $gpsEnabled
+            ) {
                 Label(
                     "GPS",
                     systemImage: "location.fill"
                 )
             }
-            .onChange(of: gpsEnabled) { _, enabled in
+            .onChange(
+                of: gpsEnabled
+            ) { _, enabled in
                 guard hasLoadedSettings else {
                     return
                 }
-                locationTelemetry.setEnabled(enabled)
+
+                locationTelemetry.setEnabled(
+                    enabled
+                )
             }
 
             if gpsEnabled {
-                if let location = locationTelemetry.location {
+                if let location =
+                    locationTelemetry.location {
                     Label(
                         String(
-                            format: "%.5f, %.5f (±%.0f m)",
+                            format:
+                                "%.5f, %.5f (±%.0f m)",
                             location.coordinate.latitude,
                             location.coordinate.longitude,
                             location.horizontalAccuracy
                         ),
-                        systemImage: "location.circle"
+                        systemImage:
+                            "location.circle"
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                } else if let error = locationTelemetry.errorMessage {
+                } else if let error =
+                    locationTelemetry.errorMessage {
                     Label(
                         error,
-                        systemImage: "exclamationmark.triangle"
+                        systemImage:
+                            "exclamationmark.triangle"
                     )
                     .font(.caption)
                     .foregroundStyle(.orange)
                 } else {
                     Label(
                         "Waiting for an iPhone location fix",
-                        systemImage: "location.circle"
+                        systemImage:
+                            "location.circle"
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -391,14 +480,17 @@ struct SettingsView: View {
             }
 
             Text(
-                "These switches control whether iSideband will use Bluetooth and GPS. They do not directly turn the iPhone’s system radios on or off."
+                """
+                These switches control whether iSideband will use Bluetooth and GPS. They do not directly turn the iPhone’s system radios on or off.
+                """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
     }
 
-    private var identitySection: some View {
+    private var identitySection:
+        some View {
         Section("Sideband Identity") {
             SidebandIdentityImporter()
 
@@ -413,25 +505,17 @@ struct SettingsView: View {
             }
 
             Text(
-                "The backup includes your private identity, contacts, discovered peers, and announcement history."
+                """
+                The backup includes your private identity, contacts, discovered peers, and announcement history.
+                """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
     }
 
-    private func prepareBackup() {
-        do {
-            backupDocument =
-                try iSidebandBackupDocument.create()
-            showBackupExporter = true
-        } catch {
-            backupStatusMessage =
-                "Could not create backup: \(error.localizedDescription)"
-        }
-    }
-
-    private var radioSettingsSection: some View {
+    private var radioSettingsSection:
+        some View {
         Section("LoRa Radio Settings") {
             settingsField(
                 title: "Frequency",
@@ -469,26 +553,34 @@ struct SettingsView: View {
             )
 
             Text(
-                "These fields are editable and saved locally. They do not change the connected RNode configuration yet."
+                """
+                These fields are validated and saved locally. They do not change the connected RNode configuration yet.
+                """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
     }
 
-    private var rnodeControlsSection: some View {
+    private var rnodeControlsSection:
+        some View {
         Section("RNode Controls") {
             Button {
                 showRestartConfirmation = true
             } label: {
                 Label(
                     "Restart RNode",
-                    systemImage: "arrow.clockwise"
+                    systemImage:
+                        "arrow.clockwise"
                 )
             }
-            .disabled(bluetooth.connectedDeviceID == nil)
+            .disabled(
+                bluetooth.connectedDeviceID == nil
+            )
 
-            Button(role: .destructive) {
+            Button(
+                role: .destructive
+            ) {
                 showRadioOffConfirmation = true
             } label: {
                 Label(
@@ -497,7 +589,9 @@ struct SettingsView: View {
                         "antenna.radiowaves.left.and.right.slash"
                 )
             }
-            .disabled(bluetooth.connectedDeviceID == nil)
+            .disabled(
+                bluetooth.connectedDeviceID == nil
+            )
         }
     }
 
@@ -512,11 +606,14 @@ struct SettingsView: View {
 
             Spacer()
 
-            TextField("", text: value)
-                .keyboardType(keyboard)
-                .multilineTextAlignment(.trailing)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 92)
+            TextField(
+                "",
+                text: value
+            )
+            .keyboardType(keyboard)
+            .multilineTextAlignment(.trailing)
+            .textFieldStyle(.roundedBorder)
+            .frame(width: 92)
 
             Text(unit)
                 .font(.caption)
@@ -528,92 +625,297 @@ struct SettingsView: View {
         }
     }
 
+    private func prepareBackup() {
+        do {
+            backupDocument =
+                try iSidebandBackupDocument
+                    .create()
+
+            showBackupExporter = true
+        } catch {
+            backupStatusMessage =
+                """
+                Could not create backup: \
+                \(error.localizedDescription)
+                """
+        }
+    }
+
     private func loadSettings() {
         guard !hasLoadedSettings else {
             return
         }
 
-        let defaults = UserDefaults.standard
+        let defaults =
+            UserDefaults.standard
 
         if defaults.object(
             forKey: "gpsInterfaceEnabled"
         ) != nil {
-            gpsEnabled = defaults.bool(
-                forKey: "gpsInterfaceEnabled"
-            )
+            gpsEnabled =
+                defaults.bool(
+                    forKey:
+                        "gpsInterfaceEnabled"
+                )
         }
 
         if defaults.object(
-            forKey: "bluetoothInterfaceEnabled"
+            forKey:
+                "bluetoothInterfaceEnabled"
         ) != nil {
-            bluetoothEnabled = defaults.bool(
-                forKey: "bluetoothInterfaceEnabled"
-            )
+            bluetoothEnabled =
+                defaults.bool(
+                    forKey:
+                        "bluetoothInterfaceEnabled"
+                )
         }
 
-        frequencyMHz = defaults.string(
-            forKey: "radioFrequencyMHz"
-        ) ?? "915.000"
+        frequencyMHz =
+            defaults.string(
+                forKey:
+                    "radioFrequencyMHz"
+            ) ?? "915.000"
 
-        bandwidthKHz = defaults.string(
-            forKey: "radioBandwidthKHz"
-        ) ?? "125"
+        bandwidthKHz =
+            defaults.string(
+                forKey:
+                    "radioBandwidthKHz"
+            ) ?? "125"
 
-        transmitPowerDBm = defaults.string(
-            forKey: "radioTransmitPowerDBm"
-        ) ?? "22"
+        transmitPowerDBm =
+            defaults.string(
+                forKey:
+                    "radioTransmitPowerDBm"
+            ) ?? "22"
 
-        spreadingFactor = defaults.string(
-            forKey: "radioSpreadingFactor"
-        ) ?? "7"
+        spreadingFactor =
+            defaults.string(
+                forKey:
+                    "radioSpreadingFactor"
+            ) ?? "7"
 
-        codingRate = defaults.string(
-            forKey: "radioCodingRate"
-        ) ?? "5"
+        codingRate =
+            defaults.string(
+                forKey:
+                    "radioCodingRate"
+            ) ?? "5"
 
         hasLoadedSettings = true
-        locationTelemetry.setEnabled(gpsEnabled)
+
+        locationTelemetry.setEnabled(
+            gpsEnabled
+        )
     }
 
     private func saveSettings() {
-        let defaults = UserDefaults.standard
+        guard let validatedSettings =
+            validatedRadioSettings()
+        else {
+            return
+        }
+
+        let defaults =
+            UserDefaults.standard
 
         defaults.set(
             gpsEnabled,
-            forKey: "gpsInterfaceEnabled"
+            forKey:
+                "gpsInterfaceEnabled"
         )
-        locationTelemetry.setEnabled(gpsEnabled)
+
+        locationTelemetry.setEnabled(
+            gpsEnabled
+        )
 
         defaults.set(
             bluetoothEnabled,
-            forKey: "bluetoothInterfaceEnabled"
+            forKey:
+                "bluetoothInterfaceEnabled"
         )
+
+        frequencyMHz =
+            String(
+                format: "%.3f",
+                validatedSettings.frequencyMHz
+            )
+
+        bandwidthKHz =
+            formattedDecimal(
+                validatedSettings.bandwidthKHz
+            )
+
+        transmitPowerDBm =
+            String(
+                validatedSettings.transmitPowerDBm
+            )
+
+        spreadingFactor =
+            String(
+                validatedSettings.spreadingFactor
+            )
+
+        codingRate =
+            String(
+                validatedSettings.codingRate
+            )
 
         defaults.set(
             frequencyMHz,
-            forKey: "radioFrequencyMHz"
+            forKey:
+                "radioFrequencyMHz"
         )
 
         defaults.set(
             bandwidthKHz,
-            forKey: "radioBandwidthKHz"
+            forKey:
+                "radioBandwidthKHz"
         )
 
         defaults.set(
             transmitPowerDBm,
-            forKey: "radioTransmitPowerDBm"
+            forKey:
+                "radioTransmitPowerDBm"
         )
 
         defaults.set(
             spreadingFactor,
-            forKey: "radioSpreadingFactor"
+            forKey:
+                "radioSpreadingFactor"
         )
 
         defaults.set(
             codingRate,
-            forKey: "radioCodingRate"
+            forKey:
+                "radioCodingRate"
         )
 
         showSavedConfirmation = true
+    }
+
+    private func validatedRadioSettings()
+        -> ValidatedRadioSettings? {
+        let cleanedFrequency =
+            frequencyMHz.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        let cleanedBandwidth =
+            bandwidthKHz.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        let cleanedPower =
+            transmitPowerDBm.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        let cleanedSpreadingFactor =
+            spreadingFactor.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        let cleanedCodingRate =
+            codingRate.trimmingCharacters(
+                in: .whitespacesAndNewlines
+            )
+
+        guard
+            let frequency =
+                Double(cleanedFrequency),
+            frequency >= 137,
+            frequency <= 1_020
+        else {
+            statusMessage =
+                """
+                Frequency must be between 137 and 1,020 MHz.
+                """
+
+            return nil
+        }
+
+        guard
+            let bandwidth =
+                Double(cleanedBandwidth),
+            bandwidth >= 7.8,
+            bandwidth <= 500
+        else {
+            statusMessage =
+                """
+                Bandwidth must be between 7.8 and 500 kHz.
+                """
+
+            return nil
+        }
+
+        guard
+            let power =
+                Int(cleanedPower),
+            (0...30).contains(power)
+        else {
+            statusMessage =
+                """
+                TX power must be between 0 and 30 dBm.
+                """
+
+            return nil
+        }
+
+        guard
+            let sf =
+                Int(cleanedSpreadingFactor),
+            (5...12).contains(sf)
+        else {
+            statusMessage =
+                """
+                Spreading factor must be between 5 and 12.
+                """
+
+            return nil
+        }
+
+        guard
+            let cr =
+                Int(cleanedCodingRate),
+            (5...8).contains(cr)
+        else {
+            statusMessage =
+                """
+                Coding rate must be entered as a denominator from 5 through 8. Enter 6 for coding rate 4/6.
+                """
+
+            return nil
+        }
+
+        return ValidatedRadioSettings(
+            frequencyMHz: frequency,
+            bandwidthKHz: bandwidth,
+            transmitPowerDBm: power,
+            spreadingFactor: sf,
+            codingRate: cr
+        )
+    }
+
+    private func formattedDecimal(
+        _ value: Double
+    ) -> String {
+        if value.rounded() == value {
+            return String(
+                format: "%.0f",
+                value
+            )
+        }
+
+        return String(
+            format: "%.1f",
+            value
+        )
+    }
+
+    private struct ValidatedRadioSettings {
+        let frequencyMHz: Double
+        let bandwidthKHz: Double
+        let transmitPowerDBm: Int
+        let spreadingFactor: Int
+        let codingRate: Int
     }
 }
