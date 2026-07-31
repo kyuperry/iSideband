@@ -1,0 +1,136 @@
+{
+  "source": "/Users/kyleperry/Desktop/iSideband/iSideband/RNodeHomeView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "RNode",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 23
+        }
+      },
+      {
+        "comment": "",
+        "key": "Switch RNodes?",
+        "location": {
+          "startingColumn": 13,
+          "startingLine": 25
+        }
+      },
+      {
+        "comment": "",
+        "key": "No Devices Found",
+        "location": {
+          "startingColumn": 13,
+          "startingLine": 92
+        }
+      },
+      {
+        "comment": "",
+        "key": "Scanning for nearby RNodes…",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 97
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap Scan to search for your RNode.",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 98
+        }
+      },
+      {
+        "comment": "",
+        "key": "Disconnect and Connect",
+        "location": {
+          "startingColumn": 17,
+          "startingLine": 30
+        }
+      },
+      {
+        "comment": "",
+        "key": "Cancel",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 55
+        }
+      },
+      {
+        "comment": "",
+        "key": "Another RNode is already connected. This will disconnect it and connect to the selected RNode.",
+        "location": {
+          "startingColumn": 17,
+          "startingLine": 60
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap an RNode to connect",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 82
+        }
+      },
+      {
+        "comment": "",
+        "key": "Tap the RNode for details",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 83
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connected",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 132
+        }
+      },
+      {
+        "comment": "",
+        "key": "Details",
+        "location": {
+          "startingColumn": 18,
+          "startingLine": 142
+        }
+      },
+      {
+        "comment": "",
+        "key": "Connect",
+        "location": {
+          "startingColumn": 24,
+          "startingLine": 175
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld dBm",
+        "location": {
+          "startingColumn": 22,
+          "startingLine": 165
+        }
+      },
+      {
+        "comment": "",
+        "key": "Stop Scanning",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 199
+        }
+      },
+      {
+        "comment": "",
+        "key": "Scan for RNodes",
+        "location": {
+          "startingColumn": 23,
+          "startingLine": 200
+        }
+      }
+    ]
+  },
+  "version": 1
+}

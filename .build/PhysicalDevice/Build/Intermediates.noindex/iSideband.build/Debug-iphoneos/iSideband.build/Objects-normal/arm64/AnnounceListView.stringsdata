@@ -1,0 +1,40 @@
+{
+  "source": "/Users/kyleperry/Desktop/iSideband/iSideband/AnnounceListView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Announce List",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 59
+        }
+      },
+      {
+        "comment": "",
+        "key": "No Announcements",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 12
+        }
+      },
+      {
+        "comment": "",
+        "key": "Nodes will appear here after iSideband receives their Reticulum announcements.",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 18
+        }
+      },
+      {
+        "comment": "",
+        "key": "%lld Announcements",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 24
+        }
+      }
+    ]
+  },
+  "version": 1
+}

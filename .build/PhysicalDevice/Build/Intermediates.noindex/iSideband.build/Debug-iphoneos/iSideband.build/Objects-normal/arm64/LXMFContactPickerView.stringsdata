@@ -1,0 +1,32 @@
+{
+  "source": "/Users/kyleperry/Desktop/iSideband/iSideband/LXMFContactPickerView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Choose Contact",
+        "location": {
+          "startingColumn": 26,
+          "startingLine": 44
+        }
+      },
+      {
+        "comment": "",
+        "key": "No LXMF Contacts",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 14
+        }
+      },
+      {
+        "comment": "",
+        "key": "Add an LXMF contact before starting a direct conversation.",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 19
+        }
+      }
+    ]
+  },
+  "version": 1
+}

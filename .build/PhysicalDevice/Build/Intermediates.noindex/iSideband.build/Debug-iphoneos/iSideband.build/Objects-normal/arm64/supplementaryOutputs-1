@@ -1,0 +1,58 @@
+{
+  "/Users/kyleperry/Desktop/iSideband/iSideband/AddLXMFContactView.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AddLXMFContactView.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AddLXMFContactView.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AddLXMFContactView.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AddLXMFContactView.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AddLXMFContactView.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/AnnounceListView.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnounceListView.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnounceListView.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnounceListView.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnounceListView.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnounceListView.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/AnnouncementNotificationManager.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnouncementNotificationManager.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnouncementNotificationManager.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnouncementNotificationManager.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnouncementNotificationManager.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/AnnouncementNotificationManager.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/BluetoothManager.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/BluetoothManager.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/BluetoothManager.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/BluetoothManager.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/BluetoothManager.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/BluetoothManager.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/ChatView.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ChatView.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ChatView.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ChatView.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ChatView.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ChatView.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/ContentView.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ContentView.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ContentView.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ContentView.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ContentView.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ContentView.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/Conversation.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/Conversation.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/Conversation.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/Conversation.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/Conversation.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/Conversation.swiftdeps"
+  },
+  "/Users/kyleperry/Desktop/iSideband/iSideband/ConversationsView.swift" : {
+    "const-values" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ConversationsView.swiftconstvalues",
+    "dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ConversationsView.d",
+    "diagnostics" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ConversationsView.dia",
+    "object" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ConversationsView.o",
+    "swift-dependencies" : "/Users/kyleperry/Desktop/iSideband/.build/PhysicalDevice/Build/Intermediates.noindex/iSideband.build/Debug-iphoneos/iSideband.build/Objects-normal/arm64/ConversationsView.swiftdeps"
+  }
+}

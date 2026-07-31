@@ -1,0 +1,88 @@
+{
+  "source": "/Users/kyleperry/Desktop/iSideband/iSideband/GroupChatView.swift",
+  "tables": {
+    "Localizable": [
+      {
+        "comment": "",
+        "key": "Voice Message",
+        "location": {
+          "startingColumn": 13,
+          "startingLine": 111
+        }
+      },
+      {
+        "comment": "",
+        "key": "Copy",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 45
+        }
+      },
+      {
+        "comment": "",
+        "key": "Delete",
+        "location": {
+          "startingColumn": 41,
+          "startingLine": 54
+        }
+      },
+      {
+        "comment": "",
+        "key": "OK",
+        "location": {
+          "startingColumn": 20,
+          "startingLine": 114
+        }
+      },
+      {
+        "comment": "",
+        "key": "Voice recording will be connected next.",
+        "location": {
+          "startingColumn": 17,
+          "startingLine": 117
+        }
+      },
+      {
+        "comment": "",
+        "key": "Type a message…",
+        "location": {
+          "startingColumn": 17,
+          "startingLine": 180
+        }
+      },
+      {
+        "comment": "",
+        "key": "Photo Library",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 129
+        }
+      },
+      {
+        "comment": "",
+        "key": "Take Photo",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 138
+        }
+      },
+      {
+        "comment": "",
+        "key": "Choose File",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 147
+        }
+      },
+      {
+        "comment": "",
+        "key": "Voice Message",
+        "location": {
+          "startingColumn": 25,
+          "startingLine": 156
+        }
+      }
+    ]
+  },
+  "version": 1
+}
