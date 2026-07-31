@@ -514,65 +514,127 @@ final class BluetoothManager:
         sendToRNode(frame)
     }
     func requestRNodeDetails() {
-        // Put the firmware into an active host session before configuring
-        // the radio. RNode's BLE interface requires this detection handshake.
-        sendToRNode(Data([
-            0xC0,
-            0x08,
-            0x73,
-            0xC0
-        ]))
+        let defaults = UserDefaults.standard
 
+        let frequencyText =
+            defaults.string(
+                forKey: "radioFrequencyMHz"
+            ) ?? "915.000"
+
+        let bandwidthText =
+            defaults.string(
+                forKey: "radioBandwidthKHz"
+            ) ?? "125"
+
+        let powerText =
+            defaults.string(
+                forKey: "radioTransmitPowerDBm"
+            ) ?? "22"
+
+        let spreadingFactorText =
+            defaults.string(
+                forKey: "radioSpreadingFactor"
+            ) ?? "7"
+
+        let codingRateText =
+            defaults.string(
+                forKey: "radioCodingRate"
+            ) ?? "5"
+
+        guard
+            let frequencyMHz =
+                Double(frequencyText),
+            let bandwidthKHz =
+                Double(bandwidthText),
+            let power =
+                Int(powerText),
+            let sf =
+                Int(spreadingFactorText),
+            let cr =
+                Int(codingRateText)
+        else {
+            connectionMessage =
+                "Saved LoRa configuration is invalid"
+
+            requestRNodeTelemetry()
+            return
+        }
+
+        let frequencyHzDouble =
+            frequencyMHz * 1_000_000
+
+        let bandwidthHzDouble =
+            bandwidthKHz * 1_000
+
+        guard
+            frequencyHzDouble >= 137_000_000,
+            frequencyHzDouble <= 1_020_000_000,
+            bandwidthHzDouble >= 7_800,
+            bandwidthHzDouble <= 500_000,
+            (0...30).contains(power),
+            (5...12).contains(sf),
+            (5...8).contains(cr)
+        else {
+            connectionMessage =
+                "Saved LoRa configuration is outside the supported range"
+
+            requestRNodeTelemetry()
+            return
+        }
+
+        let configuration =
+            RNodeRadioConfiguration(
+                frequencyHz:
+                    UInt32(
+                        frequencyHzDouble.rounded()
+                    ),
+                bandwidthHz:
+                    UInt32(
+                        bandwidthHzDouble.rounded()
+                    ),
+                transmitPowerDBm: power,
+                spreadingFactor: sf,
+                codingRate: cr
+            )
+
+        connectionMessage =
+            "Applying saved LoRa configuration…"
+
+        applyRadioConfiguration(
+            configuration
+        ) { result in
+            switch result {
+            case .success:
+                self.connectionMessage =
+                    "RNode data channel ready"
+
+                print(
+                    """
+                    Saved LoRa configuration applied on connection
+                    Frequency: \(frequencyMHz) MHz
+                    Bandwidth: \(bandwidthKHz) kHz
+                    TX power: \(power) dBm
+                    Spreading factor: \(sf)
+                    Coding rate: 4/\(cr)
+                    """
+                )
+
+            case .failure(let error):
+                self.connectionMessage =
+                    "Radio configuration failed: \(error.localizedDescription)"
+
+                print(
+                    "Could not apply saved LoRa configuration:",
+                    error.localizedDescription
+                )
+            }
+
+            self.requestRNodeTelemetry()
+        }
+    }
+    private func requestRNodeTelemetry() {
         let frames: [Data] = [
-            // Frequency: 915,000,000 Hz
-            Data([
-                0xC0,
-                0x01,
-                0x36, 0x89, 0xCA, 0xC0,
-                0xC0
-            ]),
-            
-            // Bandwidth: 125,000 Hz
-            Data([
-                0xC0,
-                0x02,
-                0x00, 0x01, 0xE8, 0x48,
-                0xC0
-            ]),
-            
-            // Transmit power: 22 dBm
-            Data([
-                0xC0,
-                0x03,
-                0x16,
-                0xC0
-            ]),
-            
-            // Spreading factor: 7
-            Data([
-                0xC0,
-                0x04,
-                0x07,
-                0xC0
-            ]),
-            
-            // Coding rate: 5
-            Data([
-                0xC0,
-                0x05,
-                0x05,
-                0xC0
-            ]),
-
-            // Enable the radio after all physical parameters are set.
-            Data([
-                0xC0,
-                0x06,
-                0x01,
-                0xC0
-            ]),
-            
-            // Firmware version request
+            // Firmware version
             Data([
                 0xC0,
                 0x50,
@@ -612,7 +674,7 @@ final class BluetoothManager:
                 0xC0
             ]),
 
-            // GPS satellite count (custom firmware extension)
+            // GPS satellite count
             Data([
                 0xC0,
                 0x2A,
@@ -620,7 +682,7 @@ final class BluetoothManager:
                 0xC0
             ]),
 
-            // Device uptime in seconds (custom firmware extension)
+            // Device uptime
             Data([
                 0xC0,
                 0x2B,
@@ -628,15 +690,25 @@ final class BluetoothManager:
                 0xC0
             ])
         ]
-        
+
         for (index, frame) in frames.enumerated() {
             DispatchQueue.main.asyncAfter(
-                deadline: .now() + 0.5 + (Double(index) * 0.2)
+                deadline:
+                    .now() +
+                    0.25 +
+                    Double(index) * 0.2
             ) {
+                guard
+                    self.connectedDeviceID != nil
+                else {
+                    return
+                }
+
                 self.sendToRNode(frame)
             }
         }
     }
+
     func sendRadioPayload(_ payload: Data) {
         guard !payload.isEmpty else {
             print("Cannot send an empty radio payload")
