@@ -1,5 +1,7 @@
 import SwiftUI
 import MapKit
+import CoreLocation
+import Combine
 
 enum MeshMapMode: String, CaseIterable, Identifiable {
     case geographic
@@ -177,9 +179,12 @@ struct GeographicMeshMapView: View {
     private var selectedMapStyle:
         GeographicMapStyle = .standard
 
-    @State private var cameraPosition: MapCameraPosition
+    @StateObject private var locationManager =
+        MeshMapLocationManager()
 
+    @State private var cameraPosition: MapCameraPosition
     @State private var showInformationBanner = true
+    @State private var hasCenteredOnFirstLocation = false
 
     init(startsInHawaii: Bool) {
         _cameraPosition = State(
@@ -192,7 +197,16 @@ struct GeographicMeshMapView: View {
     var body: some View {
         ZStack {
             Map(position: $cameraPosition) {
-                UserAnnotation()
+                if let coordinate =
+                    locationManager.coordinate {
+                    Annotation(
+                        "Connected RNode",
+                        coordinate: coordinate,
+                        anchor: .bottom
+                    ) {
+                        geographicRNodeMarker
+                    }
+                }
             }
             .mapStyle(selectedMapStyle.mapStyle)
             .mapControls {
@@ -210,7 +224,7 @@ struct GeographicMeshMapView: View {
                     dismissibleStatusBanner(
                         title: "Geographic Mesh Map",
                         message:
-                            "Nodes that opt in to location sharing will appear here.",
+                            "Your connected RNode is shown at this iPhone's live GPS position. Nodes that opt in to location sharing will appear here.",
                         isPresented:
                             $showInformationBanner
                     )
@@ -228,9 +242,79 @@ struct GeographicMeshMapView: View {
                 mapStyleMenu
             }
         }
+        .onAppear {
+            locationManager.startUpdating()
+        }
+        .onDisappear {
+            locationManager.stopUpdating()
+        }
+        .onChange(
+            of: locationManager.coordinateKey
+        ) { _, _ in
+            centerOnFirstLocationIfNeeded()
+        }
         .animation(
             .easeInOut(duration: 0.2),
             value: showInformationBanner
+        )
+    }
+
+    private var geographicRNodeMarker: some View {
+        VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(
+                        width: 58,
+                        height: 58
+                    )
+                    .shadow(
+                        color:
+                            Color.black.opacity(0.16),
+                        radius: 7,
+                        y: 3
+                    )
+
+                Circle()
+                    .stroke(
+                        Color.accentColor,
+                        lineWidth: 2.5
+                    )
+                    .frame(
+                        width: 58,
+                        height: 58
+                    )
+
+                RadioTowerGlyph()
+                    .foregroundStyle(
+                        Color.accentColor
+                    )
+                    .frame(
+                        width: 39,
+                        height: 39
+                    )
+            }
+
+            Text("Connected RNode")
+                .font(
+                    .caption2.weight(.bold)
+                )
+                .foregroundStyle(.primary)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .overlay {
+                    Capsule()
+                        .stroke(
+                            Color.secondary.opacity(0.2),
+                            lineWidth: 1
+                        )
+                }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Connected RNode at current GPS location"
         )
     }
 
@@ -242,10 +326,26 @@ struct GeographicMeshMapView: View {
                 Spacer()
 
                 Button {
-                    withAnimation {
+                    locationManager.startUpdating()
+
+                    guard let coordinate =
+                        locationManager.coordinate else {
                         cameraPosition = .userLocation(
                             followsHeading: false,
                             fallback: .automatic
+                        )
+                        return
+                    }
+
+                    withAnimation {
+                        cameraPosition = .region(
+                            MKCoordinateRegion(
+                                center: coordinate,
+                                span: MKCoordinateSpan(
+                                    latitudeDelta: 0.025,
+                                    longitudeDelta: 0.025
+                                )
+                            )
                         )
                     }
                 } label: {
@@ -267,7 +367,7 @@ struct GeographicMeshMapView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(
-                    "Go to current location"
+                    "Go to connected RNode location"
                 )
             }
         }
@@ -294,159 +394,492 @@ struct GeographicMeshMapView: View {
         }
         .accessibilityLabel("Choose map style")
     }
+
+    private func centerOnFirstLocationIfNeeded() {
+        guard !hasCenteredOnFirstLocation,
+              let coordinate =
+                locationManager.coordinate else {
+            return
+        }
+
+        hasCenteredOnFirstLocation = true
+
+        withAnimation {
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(
+                        latitudeDelta: 0.025,
+                        longitudeDelta: 0.025
+                    )
+                )
+            )
+        }
+    }
 }
 
-import SwiftUI
+final class MeshMapLocationManager:
+    NSObject,
+    ObservableObject,
+    CLLocationManagerDelegate {
+
+    @Published private(set) var coordinate:
+        CLLocationCoordinate2D?
+
+    private let manager = CLLocationManager()
+
+    var coordinateKey: String {
+        guard let coordinate else {
+            return "none"
+        }
+
+        return String(
+            format: "%.6f,%.6f",
+            coordinate.latitude,
+            coordinate.longitude
+        )
+    }
+
+    override init() {
+        super.init()
+
+        manager.delegate = self
+        manager.desiredAccuracy =
+            kCLLocationAccuracyBest
+        manager.distanceFilter = 5
+    }
+
+    func startUpdating() {
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+
+        case .authorizedAlways,
+             .authorizedWhenInUse:
+            manager.startUpdatingLocation()
+
+        case .restricted,
+             .denied:
+            break
+
+        @unknown default:
+            break
+        }
+    }
+
+    func stopUpdating() {
+        manager.stopUpdatingLocation()
+    }
+
+    func locationManagerDidChangeAuthorization(
+        _ manager: CLLocationManager
+    ) {
+        switch manager.authorizationStatus {
+        case .authorizedAlways,
+             .authorizedWhenInUse:
+            manager.startUpdatingLocation()
+
+        default:
+            break
+        }
+    }
+
+    func locationManager(
+        _ manager: CLLocationManager,
+        didUpdateLocations locations: [CLLocation]
+    ) {
+        guard let location = locations.last,
+              location.horizontalAccuracy >= 0 else {
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.coordinate = location.coordinate
+        }
+    }
+
+    func locationManager(
+        _ manager: CLLocationManager,
+        didFailWithError error: Error
+    ) {
+        print(
+            "Mesh map location error: \(error.localizedDescription)"
+        )
+    }
+}
 
 struct TopologyMeshMapView: View {
     @ObservedObject private var discoveredStore =
         ReticulumDiscoveredPeerStore.shared
 
     @State private var showInformationBanner = true
+    @State private var selectedPeer:
+        ReticulumDiscoveredPeer?
 
-    private struct DisplayNode: Identifiable {
-        let id: String
-        let name: String
-        let detail: String?
-    }
-
-    private var discoveredNodes: [DisplayNode] {
-        discoveredStore.peers.enumerated().map { index, peer in
-            let name =
-                reflectedString(
-                    from: peer,
-                    matching: [
-                        "displayName",
-                        "name",
-                        "peerName",
-                        "identityName",
-                        "announceName"
-                    ]
-                )
-                ?? "Discovered Node"
-
-            let destinationHash =
-                reflectedString(
-                    from: peer,
-                    matching: [
-                        "destinationHashHex",
-                        "destinationHash",
-                        "identityHash",
-                        "hash"
-                    ]
-                )
-
-            let shortenedHash = destinationHash.map {
-                shortenHash($0)
-            }
-
-            return DisplayNode(
-                id: destinationHash ?? "peer-\(index)",
-                name: name,
-                detail: shortenedHash
-            )
-        }
-    }
+    private let dimAfter: TimeInterval = 5 * 60
+    private let hideAfter: TimeInterval = 30 * 60
 
     var body: some View {
-        ZStack {
-            Color(.systemGroupedBackground)
-                .ignoresSafeArea(edges: .bottom)
+        TimelineView(
+            .animation(minimumInterval: 1.0 / 30.0)
+        ) { timeline in
+            let now = timeline.date
+            let peers = visiblePeers(at: now)
 
-            if discoveredNodes.isEmpty {
-                emptyTopology
-            } else {
-                topologyCanvas
-            }
+            ZStack {
+                Color(.systemGroupedBackground)
+                    .ignoresSafeArea(edges: .bottom)
 
-            if showInformationBanner {
-                VStack {
-                    Spacer()
-
-                    dismissibleStatusBanner(
-                        title: "Topology Mesh Map",
-                        message:
-                            "The center represents your connected RNode. Discovered Reticulum nodes appear around it.",
-                        isPresented:
-                            $showInformationBanner
-                    )
-                    .padding(.horizontal)
-                    .padding(.bottom, 90)
-                    .transition(
-                        .move(edge: .bottom)
-                            .combined(with: .opacity)
+                if peers.isEmpty {
+                    emptyTopology
+                } else {
+                    liveTopology(
+                        peers: peers,
+                        now: now
                     )
                 }
+
+                if showInformationBanner {
+                    VStack {
+                        Spacer()
+
+                        dismissibleStatusBanner(
+                            title: "Live Topology",
+                            message:
+                                "Recently heard Reticulum nodes appear around your connected RNode. Older nodes gradually dim and disappear.",
+                            isPresented:
+                                $showInformationBanner
+                        )
+                        .padding(.horizontal)
+                        .padding(.bottom, 90)
+                        .transition(
+                            .move(edge: .bottom)
+                                .combined(with: .opacity)
+                        )
+                    }
+                }
+            }
+            .animation(
+                .spring(
+                    response: 0.55,
+                    dampingFraction: 0.78
+                ),
+                value: peers.map(\.id)
+            )
+            .sheet(item: $selectedPeer) { peer in
+                peerDetailsSheet(
+                    peer: peer,
+                    now: now
+                )
+                .presentationDetents([.medium])
+                .presentationDragIndicator(.visible)
             }
         }
-        .animation(
-            .easeInOut(duration: 0.2),
-            value: showInformationBanner
-        )
-        .animation(
-            .easeInOut(duration: 0.25),
-            value: discoveredNodes.count
-        )
     }
 
-    private var topologyCanvas: some View {
+    private func liveTopology(
+        peers: [ReticulumDiscoveredPeer],
+        now: Date
+    ) -> some View {
         GeometryReader { geometry in
             let size = geometry.size
+
             let center = CGPoint(
                 x: size.width / 2,
                 y: size.height / 2
             )
 
-            let peerPositions = positions(
-                around: center,
-                count: discoveredNodes.count,
-                availableSize: size
+            let positions = nodePositions(
+                center: center,
+                size: size,
+                count: peers.count
             )
 
-            Canvas { context, _ in
-                for position in peerPositions {
-                    drawConnection(
-                        from: center,
-                        to: position,
-                        in: &context
-                    )
-                }
+            ZStack {
+                Canvas { context, _ in
+                    for (index, position) in positions.enumerated() {
+                        guard peers.indices.contains(index) else {
+                            continue
+                        }
 
-                for (index, node) in discoveredNodes.enumerated() {
-                    guard peerPositions.indices.contains(index) else {
-                        continue
+                        let peer = peers[index]
+                        let age = max(
+                            0,
+                            now.timeIntervalSince(
+                                peer.lastSeenAt
+                            )
+                        )
+
+                        drawConnection(
+                            from: center,
+                            to: position,
+                            age: age,
+                            now: now,
+                            in: &context
+                        )
                     }
-
-                    drawPeerNode(
-                        at: peerPositions[index],
-                        node: node,
-                        in: &context
-                    )
                 }
 
-                drawConnectedRNode(
-                    at: center,
-                    in: &context
-                )
+                connectedRNodeView(now: now)
+                    .position(center)
+                    .zIndex(2)
+
+                ForEach(
+                    Array(peers.enumerated()),
+                    id: \.element.id
+                ) { index, peer in
+                    if positions.indices.contains(index) {
+                        peerNodeView(
+                            peer: peer,
+                            now: now
+                        )
+                        .position(positions[index])
+                        .transition(
+                            .scale(scale: 0.45)
+                                .combined(with: .opacity)
+                        )
+                        .onTapGesture {
+                            selectedPeer = peer
+                        }
+                        .zIndex(3)
+                    }
+                }
             }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 45)
+        .padding(.top, 30)
         .padding(.bottom, 115)
+    }
+
+    private func connectedRNodeView(
+        now: Date
+    ) -> some View {
+        let cycleDuration = 2.6
+        let cycle =
+            now.timeIntervalSinceReferenceDate
+                .truncatingRemainder(
+                    dividingBy: cycleDuration
+                )
+            / cycleDuration
+
+        return VStack(spacing: 7) {
+            ZStack {
+                ForEach(0..<3, id: \.self) { index in
+                    let delayedProgress =
+                        (
+                            cycle
+                            - Double(index) * 0.18
+                            + 1
+                        )
+                        .truncatingRemainder(
+                            dividingBy: 1
+                        )
+
+                    Circle()
+                        .stroke(
+                            Color.accentColor.opacity(
+                                max(
+                                    0,
+                                    0.24
+                                    * (
+                                        1
+                                        - delayedProgress
+                                    )
+                                )
+                            ),
+                            lineWidth: 2
+                        )
+                        .frame(
+                            width: 96,
+                            height: 96
+                        )
+                        .scaleEffect(
+                            1
+                            + delayedProgress * 0.48
+                        )
+                }
+
+                Circle()
+                    .fill(
+                        Color(
+                            .secondarySystemGroupedBackground
+                        )
+                    )
+                    .frame(
+                        width: 96,
+                        height: 96
+                    )
+                    .shadow(
+                        color:
+                            Color.accentColor.opacity(0.20),
+                        radius: 10
+                    )
+
+                Circle()
+                    .stroke(
+                        Color.accentColor,
+                        lineWidth: 3
+                    )
+                    .frame(
+                        width: 96,
+                        height: 96
+                    )
+
+                RadioTowerGlyph()
+                    .foregroundStyle(
+                        Color.accentColor
+                    )
+                    .frame(
+                        width: 66,
+                        height: 66
+                    )
+            }
+
+            Text("Connected RNode")
+                .font(
+                    .caption.weight(.bold)
+                )
+                .foregroundStyle(.primary)
+
+            Text("You")
+                .font(.caption2)
+                .foregroundStyle(Color.accentColor)
+        }
+        .frame(width: 140)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Connected RNode, you"
+        )
+    }
+
+    private func peerNodeView(
+        peer: ReticulumDiscoveredPeer,
+        now: Date
+    ) -> some View {
+        let age = max(
+            0,
+            now.timeIntervalSince(peer.lastSeenAt)
+        )
+
+        let isFresh = age < 10
+        let opacity = nodeOpacity(for: age)
+
+        let pulse =
+            isFresh
+            ? 1.0 + (
+                0.08
+                * sin(
+                    now.timeIntervalSinceReferenceDate
+                    * 4
+                )
+            )
+            : 1.0
+
+        return VStack(spacing: 5) {
+            ZStack {
+                if isFresh {
+                    Circle()
+                        .stroke(
+                            Color.green.opacity(0.35),
+                            lineWidth: 4
+                        )
+                        .frame(
+                            width: 72,
+                            height: 72
+                        )
+                        .scaleEffect(pulse)
+                }
+
+                Circle()
+                    .fill(
+                        Color(
+                            .secondarySystemGroupedBackground
+                        )
+                    )
+                    .frame(
+                        width: 58,
+                        height: 58
+                    )
+
+                Circle()
+                    .stroke(
+                        isFresh
+                            ? Color.green
+                            : Color.accentColor.opacity(0.85),
+                        lineWidth: 3
+                    )
+                    .frame(
+                        width: 58,
+                        height: 58
+                    )
+
+                Image(
+                    systemName:
+                        "dot.radiowaves.left.and.right"
+                )
+                .font(
+                    .system(
+                        size: 22,
+                        weight: .semibold
+                    )
+                )
+                .foregroundStyle(
+                    isFresh
+                        ? Color.green
+                        : Color.accentColor
+                )
+            }
+
+            Text(peer.resolvedDisplayName)
+                .font(
+                    .caption.weight(.semibold)
+                )
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text(
+                lastHeardText(
+                    peer,
+                    now: now
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+        }
+        .frame(width: 115)
+        .opacity(opacity)
+        .scaleEffect(
+            isFresh
+                ? pulse
+                : 1
+        )
+        .animation(
+            .spring(
+                response: 0.38,
+                dampingFraction: 0.72
+            ),
+            value: peer.lastSeenAt
+        )
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(peer.resolvedDisplayName), \(lastHeardText(peer, now: now))"
+        )
     }
 
     private var emptyTopology: some View {
         VStack(spacing: 18) {
             Spacer()
 
-            connectedRNodePreview
+            connectedRNodeView(now: Date())
 
             VStack(spacing: 6) {
-                Text("Connected RNode")
+                Text("No Recently Heard Nodes")
                     .font(.headline)
 
                 Text(
-                    "Discovered Reticulum nodes will appear around your RNode."
+                    "Reticulum nodes will animate into the topology when their announces are received."
                 )
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
@@ -459,79 +892,98 @@ struct TopologyMeshMapView: View {
         .padding(.bottom, 90)
     }
 
-    private var connectedRNodePreview: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    Color.accentColor.opacity(0.14)
-                )
-                .frame(
-                    width: 108,
-                    height: 108
-                )
+    private func peerDetailsSheet(
+        peer: ReticulumDiscoveredPeer,
+        now: Date
+    ) -> some View {
+        NavigationStack {
+            List {
+                Section("Node") {
+                    LabeledContent(
+                        "Name",
+                        value: peer.resolvedDisplayName
+                    )
 
-            VStack(spacing: 0) {
-                Image(
-                    systemName:
-                        "antenna.radiowaves.left.and.right"
-                )
-                .font(.system(size: 22, weight: .semibold))
-                .foregroundStyle(Color.accentColor)
-                .offset(y: 3)
+                    VStack(
+                        alignment: .leading,
+                        spacing: 6
+                    ) {
+                        Text("Destination Hash")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
 
-                RoundedRectangle(
-                    cornerRadius: 10,
-                    style: .continuous
-                )
-                .fill(Color.accentColor)
-                .frame(
-                    width: 57,
-                    height: 44
-                )
-                .overlay {
-                    VStack(spacing: 5) {
-                        Capsule()
-                            .fill(Color.white.opacity(0.95))
-                            .frame(
-                                width: 27,
-                                height: 4
+                        Text(peer.destinationHash)
+                            .font(
+                                .system(
+                                    .footnote,
+                                    design: .monospaced
+                                )
                             )
-
-                        HStack(spacing: 5) {
-                            Circle()
-                                .fill(Color.green)
-                                .frame(
-                                    width: 7,
-                                    height: 7
-                                )
-
-                            Circle()
-                                .fill(Color.white.opacity(0.8))
-                                .frame(
-                                    width: 7,
-                                    height: 7
-                                )
-                        }
+                            .textSelection(.enabled)
                     }
+                    .padding(.vertical, 4)
                 }
-                .overlay {
-                    RoundedRectangle(
-                        cornerRadius: 10,
-                        style: .continuous
+
+                Section("Activity") {
+                    LabeledContent(
+                        "Status",
+                        value: statusText(
+                            for: peer,
+                            now: now
+                        )
                     )
-                    .stroke(
-                        Color.white.opacity(0.9),
-                        lineWidth: 2
+
+                    LabeledContent(
+                        "First Seen",
+                        value: peer.firstSeenAt.formatted(
+                            date: .abbreviated,
+                            time: .shortened
+                        )
                     )
+
+                    LabeledContent(
+                        "Last Seen",
+                        value: peer.lastSeenAt.formatted(
+                            date: .abbreviated,
+                            time: .shortened
+                        )
+                    )
+
+                    LabeledContent(
+                        "Last Heard",
+                        value: lastHeardText(
+                            peer,
+                            now: now
+                        )
+                    )
+                }
+
+                Section {
+                    Text(
+                        "This connection represents a node announcement heard by your RNode. It does not yet prove a direct or multi-hop route."
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle(peer.resolvedDisplayName)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(
+                    placement: .confirmationAction
+                ) {
+                    Button("Done") {
+                        selectedPeer = nil
+                    }
                 }
             }
         }
     }
 
-    private func positions(
-        around center: CGPoint,
-        count: Int,
-        availableSize: CGSize
+    private func nodePositions(
+        center: CGPoint,
+        size: CGSize,
+        count: Int
     ) -> [CGPoint] {
         guard count > 0 else {
             return []
@@ -540,20 +992,24 @@ struct TopologyMeshMapView: View {
         let displayedCount = min(count, 12)
 
         let horizontalRadius = min(
-            max(115, availableSize.width * 0.34),
+            max(115, size.width * 0.34),
             165
         )
 
         let verticalRadius = min(
-            max(125, availableSize.height * 0.28),
-            215
+            max(125, size.height * 0.28),
+            210
         )
 
         return (0..<displayedCount).map { index in
             let angle =
-                (Double(index) / Double(displayedCount))
-                * (Double.pi * 2)
-                - (Double.pi / 2)
+                (
+                    Double(index)
+                    / Double(displayedCount)
+                )
+                * Double.pi
+                * 2
+                - Double.pi / 2
 
             return CGPoint(
                 x:
@@ -571,16 +1027,27 @@ struct TopologyMeshMapView: View {
     private func drawConnection(
         from start: CGPoint,
         to end: CGPoint,
+        age: TimeInterval,
+        now: Date,
         in context: inout GraphicsContext
     ) {
-        var glowPath = Path()
-        glowPath.move(to: start)
-        glowPath.addLine(to: end)
+        let freshness = connectionFreshness(
+            for: age
+        )
+
+        let lineColor = freshness.color
+        let opacity = freshness.opacity
+
+        var glow = Path()
+        glow.move(to: start)
+        glow.addLine(to: end)
 
         context.stroke(
-            glowPath,
+            glow,
             with: .color(
-                Color.accentColor.opacity(0.12)
+                lineColor.opacity(
+                    0.10 * opacity
+                )
             ),
             style: StrokeStyle(
                 lineWidth: 7,
@@ -592,289 +1059,325 @@ struct TopologyMeshMapView: View {
         path.move(to: start)
         path.addLine(to: end)
 
+        let dashPhase = CGFloat(
+            now.timeIntervalSinceReferenceDate
+                .truncatingRemainder(
+                    dividingBy: 14
+                )
+        )
+
         context.stroke(
             path,
             with: .color(
-                Color.accentColor.opacity(0.58)
+                lineColor.opacity(
+                    0.62 * opacity
+                )
             ),
             style: StrokeStyle(
-                lineWidth: 2,
+                lineWidth:
+                    age < 10
+                        ? 2.6
+                        : 2,
                 lineCap: .round,
-                dash: [7, 6]
+                dash: [7, 6],
+                dashPhase: -dashPhase
             )
         )
     }
 
-    private func drawConnectedRNode(
-        at point: CGPoint,
-        in context: inout GraphicsContext
+    private func connectionFreshness(
+        for age: TimeInterval
+    ) -> (
+        color: Color,
+        opacity: Double
     ) {
-        let outerRect = CGRect(
-            x: point.x - 46,
-            y: point.y - 46,
-            width: 92,
-            height: 92
-        )
-
-        context.fill(
-            Path(ellipseIn: outerRect),
-            with: .color(
-                Color.accentColor.opacity(0.16)
-            )
-        )
-
-        let antenna = context.resolve(
-            Image(
-                systemName:
-                    "antenna.radiowaves.left.and.right"
-            )
-        )
-
-        context.draw(
-            antenna,
-            in: CGRect(
-                x: point.x - 14,
-                y: point.y - 43,
-                width: 28,
-                height: 28
-            )
-        )
-
-        let bodyRect = CGRect(
-            x: point.x - 31,
-            y: point.y - 16,
-            width: 62,
-            height: 48
-        )
-
-        context.fill(
-            Path(
-                roundedRect: bodyRect,
-                cornerRadius: 11
-            ),
-            with: .color(Color.accentColor)
-        )
-
-        context.stroke(
-            Path(
-                roundedRect: bodyRect,
-                cornerRadius: 11
-            ),
-            with: .color(
-                Color.white.opacity(0.92)
-            ),
-            lineWidth: 2.5
-        )
-
-        let displayRect = CGRect(
-            x: point.x - 17,
-            y: point.y - 6,
-            width: 34,
-            height: 7
-        )
-
-        context.fill(
-            Path(
-                roundedRect: displayRect,
-                cornerRadius: 3
-            ),
-            with: .color(
-                Color.white.opacity(0.9)
-            )
-        )
-
-        let statusRect = CGRect(
-            x: point.x - 4,
-            y: point.y + 10,
-            width: 8,
-            height: 8
-        )
-
-        context.fill(
-            Path(ellipseIn: statusRect),
-            with: .color(Color.green)
-        )
-
-        let title = context.resolve(
-            Text("Connected RNode")
-                .font(
-                    .caption.weight(.bold)
-                )
-                .foregroundStyle(.primary)
-        )
-
-        context.draw(
-            title,
-            at: CGPoint(
-                x: point.x,
-                y: point.y + 53
-            ),
-            anchor: .center
-        )
-    }
-
-    private func drawPeerNode(
-        at point: CGPoint,
-        node: DisplayNode,
-        in context: inout GraphicsContext
-    ) {
-        let circleRect = CGRect(
-            x: point.x - 28,
-            y: point.y - 28,
-            width: 56,
-            height: 56
-        )
-
-        context.fill(
-            Path(ellipseIn: circleRect),
-            with: .color(
-                Color(.secondarySystemGroupedBackground)
-            )
-        )
-
-        context.stroke(
-            Path(ellipseIn: circleRect),
-            with: .color(
-                Color.accentColor.opacity(0.85)
-            ),
-            lineWidth: 3
-        )
-
-        let symbol = context.resolve(
-            Image(
-                systemName:
-                    "dot.radiowaves.left.and.right"
-            )
-        )
-
-        context.draw(
-            symbol,
-            at: point,
-            anchor: .center
-        )
-
-        let title = context.resolve(
-            Text(node.name)
-                .font(
-                    .caption.weight(.semibold)
-                )
-                .foregroundStyle(.primary)
-        )
-
-        context.draw(
-            title,
-            at: CGPoint(
-                x: point.x,
-                y: point.y + 39
-            ),
-            anchor: .center
-        )
-
-        if let detail = node.detail {
-            let subtitle = context.resolve(
-                Text(detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            )
-
-            context.draw(
-                subtitle,
-                at: CGPoint(
-                    x: point.x,
-                    y: point.y + 54
-                ),
-                anchor: .center
+        if age < 60 {
+            return (
+                .green,
+                1
             )
         }
+
+        if age < 5 * 60 {
+            return (
+                .accentColor,
+                0.95
+            )
+        }
+
+        if age < 15 * 60 {
+            return (
+                .purple,
+                0.75
+            )
+        }
+
+        return (
+            .secondary,
+            0.50
+        )
     }
 
-    private func reflectedString(
-        from value: Any,
-        matching names: [String]
-    ) -> String? {
-        var currentMirror: Mirror? = Mirror(
-            reflecting: value
-        )
-
-        while let mirror = currentMirror {
-            for child in mirror.children {
-                guard let label = child.label else {
-                    continue
-                }
-
-                guard names.contains(label) else {
-                    continue
-                }
-
-                if let string = unwrapString(
-                    child.value
-                ) {
-                    let cleaned =
-                        string.trimmingCharacters(
-                            in: .whitespacesAndNewlines
-                        )
-
-                    if !cleaned.isEmpty {
-                        return cleaned
-                    }
-                }
+    private func visiblePeers(
+        at now: Date
+    ) -> [ReticulumDiscoveredPeer] {
+        discoveredStore.peers
+            .filter { peer in
+                now.timeIntervalSince(
+                    peer.lastSeenAt
+                ) < hideAfter
             }
-
-            currentMirror = mirror.superclassMirror
-        }
-
-        return nil
-    }
-
-    private func unwrapString(
-        _ value: Any
-    ) -> String? {
-        let mirror = Mirror(
-            reflecting: value
-        )
-
-        if mirror.displayStyle == .optional {
-            guard let child = mirror.children.first else {
-                return nil
+            .sorted {
+                $0.lastSeenAt > $1.lastSeenAt
             }
-
-            return unwrapString(child.value)
-        }
-
-        if let string = value as? String {
-            return string
-        }
-
-        if let data = value as? Data {
-            return data
-                .map {
-                    String(
-                        format: "%02x",
-                        $0
-                    )
-                }
-                .joined()
-        }
-
-        return nil
+            .prefix(12)
+            .map { $0 }
     }
 
-    private func shortenHash(
-        _ hash: String
+    private func nodeOpacity(
+        for age: TimeInterval
+    ) -> Double {
+        guard age > dimAfter else {
+            return 1
+        }
+
+        let fadeDuration =
+            hideAfter - dimAfter
+
+        let fadeProgress =
+            (age - dimAfter)
+            / fadeDuration
+
+        return max(
+            0.25,
+            1 - fadeProgress
+        )
+    }
+
+    private func statusText(
+        for peer: ReticulumDiscoveredPeer,
+        now: Date
     ) -> String {
-        let cleaned = hash
-            .replacingOccurrences(
-                of: " ",
-                with: ""
-            )
-            .lowercased()
+        let age = now.timeIntervalSince(
+            peer.lastSeenAt
+        )
 
-        guard cleaned.count > 12 else {
-            return cleaned
+        if age < 10 {
+            return "Just heard"
         }
 
-        return
-            "\(cleaned.prefix(6))…\(cleaned.suffix(6))"
+        if age < dimAfter {
+            return "Recently heard"
+        }
+
+        return "Stale"
+    }
+
+    private func lastHeardText(
+        _ peer: ReticulumDiscoveredPeer,
+        now: Date
+    ) -> String {
+        let seconds = max(
+            0,
+            Int(
+                now.timeIntervalSince(
+                    peer.lastSeenAt
+                )
+            )
+        )
+
+        if seconds < 5 {
+            return "Heard now"
+        }
+
+        if seconds < 60 {
+            return "Heard \(seconds)s ago"
+        }
+
+        let minutes = seconds / 60
+
+        if minutes < 60 {
+            return "Heard \(minutes)m ago"
+        }
+
+        let hours = minutes / 60
+        return "Heard \(hours)h ago"
+    }
+}
+
+
+private struct RadioTowerGlyph: View {
+    var body: some View {
+        Canvas { context, size in
+            let color = Color.accentColor
+            let centerX = size.width / 2
+            let topY = size.height * 0.24
+            let baseY = size.height * 0.84
+
+            var mast = Path()
+            mast.move(
+                to: CGPoint(
+                    x: centerX,
+                    y: topY
+                )
+            )
+            mast.addLine(
+                to: CGPoint(
+                    x: size.width * 0.31,
+                    y: baseY
+                )
+            )
+            mast.move(
+                to: CGPoint(
+                    x: centerX,
+                    y: topY
+                )
+            )
+            mast.addLine(
+                to: CGPoint(
+                    x: size.width * 0.69,
+                    y: baseY
+                )
+            )
+            mast.move(
+                to: CGPoint(
+                    x: size.width * 0.31,
+                    y: baseY
+                )
+            )
+            mast.addLine(
+                to: CGPoint(
+                    x: size.width * 0.69,
+                    y: baseY
+                )
+            )
+
+            context.stroke(
+                mast,
+                with: .color(color),
+                style: StrokeStyle(
+                    lineWidth: 4,
+                    lineCap: .round,
+                    lineJoin: .round
+                )
+            )
+
+            let braceLevels: [CGFloat] = [
+                0.42,
+                0.57,
+                0.72
+            ]
+
+            for level in braceLevels {
+                let y = size.height * level
+                let progress =
+                    (y - topY)
+                    / (baseY - topY)
+
+                let leftX =
+                    centerX
+                    + (
+                        size.width * 0.31
+                        - centerX
+                    )
+                    * progress
+
+                let rightX =
+                    centerX
+                    + (
+                        size.width * 0.69
+                        - centerX
+                    )
+                    * progress
+
+                var brace = Path()
+                brace.move(
+                    to: CGPoint(
+                        x: leftX,
+                        y: y
+                    )
+                )
+                brace.addLine(
+                    to: CGPoint(
+                        x: rightX,
+                        y: y
+                    )
+                )
+
+                context.stroke(
+                    brace,
+                    with: .color(color),
+                    style: StrokeStyle(
+                        lineWidth: 2.5,
+                        lineCap: .round
+                    )
+                )
+            }
+
+            let transmitterRect = CGRect(
+                x: centerX - 5,
+                y: topY - 5,
+                width: 10,
+                height: 10
+            )
+
+            context.fill(
+                Path(ellipseIn: transmitterRect),
+                with: .color(color)
+            )
+
+            drawWave(
+                centerX: centerX,
+                centerY: topY,
+                radius: size.width * 0.20,
+                startAngle: .degrees(205),
+                endAngle: .degrees(335),
+                in: &context,
+                color: color
+            )
+
+            drawWave(
+                centerX: centerX,
+                centerY: topY,
+                radius: size.width * 0.31,
+                startAngle: .degrees(205),
+                endAngle: .degrees(335),
+                in: &context,
+                color: color
+            )
+        }
+    }
+
+    private func drawWave(
+        centerX: CGFloat,
+        centerY: CGFloat,
+        radius: CGFloat,
+        startAngle: Angle,
+        endAngle: Angle,
+        in context: inout GraphicsContext,
+        color: Color
+    ) {
+        var path = Path()
+
+        path.addArc(
+            center: CGPoint(
+                x: centerX,
+                y: centerY
+            ),
+            radius: radius,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            clockwise: false
+        )
+
+        context.stroke(
+            path,
+            with: .color(color),
+            style: StrokeStyle(
+                lineWidth: 3.5,
+                lineCap: .round
+            )
+        )
     }
 }
 
