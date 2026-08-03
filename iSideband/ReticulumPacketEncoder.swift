@@ -53,6 +53,43 @@ struct ReticulumPacketEncoder {
 
         return packet
     }
+    
+    func encodeProofPacket(
+        proofDestinationHash: Data,
+        proofPayload: Data
+    ) throws -> Data {
+        guard proofDestinationHash.count ==
+                Self.destinationHashByteCount
+        else {
+            throw ReticulumEncodingError
+                .invalidDestinationHash
+        }
+
+        guard proofPayload.count == 96 else {
+            throw ReticulumEncodingError
+                .emptyMessage
+        }
+
+        var packet = Data([
+            0x03,
+            0x00
+        ])
+
+        packet.append(proofDestinationHash)
+
+        packet.append(
+            ReticulumPacketContext.none.rawValue
+        )
+
+        packet.append(proofPayload)
+
+        guard packet.count <= 500 else {
+            throw ReticulumEncodingError
+                .packetTooLarge
+        }
+
+        return packet
+    }
 
     func destinationHashData(
         from destinationHash: String

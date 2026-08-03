@@ -273,10 +273,18 @@ final class ReticulumCoreBridge: ObservableObject {
                         ).baseAddress else {
                     return
                 }
-                _ = runcore_raw_interface_receive(
+                let result = runcore_raw_interface_receive(
                     activeHandle,
                     baseAddress,
                     Int32(packet.count)
+                )
+
+                print(
+                    """
+                    RETICULUM CORE RECEIVE
+                    Bytes: \(packet.count)
+                    Result: \(result)
+                    """
                 )
             }
         }
@@ -335,32 +343,167 @@ final class ReticulumCoreBridge: ObservableObject {
         destinationHash: String,
         clientID: UUID
     ) -> Bool {
-        guard handle != 0 else { return false }
-        return destinationHash.withCString { destination in
-            caption.withCString { content in
-                fileURL.path.withCString { path in
-                    name.withCString { filename in
-                        mimeType.withCString { mime in
-                            clientID.uuidString.withCString { identifier in
-                                runcore_send_attachment(
-                                    handle, destination, content, path,
-                                    filename, mime, identifier
-                                ) == 0
+        guard handle != 0 else {
+            print(
+                "ATTACHMENT SEND FAILED: Reticulum core not running"
+            )
+            return false
+        }
+
+        guard FileManager.default.fileExists(
+            atPath: fileURL.path
+        ) else {
+            print(
+                """
+                ATTACHMENT SEND FAILED
+                File does not exist at:
+                \(fileURL.path)
+                """
+            )
+            return false
+        }
+
+        let attributes =
+            try? FileManager.default.attributesOfItem(
+                atPath: fileURL.path
+            )
+
+        let fileSize =
+            (attributes?[.size] as? NSNumber)?
+            .intValue ?? 0
+
+        print(
+            """
+            ATTACHMENT SEND START
+            Path: \(fileURL.path)
+            Name: \(name)
+            MIME: \(mimeType)
+            Size: \(fileSize) bytes
+            Destination: \(destinationHash)
+            Client ID: \(clientID.uuidString)
+            """
+        )
+
+        let result =
+            destinationHash.withCString { destination in
+                caption.withCString { content in
+                    fileURL.path.withCString { path in
+                        name.withCString { filename in
+                            mimeType.withCString { mime in
+                                clientID.uuidString.withCString {
+                                    identifier in
+
+                                    runcore_send_attachment(
+                                        handle,
+                                        destination,
+                                        content,
+                                        path,
+                                        filename,
+                                        mime,
+                                        identifier
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
-        }
+
+        print(
+            "ATTACHMENT SEND RESULT: \(result)"
+        )
+
+        return result == 0
     }
 
-    func receiveStatus(clientID: String, status: String) {
-        guard let id = UUID(uuidString: clientID),
-              let value = LXMFOutgoingStatus(rawValue: status) else { return }
-        LXMFManager.shared.updateMessageStatus(id: id, status: value)
+    func receiveStatus(
+        clientID: String,
+        status: String
+    ) {
+        print("STATUS CALLBACK ENTERED")
+
+        print("clientID='\(clientID)' status='\(status)'")
+
+        guard let id = UUID(uuidString: clientID) else {
+            print("LXMF STATUS FAILED: invalid client ID")
+            return
+        }
+
+        guard let value =
+                LXMFOutgoingStatus(rawValue: status)
+        else {
+            print(
+                "LXMF STATUS FAILED: unknown status \(status)"
+            )
+            return
+        }
+
+        LXMFManager.shared.updateMessageStatus(
+            id: id,
+            status: value
+        )
     }
 
     func transmit(_ packet: Data) {
+        guard !packet.isEmpty else {
+            print("Reticulum core attempted empty transmission")
+            return
+        }
+
+        let packetType = packet[0] & 0x03
+
+        let destinationTypeBits =
+            (packet[0] >> 2) & 0x03
+
+        let contextValue: UInt8? =
+            packet.count > 18
+                ? packet[18]
+                : nil
+
+        let typeName: String
+        switch packetType {
+        case 0x00:
+            typeName = "Data"
+        case 0x01:
+            typeName = "Announce"
+        case 0x02:
+            typeName = "Link Request"
+        case 0x03:
+            typeName = "Proof"
+        default:
+            typeName = "Unknown"
+        }
+
+        let destinationName: String
+        switch destinationTypeBits {
+        case 0x00:
+            destinationName = "Single"
+        case 0x01:
+            destinationName = "Group"
+        case 0x02:
+            destinationName = "Plain"
+        case 0x03:
+            destinationName = "Link"
+        default:
+            destinationName = "Unknown"
+        }
+
+        print(
+            """
+            RETICULUM CORE TRANSMIT
+            Type: \(typeName)
+            Destination: \(destinationName)
+            Context: \(contextValue.map {
+                String(format: "0x%02X", $0)
+            } ?? "Unavailable")
+            First byte: 0x\(String(
+                format: "%02X",
+                packet[0]
+            ))
+            Bytes: \(packet.count)
+            """
+        )
+
         bluetooth?.sendRadioPayload(packet)
     }
 

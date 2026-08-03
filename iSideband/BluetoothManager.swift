@@ -741,7 +741,37 @@ final class BluetoothManager:
         
         print("Sent raw radio-data test: \(text)")
     }
+    private func reticulumPacketHash(
+        for packet: DecodedReticulumPacket
+    ) -> Data? {
+        guard packet.raw.count >= 3 else {
+            return nil
+        }
 
+        var hashablePart = Data([
+            packet.raw[0] & 0x0F
+        ])
+
+        switch packet.headerType {
+        case .normal:
+            hashablePart.append(
+                packet.raw.dropFirst(2)
+            )
+
+        case .transport:
+            guard packet.raw.count > 18 else {
+                return nil
+            }
+
+            hashablePart.append(
+                packet.raw.dropFirst(18)
+            )
+        }
+
+        return Data(
+            SHA256.hash(data: hashablePart)
+        )
+    }
     private func handleIncomingLXMF(
         _ packet: DecodedReticulumPacket
     ) {
@@ -1230,13 +1260,35 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                 for frame in frames {
                     let packet = packetDecoder.decode(frame)
-                    
+                    print(
+                        """
+                        RNode decoded command
+                        Type: \(packet.commandType)
+                        Payload bytes: \(packet.payload.count)
+                        """
+                    )
                     if packet.commandType == .data {
+                        print(
+                            "RNode RADIO DATA received: \(packet.payload.count) bytes"
+                        )
                         let payloadData = Data(packet.payload)
 
                         do {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
+                            print(
+                                """
+                                ===== RETICULUM PACKET =====
+                                Classification: \(reticulumPacket.diagnosticClassification)
+                                Packet Type: \(reticulumPacket.packetType)
+                                Destination Type: \(reticulumPacket.destinationType)
+                                Context: \(reticulumPacket.context.map(String.init(describing:)) ?? "Unknown")
+                                Context Raw: 0x\(String(format: "%02X", reticulumPacket.contextRawValue))
+                                Destination: \(reticulumPacket.destinationHashHex)
+                                Payload Length: \(reticulumPacket.payload.count) bytes
+                                ============================
+                                """
+                            )   
 
                             reticulumBytesReceived +=
                                 reticulumPacket.raw.count

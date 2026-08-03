@@ -190,6 +190,10 @@ final class LXMFService: ObservableObject {
     private func transmitMessage(
         of message: LXMFOutgoingMessage
     ) async {
+        
+        print("========== TRANSMIT MESSAGE ==========")
+        print("Attachment present: \(message.attachment != nil)")
+        print("Text: \(message.text)")
         manager?.updateMessageStatus(
             id: message.id,
             status: .sending
@@ -208,18 +212,51 @@ final class LXMFService: ObservableObject {
         }
 
         if let attachment = message.attachment {
-            let accepted = ReticulumCoreBridge.shared.sendAttachment(
-                at: URL(fileURLWithPath: attachment.path),
-                name: attachment.name,
-                mimeType: attachment.mimeType,
-                caption: message.text,
-                destinationHash: message.peer.destinationHash,
-                clientID: message.id
-            )
-            if !accepted {
-                manager?.updateMessageStatus(id: message.id, status: .failed)
-                statusMessage = "Attachment failed to enter Reticulum delivery"
+            let attachmentURL: URL
+
+            if attachment.path.hasPrefix("file://"),
+               let parsedURL = URL(string: attachment.path) {
+                attachmentURL = parsedURL
+            } else {
+                attachmentURL = URL(
+                    fileURLWithPath: attachment.path
+                )
             }
+
+            print(
+                """
+                LXMF ATTACHMENT REQUEST
+                Stored path: \(attachment.path)
+                Resolved path: \(attachmentURL.path)
+                Exists: \(FileManager.default.fileExists(
+                    atPath: attachmentURL.path
+                ))
+                Name: \(attachment.name)
+                MIME: \(attachment.mimeType)
+                """
+            )
+
+            let accepted =
+                ReticulumCoreBridge.shared.sendAttachment(
+                    at: attachmentURL,
+                    name: attachment.name,
+                    mimeType: attachment.mimeType,
+                    caption: message.text,
+                    destinationHash:
+                        message.peer.destinationHash,
+                    clientID: message.id
+                )
+
+            if !accepted {
+                manager?.updateMessageStatus(
+                    id: message.id,
+                    status: .failed
+                )
+
+                statusMessage =
+                    "Attachment failed to enter Reticulum delivery"
+            }
+
             return
         }
 

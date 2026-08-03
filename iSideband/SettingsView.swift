@@ -62,6 +62,10 @@ struct SettingsView: View {
     @State private var showRestartConfirmation = false
     @State private var showRadioOffConfirmation = false
     @State private var showSavedConfirmation = false
+
+    @State private var savedConfirmationMessage =
+        "Your iSideband settings were saved."
+
     @State private var statusMessage: String?
 
     @State private var showBackupWarning = false
@@ -72,6 +76,11 @@ struct SettingsView: View {
 
     @State private var backupStatusMessage: String?
     @State private var hasLoadedSettings = false
+    @State private var isApplyingRadioSettings = false
+
+    private var isRNodeConnected: Bool {
+        bluetooth.connectedDeviceID != nil
+    }
 
     var body: some View {
         Form {
@@ -89,10 +98,17 @@ struct SettingsView: View {
             ToolbarItem(
                 placement: .topBarTrailing
             ) {
-                Button("Save") {
+                Button {
                     saveSettings()
+                } label: {
+                    if isApplyingRadioSettings {
+                        ProgressView()
+                    } else {
+                        Text("Save")
+                            .fontWeight(.semibold)
+                    }
                 }
-                .fontWeight(.semibold)
+                .disabled(isApplyingRadioSettings)
             }
         }
         .onAppear {
@@ -122,8 +138,7 @@ struct SettingsView: View {
             isPresented: $showBackupExporter,
             document: backupDocument,
             contentType: .iSidebandBackup,
-            defaultFilename:
-                "iSideband-Backup"
+            defaultFilename: "iSideband-Backup"
         ) { result in
             switch result {
             case .success:
@@ -233,11 +248,7 @@ struct SettingsView: View {
                 role: .cancel
             ) { }
         } message: {
-            Text(
-                """
-                Your iSideband settings were saved.
-                """
-            )
+            Text(savedConfirmationMessage)
         }
         .alert(
             "RNode Status",
@@ -358,8 +369,7 @@ struct SettingsView: View {
             } label: {
                 Label(
                     "View Discovered Peers",
-                    systemImage:
-                        "person.2.fill"
+                    systemImage: "person.2.fill"
                 )
             }
         }
@@ -552,13 +562,33 @@ struct SettingsView: View {
                 keyboard: .numberPad
             )
 
-            Text(
-                """
-                These fields are validated and saved locally. They do not change the connected RNode configuration yet.
-                """
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
+            if isRNodeConnected {
+                Label(
+                    isApplyingRadioSettings
+                        ? "Applying settings to the connected RNode…"
+                        : "Press Save to apply these settings to the connected RNode.",
+                    systemImage:
+                        isApplyingRadioSettings
+                            ? "arrow.triangle.2.circlepath"
+                            : "antenna.radiowaves.left.and.right"
+                )
+                .font(.caption)
+                .foregroundStyle(
+                    isApplyingRadioSettings
+                        ? .orange
+                        : .green
+                )
+            } else {
+                Label(
+                    """
+                    No RNode is connected. Save will retain these values locally.
+                    """,
+                    systemImage:
+                        "exclamationmark.triangle"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
         }
     }
 
@@ -570,13 +600,10 @@ struct SettingsView: View {
             } label: {
                 Label(
                     "Restart RNode",
-                    systemImage:
-                        "arrow.clockwise"
+                    systemImage: "arrow.clockwise"
                 )
             }
-            .disabled(
-                bluetooth.connectedDeviceID == nil
-            )
+            .disabled(!isRNodeConnected)
 
             Button(
                 role: .destructive
@@ -589,9 +616,7 @@ struct SettingsView: View {
                         "antenna.radiowaves.left.and.right.slash"
                 )
             }
-            .disabled(
-                bluetooth.connectedDeviceID == nil
-            )
+            .disabled(!isRNodeConnected)
         }
     }
 
@@ -614,6 +639,7 @@ struct SettingsView: View {
             .multilineTextAlignment(.trailing)
             .textFieldStyle(.roundedBorder)
             .frame(width: 92)
+            .disabled(isApplyingRadioSettings)
 
             Text(unit)
                 .font(.caption)
@@ -708,6 +734,10 @@ struct SettingsView: View {
     }
 
     private func saveSettings() {
+        guard !isApplyingRadioSettings else {
+            return
+        }
+
         guard let validatedSettings =
             validatedRadioSettings()
         else {
@@ -719,8 +749,7 @@ struct SettingsView: View {
 
         defaults.set(
             gpsEnabled,
-            forKey:
-                "gpsInterfaceEnabled"
+            forKey: "gpsInterfaceEnabled"
         )
 
         locationTelemetry.setEnabled(
@@ -789,7 +818,104 @@ struct SettingsView: View {
                 "radioCodingRate"
         )
 
-        showSavedConfirmation = true
+        guard isRNodeConnected else {
+            savedConfirmationMessage =
+                """
+                Your settings were saved locally. They will be applied when the RNode reconnects.
+                """
+
+            showSavedConfirmation = true
+            return
+        }
+
+        let configuration =
+            RNodeRadioConfiguration(
+                frequencyHz:
+                    UInt32(
+                        (
+                            validatedSettings
+                                .frequencyMHz *
+                            1_000_000
+                        )
+                        .rounded()
+                    ),
+                bandwidthHz:
+                    UInt32(
+                        (
+                            validatedSettings
+                                .bandwidthKHz *
+                            1_000
+                        )
+                        .rounded()
+                    ),
+                transmitPowerDBm:
+                    validatedSettings
+                        .transmitPowerDBm,
+                spreadingFactor:
+                    validatedSettings
+                        .spreadingFactor,
+                codingRate:
+                    validatedSettings
+                        .codingRate
+            )
+
+        isApplyingRadioSettings = true
+
+        bluetooth.applyRadioConfiguration(
+            configuration
+        ) { result in
+            isApplyingRadioSettings = false
+
+            switch result {
+            case .success(let applied):
+                frequencyMHz =
+                    String(
+                        format: "%.3f",
+                        applied.frequencyMHz
+                    )
+
+                bandwidthKHz =
+                    formattedDecimal(
+                        applied.bandwidthKHz
+                    )
+
+                transmitPowerDBm =
+                    String(
+                        applied.transmitPowerDBm
+                    )
+
+                spreadingFactor =
+                    String(
+                        applied.spreadingFactor
+                    )
+
+                codingRate =
+                    String(
+                        applied.codingRate
+                    )
+
+                savedConfirmationMessage =
+                    """
+                    Settings saved and sent to the connected RNode.
+
+                    Frequency: \(frequencyMHz) MHz
+                    Bandwidth: \(bandwidthKHz) kHz
+                    TX Power: \(transmitPowerDBm) dBm
+                    Spreading Factor: \(spreadingFactor)
+                    Coding Rate: 4/\(codingRate)
+                    """
+
+                showSavedConfirmation = true
+
+            case .failure(let error):
+                statusMessage =
+                    """
+                    Settings were saved locally, but the RNode could not be configured.
+
+                    \(error.localizedDescription)
+                    """
+            }
+        }
     }
 
     private func validatedRadioSettings()

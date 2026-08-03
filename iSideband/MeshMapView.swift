@@ -296,96 +296,68 @@ struct GeographicMeshMapView: View {
     }
 }
 
+import SwiftUI
+
 struct TopologyMeshMapView: View {
+    @ObservedObject private var discoveredStore =
+        ReticulumDiscoveredPeerStore.shared
+
     @State private var showInformationBanner = true
+
+    private struct DisplayNode: Identifiable {
+        let id: String
+        let name: String
+        let detail: String?
+    }
+
+    private var discoveredNodes: [DisplayNode] {
+        discoveredStore.peers.enumerated().map { index, peer in
+            let name =
+                reflectedString(
+                    from: peer,
+                    matching: [
+                        "displayName",
+                        "name",
+                        "peerName",
+                        "identityName",
+                        "announceName"
+                    ]
+                )
+                ?? "Discovered Node"
+
+            let destinationHash =
+                reflectedString(
+                    from: peer,
+                    matching: [
+                        "destinationHashHex",
+                        "destinationHash",
+                        "identityHash",
+                        "hash"
+                    ]
+                )
+
+            let shortenedHash = destinationHash.map {
+                shortenHash($0)
+            }
+
+            return DisplayNode(
+                id: destinationHash ?? "peer-\(index)",
+                name: name,
+                detail: shortenedHash
+            )
+        }
+    }
 
     var body: some View {
         ZStack {
             Color(.systemGroupedBackground)
                 .ignoresSafeArea(edges: .bottom)
 
-            Canvas { context, size in
-                let center = CGPoint(
-                    x: size.width / 2,
-                    y: size.height / 2
-                )
-
-                let topNode = CGPoint(
-                    x: center.x,
-                    y: center.y - 125
-                )
-
-                let leftNode = CGPoint(
-                    x: center.x - 105,
-                    y: center.y + 65
-                )
-
-                let rightNode = CGPoint(
-                    x: center.x + 105,
-                    y: center.y + 65
-                )
-
-                let lowerNode = CGPoint(
-                    x: center.x,
-                    y: center.y + 165
-                )
-
-                drawConnection(
-                    from: topNode,
-                    to: leftNode,
-                    in: &context
-                )
-
-                drawConnection(
-                    from: topNode,
-                    to: rightNode,
-                    in: &context
-                )
-
-                drawConnection(
-                    from: leftNode,
-                    to: rightNode,
-                    in: &context
-                )
-
-                drawConnection(
-                    from: leftNode,
-                    to: lowerNode,
-                    in: &context
-                )
-
-                drawConnection(
-                    from: rightNode,
-                    to: lowerNode,
-                    in: &context
-                )
-
-                drawNode(
-                    at: topNode,
-                    label: "You",
-                    in: &context
-                )
-
-                drawNode(
-                    at: leftNode,
-                    label: "Node A",
-                    in: &context
-                )
-
-                drawNode(
-                    at: rightNode,
-                    label: "Node B",
-                    in: &context
-                )
-
-                drawNode(
-                    at: lowerNode,
-                    label: "Node C",
-                    in: &context
-                )
+            if discoveredNodes.isEmpty {
+                emptyTopology
+            } else {
+                topologyCanvas
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 80)
 
             if showInformationBanner {
                 VStack {
@@ -394,7 +366,7 @@ struct TopologyMeshMapView: View {
                     dismissibleStatusBanner(
                         title: "Topology Mesh Map",
                         message:
-                            "Live Reticulum paths and discovered nodes will appear here later.",
+                            "The center represents your connected RNode. Discovered Reticulum nodes appear around it.",
                         isPresented:
                             $showInformationBanner
                     )
@@ -411,6 +383,189 @@ struct TopologyMeshMapView: View {
             .easeInOut(duration: 0.2),
             value: showInformationBanner
         )
+        .animation(
+            .easeInOut(duration: 0.25),
+            value: discoveredNodes.count
+        )
+    }
+
+    private var topologyCanvas: some View {
+        GeometryReader { geometry in
+            let size = geometry.size
+            let center = CGPoint(
+                x: size.width / 2,
+                y: size.height / 2
+            )
+
+            let peerPositions = positions(
+                around: center,
+                count: discoveredNodes.count,
+                availableSize: size
+            )
+
+            Canvas { context, _ in
+                for position in peerPositions {
+                    drawConnection(
+                        from: center,
+                        to: position,
+                        in: &context
+                    )
+                }
+
+                for (index, node) in discoveredNodes.enumerated() {
+                    guard peerPositions.indices.contains(index) else {
+                        continue
+                    }
+
+                    drawPeerNode(
+                        at: peerPositions[index],
+                        node: node,
+                        in: &context
+                    )
+                }
+
+                drawConnectedRNode(
+                    at: center,
+                    in: &context
+                )
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.top, 45)
+        .padding(.bottom, 115)
+    }
+
+    private var emptyTopology: some View {
+        VStack(spacing: 18) {
+            Spacer()
+
+            connectedRNodePreview
+
+            VStack(spacing: 6) {
+                Text("Connected RNode")
+                    .font(.headline)
+
+                Text(
+                    "Discovered Reticulum nodes will appear around your RNode."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            }
+
+            Spacer()
+        }
+        .padding(.horizontal, 36)
+        .padding(.bottom, 90)
+    }
+
+    private var connectedRNodePreview: some View {
+        ZStack {
+            Circle()
+                .fill(
+                    Color.accentColor.opacity(0.14)
+                )
+                .frame(
+                    width: 108,
+                    height: 108
+                )
+
+            VStack(spacing: 0) {
+                Image(
+                    systemName:
+                        "antenna.radiowaves.left.and.right"
+                )
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .offset(y: 3)
+
+                RoundedRectangle(
+                    cornerRadius: 10,
+                    style: .continuous
+                )
+                .fill(Color.accentColor)
+                .frame(
+                    width: 57,
+                    height: 44
+                )
+                .overlay {
+                    VStack(spacing: 5) {
+                        Capsule()
+                            .fill(Color.white.opacity(0.95))
+                            .frame(
+                                width: 27,
+                                height: 4
+                            )
+
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Color.green)
+                                .frame(
+                                    width: 7,
+                                    height: 7
+                                )
+
+                            Circle()
+                                .fill(Color.white.opacity(0.8))
+                                .frame(
+                                    width: 7,
+                                    height: 7
+                                )
+                        }
+                    }
+                }
+                .overlay {
+                    RoundedRectangle(
+                        cornerRadius: 10,
+                        style: .continuous
+                    )
+                    .stroke(
+                        Color.white.opacity(0.9),
+                        lineWidth: 2
+                    )
+                }
+            }
+        }
+    }
+
+    private func positions(
+        around center: CGPoint,
+        count: Int,
+        availableSize: CGSize
+    ) -> [CGPoint] {
+        guard count > 0 else {
+            return []
+        }
+
+        let displayedCount = min(count, 12)
+
+        let horizontalRadius = min(
+            max(115, availableSize.width * 0.34),
+            165
+        )
+
+        let verticalRadius = min(
+            max(125, availableSize.height * 0.28),
+            215
+        )
+
+        return (0..<displayedCount).map { index in
+            let angle =
+                (Double(index) / Double(displayedCount))
+                * (Double.pi * 2)
+                - (Double.pi / 2)
+
+            return CGPoint(
+                x:
+                    center.x
+                    + CGFloat(cos(angle))
+                    * horizontalRadius,
+                y:
+                    center.y
+                    + CGFloat(sin(angle))
+                    * verticalRadius
+            )
+        }
     }
 
     private func drawConnection(
@@ -418,6 +573,21 @@ struct TopologyMeshMapView: View {
         to end: CGPoint,
         in context: inout GraphicsContext
     ) {
+        var glowPath = Path()
+        glowPath.move(to: start)
+        glowPath.addLine(to: end)
+
+        context.stroke(
+            glowPath,
+            with: .color(
+                Color.accentColor.opacity(0.12)
+            ),
+            style: StrokeStyle(
+                lineWidth: 7,
+                lineCap: .round
+            )
+        )
+
         var path = Path()
         path.move(to: start)
         path.addLine(to: end)
@@ -425,41 +595,147 @@ struct TopologyMeshMapView: View {
         context.stroke(
             path,
             with: .color(
-                Color.secondary.opacity(0.45)
+                Color.accentColor.opacity(0.58)
             ),
             style: StrokeStyle(
                 lineWidth: 2,
+                lineCap: .round,
                 dash: [7, 6]
             )
         )
     }
 
-    private func drawNode(
+    private func drawConnectedRNode(
         at point: CGPoint,
-        label: String,
         in context: inout GraphicsContext
     ) {
-        let circleSize = CGSize(
-            width: 58,
-            height: 58
+        let outerRect = CGRect(
+            x: point.x - 46,
+            y: point.y - 46,
+            width: 92,
+            height: 92
         )
 
+        context.fill(
+            Path(ellipseIn: outerRect),
+            with: .color(
+                Color.accentColor.opacity(0.16)
+            )
+        )
+
+        let antenna = context.resolve(
+            Image(
+                systemName:
+                    "antenna.radiowaves.left.and.right"
+            )
+        )
+
+        context.draw(
+            antenna,
+            in: CGRect(
+                x: point.x - 14,
+                y: point.y - 43,
+                width: 28,
+                height: 28
+            )
+        )
+
+        let bodyRect = CGRect(
+            x: point.x - 31,
+            y: point.y - 16,
+            width: 62,
+            height: 48
+        )
+
+        context.fill(
+            Path(
+                roundedRect: bodyRect,
+                cornerRadius: 11
+            ),
+            with: .color(Color.accentColor)
+        )
+
+        context.stroke(
+            Path(
+                roundedRect: bodyRect,
+                cornerRadius: 11
+            ),
+            with: .color(
+                Color.white.opacity(0.92)
+            ),
+            lineWidth: 2.5
+        )
+
+        let displayRect = CGRect(
+            x: point.x - 17,
+            y: point.y - 6,
+            width: 34,
+            height: 7
+        )
+
+        context.fill(
+            Path(
+                roundedRect: displayRect,
+                cornerRadius: 3
+            ),
+            with: .color(
+                Color.white.opacity(0.9)
+            )
+        )
+
+        let statusRect = CGRect(
+            x: point.x - 4,
+            y: point.y + 10,
+            width: 8,
+            height: 8
+        )
+
+        context.fill(
+            Path(ellipseIn: statusRect),
+            with: .color(Color.green)
+        )
+
+        let title = context.resolve(
+            Text("Connected RNode")
+                .font(
+                    .caption.weight(.bold)
+                )
+                .foregroundStyle(.primary)
+        )
+
+        context.draw(
+            title,
+            at: CGPoint(
+                x: point.x,
+                y: point.y + 53
+            ),
+            anchor: .center
+        )
+    }
+
+    private func drawPeerNode(
+        at point: CGPoint,
+        node: DisplayNode,
+        in context: inout GraphicsContext
+    ) {
         let circleRect = CGRect(
-            x: point.x - circleSize.width / 2,
-            y: point.y - circleSize.height / 2,
-            width: circleSize.width,
-            height: circleSize.height
+            x: point.x - 28,
+            y: point.y - 28,
+            width: 56,
+            height: 56
         )
 
         context.fill(
             Path(ellipseIn: circleRect),
-            with: .color(Color.accentColor)
+            with: .color(
+                Color(.secondarySystemGroupedBackground)
+            )
         )
 
         context.stroke(
             Path(ellipseIn: circleRect),
             with: .color(
-                Color.white.opacity(0.9)
+                Color.accentColor.opacity(0.85)
             ),
             lineWidth: 3
         )
@@ -467,7 +743,7 @@ struct TopologyMeshMapView: View {
         let symbol = context.resolve(
             Image(
                 systemName:
-                    "antenna.radiowaves.left.and.right"
+                    "dot.radiowaves.left.and.right"
             )
         )
 
@@ -477,8 +753,8 @@ struct TopologyMeshMapView: View {
             anchor: .center
         )
 
-        let text = context.resolve(
-            Text(label)
+        let title = context.resolve(
+            Text(node.name)
                 .font(
                     .caption.weight(.semibold)
                 )
@@ -486,13 +762,119 @@ struct TopologyMeshMapView: View {
         )
 
         context.draw(
-            text,
+            title,
             at: CGPoint(
                 x: point.x,
-                y: point.y + 42
+                y: point.y + 39
             ),
             anchor: .center
         )
+
+        if let detail = node.detail {
+            let subtitle = context.resolve(
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            )
+
+            context.draw(
+                subtitle,
+                at: CGPoint(
+                    x: point.x,
+                    y: point.y + 54
+                ),
+                anchor: .center
+            )
+        }
+    }
+
+    private func reflectedString(
+        from value: Any,
+        matching names: [String]
+    ) -> String? {
+        var currentMirror: Mirror? = Mirror(
+            reflecting: value
+        )
+
+        while let mirror = currentMirror {
+            for child in mirror.children {
+                guard let label = child.label else {
+                    continue
+                }
+
+                guard names.contains(label) else {
+                    continue
+                }
+
+                if let string = unwrapString(
+                    child.value
+                ) {
+                    let cleaned =
+                        string.trimmingCharacters(
+                            in: .whitespacesAndNewlines
+                        )
+
+                    if !cleaned.isEmpty {
+                        return cleaned
+                    }
+                }
+            }
+
+            currentMirror = mirror.superclassMirror
+        }
+
+        return nil
+    }
+
+    private func unwrapString(
+        _ value: Any
+    ) -> String? {
+        let mirror = Mirror(
+            reflecting: value
+        )
+
+        if mirror.displayStyle == .optional {
+            guard let child = mirror.children.first else {
+                return nil
+            }
+
+            return unwrapString(child.value)
+        }
+
+        if let string = value as? String {
+            return string
+        }
+
+        if let data = value as? Data {
+            return data
+                .map {
+                    String(
+                        format: "%02x",
+                        $0
+                    )
+                }
+                .joined()
+        }
+
+        return nil
+    }
+
+    private func shortenHash(
+        _ hash: String
+    ) -> String {
+        let cleaned = hash
+            .replacingOccurrences(
+                of: " ",
+                with: ""
+            )
+            .lowercased()
+
+        guard cleaned.count > 12 else {
+            return cleaned
+        }
+
+        return
+            "\(cleaned.prefix(6))…\(cleaned.suffix(6))"
     }
 }
 

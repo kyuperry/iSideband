@@ -115,11 +115,48 @@ final class LXMFManager: ObservableObject {
         caption: String = "",
         to peer: LXMFPeer
     ) -> LXMFOutgoingMessage? {
-        guard peer.isDestinationValid,
-              FileManager.default.fileExists(atPath: fileURL.path),
-              let attributes = try? FileManager.default.attributesOfItem(atPath: fileURL.path),
-              let byteCount = (attributes[.size] as? NSNumber)?.intValue,
-              byteCount <= Self.maximumAttachmentBytes else { return nil }
+        guard peer.isDestinationValid else {
+            print("ATTACHMENT QUEUE FAILED: invalid destination")
+            return nil
+        }
+
+        guard FileManager.default.fileExists(
+            atPath: fileURL.path
+        ) else {
+            print(
+                "ATTACHMENT QUEUE FAILED: file missing at \(fileURL.path)"
+            )
+            return nil
+        }
+
+        guard let attributes =
+                try? FileManager.default.attributesOfItem(
+                    atPath: fileURL.path
+                ),
+              let byteCount =
+                attributes[.size] as? NSNumber
+        else {
+            print("ATTACHMENT QUEUE FAILED: could not read file size")
+            return nil
+        }
+
+        print(
+            """
+            ATTACHMENT QUEUE CHECK
+            File: \(fileURL.path)
+            Size: \(byteCount.intValue) bytes
+            Maximum: \(Self.maximumAttachmentBytes) bytes
+            """
+        )
+
+        guard byteCount.intValue <=
+                Self.maximumAttachmentBytes
+        else {
+            print(
+                "ATTACHMENT QUEUE FAILED: photo exceeds maximum size"
+            )
+            return nil
+        }
         let message = LXMFOutgoingMessage(
             text: caption,
             peer: peer,

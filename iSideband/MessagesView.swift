@@ -270,7 +270,15 @@ struct MessagesView: View {
         ) { result in
             handleSelectedFile(result)
         }
-        .onChange(of: selectedPhoto) {
+        .onChange(of: selectedPhoto) { _, newPhoto in
+            print(
+                "PHOTO PICKER CHANGED: \(newPhoto != nil)"
+            )
+
+            guard newPhoto != nil else {
+                return
+            }
+
             handleSelectedPhoto()
         }
         .onChange(of: messages) {
@@ -495,14 +503,44 @@ struct MessagesView: View {
             }
 
             await MainActor.run {
-                guard let peer = contact?.peer,
-                      let queued = lxmfManager.sendAttachment(
-                        at: savedURL,
-                        name: savedURL.lastPathComponent,
-                        mimeType: "image/jpeg",
-                        type: .photo,
-                        to: peer
-                      ) else {
+                guard let peer = contact?.peer else {
+                    print("PHOTO SEND FAILED: contact peer is missing")
+
+                    messages.append(
+                        ChatMessage(
+                            text: "",
+                            isOutgoing: true,
+                            status: "Failed",
+                            type: .photo,
+                            attachmentName: savedURL.lastPathComponent,
+                            attachmentPath: savedURL.path,
+                            attachmentSize: photoData.count
+                        )
+                    )
+
+                    self.selectedPhoto = nil
+                    return
+                }
+
+                print(
+                    """
+                    PHOTO SEND QUEUE ATTEMPT
+                    Destination: \(peer.destinationHash)
+                    Path: \(savedURL.path)
+                    Exists: \(FileManager.default.fileExists(
+                        atPath: savedURL.path
+                    ))
+                    Size: \(photoData.count) bytes
+                    """
+                )
+
+                guard let queued = lxmfManager.sendAttachment(
+                    at: savedURL,
+                    name: savedURL.lastPathComponent,
+                    mimeType: "image/jpeg",
+                    type: .photo,
+                    to: peer
+                ) else {
                     messages.append(ChatMessage(
                         text: "", isOutgoing: true, status: "Failed",
                         type: .photo, attachmentName: savedURL.lastPathComponent,

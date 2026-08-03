@@ -50,6 +50,52 @@ struct DecodedReticulumPacket {
     var isAnnounce: Bool {
         packetType == .announce
     }
+    var diagnosticClassification: String {
+        switch packetType {
+        case .linkRequest:
+            return "Link Request"
+
+        case .proof:
+            switch context {
+            case .linkRequestProof:
+                return "Link Request Proof"
+
+            case .resourceProof:
+                return "Resource Proof"
+
+            default:
+                return "Proof"
+            }
+
+        case .data:
+            if destinationType == .link {
+                switch context {
+                case .linkIdentify:
+                    return "Link Identification"
+
+                case .linkClose:
+                    return "Link Close"
+
+                case .keepalive:
+                    return "Link Keepalive"
+
+                case .resourceAdvertisement:
+                    return "Resource Advertisement"
+
+                case .resource:
+                    return "Resource Data"
+
+                default:
+                    return "Link Data"
+                }
+            }
+
+            return "Single-Packet Data"
+
+        case .announce:
+            return "Announce"
+        }
+    }
 
     var destinationHashHex: String {
         destinationHash

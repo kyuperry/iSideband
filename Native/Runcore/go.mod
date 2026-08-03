@@ -3,9 +3,11 @@ module runcore
 go 1.25.4
 
 require (
+	github.com/fsnotify/fsnotify v1.7.0
 	github.com/svanichkin/configobj v0.0.1
 	github.com/svanichkin/go-lxmf v0.9.3
 	github.com/svanichkin/go-reticulum v1.0.4
+	golang.org/x/sys v0.39.0
 )
 
 replace github.com/svanichkin/go-reticulum => ../go-reticulum
@@ -14,7 +16,6 @@ require (
 	github.com/JuulLabs-OSS/cbgo v0.0.1 // indirect
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/dsnet/compress v0.0.1 // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ble/ble v0.0.0-20240122180141-8c5522f54333 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/godbus/dbus/v5 v5.1.0 // indirect
@@ -34,6 +35,7 @@ require (
 	github.com/tinygo-org/pio v0.2.0 // indirect
 	go.bug.st/serial v1.6.4 // indirect
 	golang.org/x/exp v0.0.0-20241204233417-43b7b7cde48d // indirect
-	golang.org/x/sys v0.39.0 // indirect
 	tinygo.org/x/bluetooth v0.14.0 // indirect
 )
+
+replace github.com/svanichkin/go-lxmf => ../go-lxmf

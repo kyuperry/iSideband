@@ -27,11 +27,25 @@ enum ReticulumDestinationType: UInt8 {
 enum ReticulumPacketContext: UInt8 {
     case none = 0x00
     case resource = 0x01
+    case resourceAdvertisement = 0x02
+    case resourceRequest = 0x03
+    case resourceHashmapUpdate = 0x04
+    case resourceProof = 0x05
+    case resourceInitiatorCancel = 0x06
+    case resourceReceiverCancel = 0x07
+    case cacheRequest = 0x08
     case request = 0x09
     case response = 0x0A
+    case pathResponse = 0x0B
     case command = 0x0C
     case commandStatus = 0x0D
     case channel = 0x0E
+    case keepalive = 0xFA
+    case linkIdentify = 0xFB
+    case linkClose = 0xFC
+    case linkProof = 0xFD
+    case linkRequestRoundTripTime = 0xFE
+    case linkRequestProof = 0xFF
 }
 
 struct ReticulumPacket {

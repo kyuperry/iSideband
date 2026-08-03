@@ -54,10 +54,6 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/svanichkin/configobj v0.0.1 h1:/4NP2Mgn9ilQMI/UkfnGkDQjYcl6n4m28SfxVPC9icI=
 github.com/svanichkin/configobj v0.0.1/go.mod h1:jJMehIdWQ8kkeiP4EHnZ9oYshhEvpoIEl7dGyYmmBYQ=
-github.com/svanichkin/go-lxmf v0.9.3 h1:6Mw+538kdqkf+EvZGOj8w4VPFnuHMf9U2ZeFzr2w+IQ=
-github.com/svanichkin/go-lxmf v0.9.3/go.mod h1:MXMiBGJe8BlS/eoT4UTuLJJ4cOgOb/9aX8gAt+Z46Qw=
-github.com/svanichkin/go-reticulum v1.0.4 h1:ZDcyGNuESWWdTEAKs7SNsC4pd+uMCLkqY08PZ1vBg1w=
-github.com/svanichkin/go-reticulum v1.0.4/go.mod h1:8w95tbNHSZLPdCyFLnKcBM4zCCSFNV7hpHOvThv+dJI=
 github.com/svanichkin/i2plib v0.0.1 h1:/H/tI3ooLyosEiuKcUJCNznmx/VA77Cxct/aYOfKqPI=
 github.com/svanichkin/i2plib v0.0.1/go.mod h1:ZdZ16JfKVIkJMVHpCMTrujq7tgdkK53cVqpEL7XPWAU=
 github.com/tarm/serial v0.0.0-20180830185346-98f6abe2eb07 h1:UyzmZLoiDWMRywV4DUYb9Fbt8uiOSooupjTq10vpvnU=
