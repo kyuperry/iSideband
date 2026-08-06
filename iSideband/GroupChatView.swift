@@ -37,6 +37,23 @@ struct GroupChatView: View {
 
                         messageBubble(for: message)
                             .contextMenu {
+                                if let attachmentURL =
+                                    saveableAttachmentURL(
+                                        for: message
+                                    ) {
+                                    ShareLink(
+                                        item: attachmentURL
+                                    ) {
+                                        Label(
+                                            message.type == .photo
+                                                ? "Save Photo…"
+                                                : "Save File…",
+                                            systemImage:
+                                                "square.and.arrow.down"
+                                        )
+                                    }
+                                }
+
                                 Button {
                                     UIPasteboard.general.string =
                                         message.text
@@ -225,6 +242,21 @@ struct GroupChatView: View {
         !draft.trimmingCharacters(
             in: .whitespacesAndNewlines
         ).isEmpty
+    }
+
+    private func saveableAttachmentURL(
+        for message: Message
+    ) -> URL? {
+        guard message.type == .photo || message.type == .file,
+              let path = message.attachmentPath else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return url
     }
 
     @ViewBuilder

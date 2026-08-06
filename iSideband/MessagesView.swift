@@ -115,6 +115,23 @@ struct MessagesView: View {
                             ForEach(messages) { message in
                                 messageBubble(message)
                                     .contextMenu {
+                                        if let attachmentURL =
+                                            saveableAttachmentURL(
+                                                for: message
+                                            ) {
+                                            ShareLink(
+                                                item: attachmentURL
+                                            ) {
+                                                Label(
+                                                    message.type == .photo
+                                                        ? "Save Photo…"
+                                                        : "Save File…",
+                                                    systemImage:
+                                                        "square.and.arrow.down"
+                                                )
+                                            }
+                                        }
+
                                         Button {
                                             copyMessage(message)
                                         } label: {
@@ -434,6 +451,21 @@ struct MessagesView: View {
         return lxmfManager.outgoingMessages.contains {
             $0.id == id && $0.status == .failed
         }
+    }
+
+    private func saveableAttachmentURL(
+        for message: ChatMessage
+    ) -> URL? {
+        guard message.type == .photo || message.type == .file,
+              let path = message.attachmentPath else {
+            return nil
+        }
+
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return url
     }
 
     private func resend(
