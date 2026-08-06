@@ -11,7 +11,8 @@ final class LXMFManager: ObservableObject {
 
     private let service = LXMFService()
     private var hasStarted = false
-    static let maximumAttachmentBytes = 120_000
+    // Match Sideband's default 1 MB direct-delivery attachment limit.
+    static let maximumAttachmentBytes = 1_000_000
 
     private static let storageKey = "isideband.lxmf.outgoing"
 
@@ -153,7 +154,7 @@ final class LXMFManager: ObservableObject {
                 Self.maximumAttachmentBytes
         else {
             print(
-                "ATTACHMENT QUEUE FAILED: photo exceeds maximum size"
+                "ATTACHMENT QUEUE FAILED: attachment exceeds maximum size"
             )
             return nil
         }
@@ -162,7 +163,7 @@ final class LXMFManager: ObservableObject {
             peer: peer,
             status: .queued,
             attachment: LXMFOutgoingAttachment(
-                path: fileURL.path,
+                path: fileURL.lastPathComponent,
                 name: name,
                 mimeType: mimeType,
                 type: type
@@ -194,11 +195,12 @@ final class LXMFManager: ObservableObject {
         }
 
         if let attachment = outgoingMessages[index].attachment {
+            let attachmentURL = attachment.resolvedFileURL()
             guard FileManager.default.fileExists(
-                atPath: attachment.path
+                atPath: attachmentURL.path
             ),
             let attributes = try? FileManager.default
-                .attributesOfItem(atPath: attachment.path),
+                .attributesOfItem(atPath: attachmentURL.path),
             let byteCount = (
                 attributes[.size] as? NSNumber
             )?.intValue,
@@ -245,6 +247,36 @@ struct LXMFOutgoingAttachment: Codable, Hashable {
     let name: String
     let mimeType: String
     let type: LXMFOutgoingAttachmentType
+
+    func resolvedFileURL(
+        fileManager: FileManager = .default
+    ) -> URL {
+        let storedURL: URL
+        if path.hasPrefix("file://"),
+           let parsedURL = URL(string: path) {
+            storedURL = parsedURL
+        } else {
+            storedURL = URL(fileURLWithPath: path)
+        }
+
+        if fileManager.fileExists(atPath: storedURL.path) {
+            return storedURL
+        }
+
+        guard let documentsDirectory = fileManager.urls(
+            for: .documentDirectory,
+            in: .userDomainMask
+        ).first else {
+            return storedURL
+        }
+
+        return documentsDirectory
+            .appendingPathComponent(
+                "DirectAttachments",
+                isDirectory: true
+            )
+            .appendingPathComponent(storedURL.lastPathComponent)
+    }
 }
 
 struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {

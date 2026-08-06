@@ -527,8 +527,18 @@ final class ReticulumCoreBridge: ObservableObject {
         }
         var identifierMaterial = Data()
         identifierMaterial.append(sourceHash)
+        identifierMaterial.append(Data(title.utf8))
         identifierMaterial.append(Data(content.utf8))
-        identifierMaterial.append(withUnsafeBytes(of: timestamp.bitPattern.bigEndian) { Data($0) })
+        identifierMaterial.append(Data(attachmentPath.utf8))
+        identifierMaterial.append(Data(attachmentName.utf8))
+        identifierMaterial.append(Data(attachmentMIME.utf8))
+        identifierMaterial.append(
+            withUnsafeBytes(
+                of: timestamp.bitPattern.bigEndian
+            ) {
+                Data($0)
+            }
+        )
         let suppliedID = Data(hex: messageIDHex)
         let message = LXMFIncomingMessage(
             id: suppliedID ?? Data(SHA256.hash(data: identifierMaterial)),
@@ -562,8 +572,15 @@ final class ReticulumCoreBridge: ObservableObject {
         let lowered = message.lowercased()
         guard lowered.contains("link") ||
                 lowered.contains("lxmf") ||
+                lowered.contains("path") ||
+                lowered.contains("attachment") ||
                 lowered.contains("announce") ||
                 lowered.contains("deliver") ||
+                lowered.contains("resource") ||
+                lowered.contains("proof") ||
+                lowered.contains("timeout") ||
+                lowered.contains("part request") ||
+                lowered.contains("cancel") ||
                 lowered.contains("failed") ||
                 lowered.contains("error") else {
             return

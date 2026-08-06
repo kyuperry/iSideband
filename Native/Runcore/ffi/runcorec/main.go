@@ -31,6 +31,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/svanichkin/go-lxmf/lxmf"
@@ -120,6 +121,16 @@ func runcore_start(contactsDir *C.char, sendDir *C.char, messagesDir *C.char, lo
 	if err != nil {
 		rns.Log(fmt.Sprintf("runcore_start failed: %v", err), rns.LOG_ERROR)
 		return 0
+	}
+
+	// The embedded iOS app supplies its own RNode-backed raw interface below.
+	// Leaving the generated AutoInterface enabled makes iOS repeatedly attempt
+	// local multicast discovery, which is blocked by the platform firewall and
+	// can leave sustained Resource traffic associated with an unusable route.
+	// Disable only that generated interface; the raw RNode interface is attached
+	// separately by runcore_attach_raw_interface().
+	if err := n.SetInterfaceEnabled("Default Interface", false); err != nil {
+		rns.Logf(rns.LOG_WARNING, "runcore: disable embedded Default Interface: %v", err)
 	}
 
 	h := &nodeHandle{node: n}
@@ -309,23 +320,57 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 		text = C.GoString(content)
 	}
 	id := C.GoString(clientID)
+	destinationHex := C.GoString(destination)
 	notifyStatus(h, id, "sending")
-	msg, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: lxmf.MethodDirect, Content: text, Fields: fields})
-	if err != nil {
-		notifyStatus(h, id, "failed")
-		return 3
-	}
-	var terminalStatus sync.Once
-	msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) {
-		terminalStatus.Do(func() {
-			notifyStatus(h, id, "sent")
-		})
-	})
-	msg.RegisterFailedCallback(func(*lxmf.LXMessage) {
-		terminalStatus.Do(func() {
+
+	// Route discovery is asynchronous. Keep the attachment job alive while a
+	// fresh announce/path is acquired instead of making the Swift caller wait or
+	// reporting the message as sent before LXMF has delivered it.
+	go func() {
+		if destinationHash, decodeErr := hex.DecodeString(destinationHex); decodeErr == nil &&
+			len(destinationHash) == lxmf.DestinationLength &&
+			!rns.TransportHasPath(destinationHash) {
+			rns.Logf(rns.LOG_NOTICE, "ATTACHMENT WAITING FOR PATH destination=%s", destinationHex)
+			rns.TransportRequestPath(destinationHash)
+			deadline := time.Now().Add(12 * time.Second)
+			for !rns.TransportHasPath(destinationHash) && time.Now().Before(deadline) {
+				time.Sleep(150 * time.Millisecond)
+			}
+			if rns.TransportHasPath(destinationHash) {
+				rns.Logf(rns.LOG_NOTICE, "ATTACHMENT PATH ACQUIRED destination=%s", destinationHex)
+			} else {
+				rns.Logf(rns.LOG_NOTICE, "ATTACHMENT PATH STILL PENDING destination=%s; retaining LXMF job", destinationHex)
+			}
+		}
+
+		msg, sendErr := h.node.SendHex(destinationHex, runcore.SendOptions{Method: lxmf.MethodDirect, Content: text, Fields: fields})
+		if sendErr != nil {
+			rns.Logf(rns.LOG_ERROR, "runcore_send_attachment failed: %v", sendErr)
 			notifyStatus(h, id, "failed")
+			return
+		}
+		var terminalStatus sync.Once
+		msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) {
+			terminalStatus.Do(func() {
+				notifyStatus(h, id, "delivered")
+			})
 		})
-	})
+		msg.RegisterFailedCallback(func(m *lxmf.LXMessage) {
+			rns.Logf(
+				rns.LOG_ERROR,
+				"LXMF FAILED: state=%d progress=%.2f representation=%d method=%d attempts=%d",
+				m.State,
+				m.Progress,
+				m.Representation,
+				m.Method,
+				m.DeliveryAttempts,
+			)
+
+			terminalStatus.Do(func() {
+				notifyStatus(h, id, "failed")
+			})
+		})
+	}()
 	return 0
 }
 

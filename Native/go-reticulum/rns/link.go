@@ -31,8 +31,10 @@ const (
 	linkKeepaliveMin       = 5 * time.Second
 	linkStaleFactor        = 2
 	linkWatchdogMaxSleep   = 5 * time.Second
-	// Python parity: default link mode is AES_128_CBC (0x00).
-	linkDefaultMode   = LinkModeAES128CBC
+	// Current Reticulum enables AES_256_CBC (0x01) as its default link mode.
+	// Using the legacy AES_128_CBC mode prevents current Python/Android peers
+	// from producing a link-request proof.
+	linkDefaultMode   = LinkModeAES256CBC
 	linkDefaultPerHop = time.Duration(DEFAULT_PER_HOP_TIMEOUT) * time.Second
 )
 
@@ -68,7 +70,9 @@ const (
 )
 
 var (
-	// Python supports AES_128_CBC and AES_256_CBC; keep both enabled for parity.
+	// Accept both generations used by Sideband in the field. Current Reticulum
+	// signals AES-256-CBC, while older Sideband releases explicitly signal mode
+	// zero (AES-128-CBC). Treating zero as "unspecified" breaks their proofs.
 	linkEnabledModes     = []int{LinkModeAES128CBC, LinkModeAES256CBC}
 	linkModeDescriptions = map[int]string{
 		LinkModeAES128CBC: "AES_128_CBC",
@@ -305,8 +309,6 @@ func NewLink(destination *Destination, owner *Destination, mode int, established
 		l.startWatchdog()
 		if err := l.sendLinkRequest(); err != nil {
 			Log(fmt.Sprintf("Could not send link request: %v", err), LOG_ERROR)
-		} else {
-			registerLinkWithTransport(l)
 		}
 	} else {
 		registerLinkWithTransport(l)
@@ -370,6 +372,10 @@ func (l *Link) sendLinkRequest() error {
 	l.packet = packet
 	l.requestData = payload
 	l.EstablishmentCost += len(packet.Raw)
+	// Register before transmission, matching Python Reticulum. A directly
+	// connected peer can return LRPROOF immediately; registering after Send()
+	// creates a race where that valid proof has no pending link to receive it.
+	registerLinkWithTransport(l)
 
 	receipt := packet.Send()
 	l.requestTime = time.Now()
@@ -380,6 +386,7 @@ func (l *Link) sendLinkRequest() error {
 	if receipt == nil && !packet.Sent {
 		return errors.New("link request send failed")
 	}
+	Logf(LOG_ERROR, "LINK REQUEST SENT id=%s mode=%d bytes=%d", PrettyHexRep(l.LinkID), l.Mode, len(packet.Raw))
 	return nil
 }
 
@@ -1209,12 +1216,15 @@ func (l *Link) handleLRProof(packet *Packet) {
 	if l == nil || packet == nil || !l.Initiator {
 		return
 	}
+	Logf(LOG_ERROR, "LRPROOF RECEIVED id=%s status=%d bytes=%d", PrettyHexRep(l.LinkID), l.Status, len(packet.Data))
 	if l.Status != LinkPending || l.destination == nil || l.destination.identity == nil {
+		Logf(LOG_ERROR, "LRPROOF REJECTED id=%s reason=invalid-state-or-identity", PrettyHexRep(l.LinkID))
 		return
 	}
 
 	mode := linkModeFromProofPacket(packet)
 	if mode != l.Mode {
+		Logf(LOG_ERROR, "LRPROOF REJECTED id=%s reason=mode-mismatch expected=%d received=%d", PrettyHexRep(l.LinkID), l.Mode, mode)
 		l.teardown(LinkTimeout)
 		return
 	}
@@ -1230,6 +1240,7 @@ func (l *Link) handleLRProof(packet *Packet) {
 	}
 
 	if len(packet.Data) < ed25519.SignatureSize+linkEcPubSize/2 {
+		Logf(LOG_ERROR, "LRPROOF REJECTED id=%s reason=short-payload bytes=%d", PrettyHexRep(l.LinkID), len(packet.Data))
 		return
 	}
 	signature := packet.Data[:ed25519.SignatureSize]
@@ -1238,7 +1249,7 @@ func (l *Link) handleLRProof(packet *Packet) {
 
 	_ = l.loadPeer(peerPub, peerSigPub)
 	if err := l.Handshake(); err != nil {
-		Log(fmt.Sprintf("Handshake failed: %v", err), LOG_ERROR)
+		Logf(LOG_ERROR, "LRPROOF REJECTED id=%s reason=handshake error=%v", PrettyHexRep(l.LinkID), err)
 		l.teardown(LinkTimeout)
 		return
 	}
@@ -1251,7 +1262,7 @@ func (l *Link) handleLRProof(packet *Packet) {
 	signed = append(signed, signalling...)
 
 	if !l.destination.identity.Validate(signature, signed) {
-		Log("Invalid link proof signature received, ignoring", LOG_DEBUG)
+		Logf(LOG_ERROR, "LRPROOF REJECTED id=%s reason=invalid-signature", PrettyHexRep(l.LinkID))
 		return
 	}
 
@@ -1267,6 +1278,7 @@ func (l *Link) handleLRProof(packet *Packet) {
 	l.updateMDU()
 
 	l.Status = LinkActive
+	Logf(LOG_ERROR, "LINK ACTIVE id=%s mode=%d mtu=%d", PrettyHexRep(l.LinkID), l.Mode, l.MTU)
 	l.activatedAt = now
 	l.lastProof = now
 	activateLinkInTransport(l)
@@ -1667,6 +1679,9 @@ func (l *Link) teardownWithOptions(reason int, sendClose bool) {
 	}
 	l.TeardownReason = reason
 	l.Status = LinkClosed
+	if l.Initiator {
+		Logf(LOG_ERROR, "LINK CLOSED id=%s reason=%d", PrettyHexRep(l.LinkID), reason)
+	}
 	if l.channel != nil {
 		l.channel.Close()
 		l.channel = nil
@@ -2288,12 +2303,10 @@ func linkModeFromLRPacket(packet *Packet) int {
 		return linkDefaultMode
 	}
 	if len(packet.Data) <= linkEcPubSize {
-		return linkDefaultMode
+		// Link requests predating MTU/mode signalling used AES-128-CBC.
+		return LinkModeAES128CBC
 	}
 	modeBits := (packet.Data[linkEcPubSize] & linkModeMask) >> 5
-	if modeBits == 0 {
-		return linkDefaultMode
-	}
 	return int(modeBits)
 }
 
@@ -2303,13 +2316,11 @@ func linkModeFromProofPacket(packet *Packet) int {
 	}
 	expected := ed25519.SignatureSize + linkEcPubSize/2 + linkSignalSize
 	if len(packet.Data) != expected {
-		return linkDefaultMode
+		// Link proofs predating MTU/mode signalling used AES-128-CBC.
+		return LinkModeAES128CBC
 	}
 	offset := ed25519.SignatureSize + linkEcPubSize/2
 	mtuBytes := packet.Data[offset : offset+linkSignalSize]
 	modeBits := (mtuBytes[0] & linkModeMask) >> 5
-	if modeBits == 0 {
-		return linkDefaultMode
-	}
 	return int(modeBits)
 }

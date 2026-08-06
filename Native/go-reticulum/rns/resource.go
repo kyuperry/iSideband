@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -1450,7 +1451,11 @@ func (r *Resource) ReceivePart(packet *Packet) {
 	}
 	partHash := r.getMapHash(partData)
 
-	start := r.consecutiveHeight
+	// RequestNext starts its window at the first part after consecutiveHeight.
+	// Match against that same range here. Starting at consecutiveHeight made the
+	// receive window end one slot too early after the first part was assembled,
+	// so the tail packet of every subsequent request could never be recognised.
+	start := r.consecutiveHeight + 1
 	if start < 0 {
 		start = 0
 	}
@@ -1548,9 +1553,9 @@ func (r *Resource) ReceivePart(packet *Packet) {
 // RequestNext requests subsequent parts from the initiator.
 func (r *Resource) RequestNext() {
 	r.requestLock.Lock()
-	defer r.requestLock.Unlock()
 
 	if r.status == ResourceFailed || r.waitingForHMU {
+		r.requestLock.Unlock()
 		return
 	}
 
@@ -1581,10 +1586,12 @@ func (r *Resource) RequestNext() {
 	hmuPart := []byte{hashmapState}
 	if hashmapState == HashmapExhausted {
 		if r.hashmapHeight == 0 {
+			r.requestLock.Unlock()
 			return
 		}
 		last := r.hashmap[r.hashmapHeight-1]
 		if last == nil {
+			r.requestLock.Unlock()
 			return
 		}
 		hmuPart = append(hmuPart, last...)
@@ -1600,8 +1607,15 @@ func (r *Resource) RequestNext() {
 		WithPacketContext(PacketCONTEXT_RESOURCE_REQ),
 	)
 	if pkt == nil {
+		r.requestLock.Unlock()
 		return
 	}
+
+	// Packet delivery can synchronously invoke the remote resource handler,
+	// which can send the requested parts back before Send() returns. The last
+	// part then calls RequestNext() again. Never hold requestLock across Send(),
+	// or a multi-window transfer deadlocks after its first window.
+	r.requestLock.Unlock()
 
 	pkt.Send()
 	if !pkt.Sent {
@@ -1790,6 +1804,18 @@ func (r *Resource) Request(requestData []byte) {
 
 // Cancel cancels the resource transfer.
 func (r *Resource) Cancel() {
+	Logf(
+		LOG_ERROR,
+		"RESOURCE CANCELLED initiator=%v status=%d progress=%.3f sentParts=%d totalParts=%d retriesLeft=%d waitingForHMU=%v\n%s",
+		r.initiator,
+		r.status,
+		r.GetProgress(),
+		r.sentParts,
+		r.totalParts,
+		r.retriesLeft,
+		r.waitingForHMU,
+		string(debug.Stack()),
+	)
 	if r.status >= ResourceComplete {
 		return
 	}

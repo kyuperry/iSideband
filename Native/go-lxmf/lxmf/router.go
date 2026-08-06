@@ -10,14 +10,14 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
-	"os/signal"
-	"time"
 	"syscall"
+	"time"
 
 	"github.com/svanichkin/go-reticulum/rns"
 	umsgpack "github.com/svanichkin/go-reticulum/rns/vendor"
@@ -86,12 +86,12 @@ const (
 )
 
 const (
-	JobOutboundInterval  = 1
-	JobStampsInterval    = 1
-	JobLinksInterval     = 1
-	JobTransientInterval = 60
-	JobStoreInterval     = 120
-	JobPeerSyncInterval  = 6
+	JobOutboundInterval   = 1
+	JobStampsInterval     = 1
+	JobLinksInterval      = 1
+	JobTransientInterval  = 60
+	JobStoreInterval      = 120
+	JobPeerSyncInterval   = 6
 	JobPeerIngestInterval = JobPeerSyncInterval
 	JobRotateInterval     = 56 * JobPeerIngestInterval
 )
@@ -180,9 +180,9 @@ type LXMRouter struct {
 	FromStaticOnly   bool
 	StaticPeers      [][]byte
 
-	Peers            map[string]*LXMPeer
-	DirectLinks      map[string]*rns.Link
-	BackchannelLinks map[string]*rns.Link
+	Peers                 map[string]*LXMPeer
+	DirectLinks           map[string]*rns.Link
+	BackchannelLinks      map[string]*rns.Link
 	backchannelIdentified map[*rns.Link]bool
 
 	OutboundStampCosts    map[string]stampCostEntry
@@ -1145,6 +1145,10 @@ func (r *LXMRouter) ProcessOutbound() {
 				msg.FailedCallback(msg)
 			}
 			continue
+		case MessageFailed:
+			// failMessage has already invoked the failure callback. Remove the
+			// terminal message so it cannot be processed and reported repeatedly.
+			continue
 		}
 		filtered = append(filtered, msg)
 	}
@@ -1235,6 +1239,10 @@ func (r *LXMRouter) ProcessOutbound() {
 						delete(r.BackchannelLinks, string(msg.DestinationHash))
 						msg.NextDeliveryAttempt = time.Now().Unix() + DeliveryRetryWait
 					} else {
+						// Link establishment timeout is transport- and hop-aware. In
+						// particular, a LoRa request/proof exchange can legitimately take
+						// longer than DeliveryRetryWait. Let Link's watchdog close an
+						// actually expired link; tearing it down here races valid proofs.
 						rns.Log("The link to "+rns.PrettyHexRep(msg.DestinationHash)+" is pending, waiting for link to become active", rns.LOG_DEBUG)
 					}
 				} else {
@@ -1244,7 +1252,14 @@ func (r *LXMRouter) ProcessOutbound() {
 						if msg.DeliveryAttempts < MaxDeliveryAttempts {
 							if rns.TransportHasPath(msg.DestinationHash) {
 								rns.Log("Establishing link to "+rns.PrettyHexRep(msg.DestinationHash)+" for delivery attempt "+fmt.Sprintf("%d", msg.DeliveryAttempts)+" to "+rns.PrettyHexRep(msg.DestinationHash), rns.LOG_DEBUG)
-								r.getOrCreateDirectLink(msg.DestinationHash)
+								mode := rns.LinkModeDefault
+								if msg.DeliveryAttempts > 1 {
+									// Older Sideband versions only support the original
+									// AES-128-CBC link mode. Try the current mode first,
+									// then retain the legacy mode for subsequent retries.
+									mode = rns.LinkModeAES128CBC
+								}
+								r.getOrCreateDirectLink(msg.DestinationHash, mode)
 								msg.Progress = 0.03
 							} else {
 								rns.Log("No path known for delivery attempt "+fmt.Sprintf("%d", msg.DeliveryAttempts)+" to "+rns.PrettyHexRep(msg.DestinationHash)+". Requesting path...", rns.LOG_DEBUG)
@@ -2772,9 +2787,9 @@ func (r *LXMRouter) CleanMessageStore() {
 	bytesCleaned := int64(0)
 
 	type weightedEntry struct {
-		entry *propagationEntry
+		entry  *propagationEntry
 		weight float64
-		id    []byte
+		id     []byte
 	}
 	weightedEntries := make([]weightedEntry, 0, len(r.PropagationEntries))
 	for transientKey := range r.PropagationEntries {
@@ -3005,7 +3020,7 @@ func (r *LXMRouter) RotatePeers() {
 	rns.Log("Dropped "+fmt.Sprintf("%d", droppedPeers)+" low acceptance rate peer"+ms+" to increase peering headroom", rns.LOG_DEBUG)
 }
 
-func (r *LXMRouter) getOrCreateDirectLink(destinationHash []byte) *rns.Link {
+func (r *LXMRouter) getOrCreateDirectLink(destinationHash []byte, mode int) *rns.Link {
 	key := string(destinationHash)
 	if link, ok := r.DirectLinks[key]; ok && link != nil {
 		if link.Status != rns.LinkClosed {
@@ -3016,7 +3031,12 @@ func (r *LXMRouter) getOrCreateDirectLink(destinationHash []byte) *rns.Link {
 
 	if !rns.TransportHasPath(destinationHash) {
 		rns.TransportRequestPath(destinationHash)
-		return nil
+		// Opportunistic packets can reach directly connected peers even when an
+		// announce/path response has not populated the path table. Reticulum's
+		// outbound layer already broadcasts packets with no known route, so allow
+		// the link request to use that same one-hop fallback instead of leaving
+		// attachment delivery stuck in the path-request loop forever.
+		rns.Log("DIRECT LINK FALLBACK: broadcasting link request without cached path", rns.LOG_ERROR)
 	}
 
 	peerID := rns.IdentityRecall(destinationHash)
@@ -3028,10 +3048,17 @@ func (r *LXMRouter) getOrCreateDirectLink(destinationHash []byte) *rns.Link {
 		return nil
 	}
 
-	link, err := rns.NewOutgoingLink(dest, rns.LinkModeDefault, func(l *rns.Link) {
+	link, err := rns.NewOutgoingLink(dest, mode, func(l *rns.Link) {
 		r.DirectLinks[key] = l
 		r.DeliveryLinkEstablished(l)
-		r.ProcessOutbound()
+		// Link establishment can complete while an outbound pass still holds the
+		// processing guard. A direct call is then discarded, leaving the queued
+		// message idle on an active link. Schedule a fresh pass after that guard
+		// has had a chance to clear.
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			r.ProcessOutbound()
+		}()
 	}, func(l *rns.Link) {
 		delete(r.DirectLinks, key)
 	})
@@ -3039,6 +3066,13 @@ func (r *LXMRouter) getOrCreateDirectLink(destinationHash []byte) *rns.Link {
 		return nil
 	}
 	r.DirectLinks[key] = link
+	// ProcessOutbound is otherwise event-driven. Ensure the queue is revisited
+	// when the delivery-attempt deadline expires, even if a link proof or
+	// callback is lost and no other traffic wakes the router.
+	go func() {
+		time.Sleep(time.Duration(DeliveryRetryWait)*time.Second + 100*time.Millisecond)
+		r.ProcessOutbound()
+	}()
 	return link
 }
 

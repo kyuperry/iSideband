@@ -139,19 +139,36 @@ struct MessageBubble: View {
             Button {
                 selectedImage = image
             } label: {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(
-                        maxWidth: 260,
-                        maxHeight: 320
-                    )
-                    .clipShape(
-                        RoundedRectangle(
-                            cornerRadius: 18,
-                            style: .continuous
+                VStack(
+                    alignment: .trailing,
+                    spacing: 4
+                ) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(
+                            maxWidth: 260,
+                            maxHeight: 320
                         )
-                    )
+                        .clipShape(
+                            RoundedRectangle(
+                                cornerRadius: 18,
+                                style: .continuous
+                            )
+                        )
+
+                    if let attachmentSize {
+                        Text(
+                            ByteCountFormatter.string(
+                                fromByteCount:
+                                    Int64(attachmentSize),
+                                countStyle: .file
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
             }
             .buttonStyle(.plain)
         } else if isFile {
