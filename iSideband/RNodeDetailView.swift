@@ -181,19 +181,22 @@ struct RNodeDetailView: View {
             }
 
             Section("Radio Telemetry") {
-                if let batteryPercent = bluetooth.batteryPercent {
-                    telemetryRow(
-                        title: "Battery",
-                        value: {
-                            let percent = batteryPercent
-                        if bluetooth.batteryState == .charging {
-                            return "\(percent)% (Charging)"
-                        }
+                TimelineView(
+                    .periodic(from: .now, by: 30)
+                ) { context in
+                    VStack(alignment: .leading, spacing: 3) {
+                        telemetryRow(
+                            title: "Battery",
+                            value: batteryStatus(at: context.date),
+                            systemImage: batterySystemImage
+                        )
 
-                        return "\(percent)%"
-                        }(),
-                        systemImage: "battery.50percent"
-                    )
+                        if bluetooth.batteryTelemetryDate != nil {
+                            Text(bluetooth.batteryTelemetrySource)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 telemetryRow(
                     title: "Reticulum Received",
@@ -257,7 +260,7 @@ struct RNodeDetailView: View {
 
             Section("Hardware") {
                 Label(
-                    "RNode Firmware: Custom",
+                    "RNode Firmware: \(bluetooth.firmwareVersion)",
                     systemImage: "cpu"
                 )
 
@@ -482,6 +485,47 @@ struct RNodeDetailView: View {
             Text(value)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.trailing)
+        }
+    }
+
+    private func batteryStatus(at date: Date) -> String {
+        guard let percent = bluetooth.batteryPercent,
+              let telemetryDate = bluetooth.batteryTelemetryDate else {
+            return isConnected ? "Waiting for RNode…" : "Unavailable"
+        }
+
+        guard date.timeIntervalSince(telemetryDate) <= 90 else {
+            return "Stale (last reported \(percent)%)"
+        }
+
+        guard let state = bluetooth.batteryState,
+              state != .unknown else {
+            return "\(percent)%"
+        }
+
+        return "\(percent)% (\(state.title))"
+    }
+
+    private var batterySystemImage: String {
+        if bluetooth.batteryState == .charging {
+            return "battery.100percent.bolt"
+        }
+
+        guard let percent = bluetooth.batteryPercent else {
+            return "battery.0percent"
+        }
+
+        switch percent {
+        case 76...100:
+            return "battery.100percent"
+        case 51...75:
+            return "battery.75percent"
+        case 26...50:
+            return "battery.50percent"
+        case 1...25:
+            return "battery.25percent"
+        default:
+            return "battery.0percent"
         }
     }
 
