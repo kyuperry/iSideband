@@ -181,6 +181,7 @@ struct MessagesView: View {
                                 restoreKeyboardAtNewestMessage = false
                             }
                         } else {
+                            showingAttachmentMenu = false
                             restoreKeyboardAtNewestMessage =
                                 isComposerFocused
                             isComposerFocused = false
@@ -198,6 +199,11 @@ struct MessagesView: View {
             }
 
             Divider()
+
+            if showingAttachmentMenu {
+                attachmentTray
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
 
             messageComposer
         }
@@ -256,46 +262,6 @@ struct MessagesView: View {
                 )
             }
         }
-        .confirmationDialog(
-            "Add Attachment",
-            isPresented: $showingAttachmentMenu,
-            titleVisibility: .visible
-        ) {
-            Button {
-                showingPhotoPicker = true
-            } label: {
-                Label(
-                    "Choose Photo",
-                    systemImage: "photo"
-                )
-            }
-
-            Button {
-                showingFilePicker = true
-            } label: {
-                Label(
-                    "Choose File",
-                    systemImage: "doc"
-                )
-            }
-
-            Button {
-                showingVoiceRecorder = true
-            } label: {
-                Label(
-                    "Record Voice Message",
-                    systemImage: "mic.fill"
-                )
-            }
-
-            Button("Take Photo — Coming Soon") { }
-                .disabled(true)
-
-            Button("Share Location — Coming Soon") { }
-                .disabled(true)
-
-            Button("Cancel", role: .cancel) { }
-        }
         .photosPicker(
             isPresented: $showingPhotoPicker,
             selection: $selectedPhoto,
@@ -334,12 +300,80 @@ struct MessagesView: View {
             messageText: $messageText,
             isFocused: $isComposerFocused,
             onAttachmentTapped: {
-                showingAttachmentMenu = true
+                withAnimation(.snappy(duration: 0.22)) {
+                    showingAttachmentMenu.toggle()
+                }
             },
             onSendTapped: {
                 sendMessage()
             }
         )
+    }
+
+    private var attachmentTray: some View {
+        HStack(spacing: 12) {
+            attachmentTrayButton(
+                title: "Photo",
+                systemImage: "photo.fill"
+            ) {
+                showingAttachmentMenu = false
+                showingPhotoPicker = true
+            }
+
+            attachmentTrayButton(
+                title: "File",
+                systemImage: "doc.fill"
+            ) {
+                showingAttachmentMenu = false
+                showingFilePicker = true
+            }
+
+            attachmentTrayButton(
+                title: "Voice",
+                systemImage: "mic.fill"
+            ) {
+                showingAttachmentMenu = false
+                showingVoiceRecorder = true
+            }
+
+            Button {
+                withAnimation(.snappy(duration: 0.22)) {
+                    showingAttachmentMenu = false
+                }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.headline)
+                    .frame(width: 42, height: 42)
+                    .background(Color.secondary.opacity(0.12), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close attachments")
+        }
+        .padding(.horizontal)
+        .padding(.top, 10)
+        .background(.bar)
+    }
+
+    private func attachmentTrayButton(
+        title: String,
+        systemImage: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.title3)
+                Text(title)
+                    .font(.caption.weight(.medium))
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 54)
+            .background(
+                Color.accentColor.opacity(0.12),
+                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private func sendAnnounce() {
