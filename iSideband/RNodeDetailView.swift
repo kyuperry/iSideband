@@ -79,12 +79,6 @@ struct RNodeDetailView: View {
                         "Copy Link Destination Hash"
                 )
 
-                telemetryRow(
-                    title: "Link Core",
-                    value: reticulumCore.status,
-                    systemImage: "network"
-                )
-
                 identityRow(
                     title: "Destination Hash",
                     value: destinationHash,
