@@ -14,6 +14,8 @@ struct SettingsView: View {
 
     @State private var gpsEnabled = false
     @State private var bluetoothEnabled = true
+    @AppStorage("shareLocationOnMesh")
+    private var shareLocationOnMesh = false
 
     @AppStorage(
         NotificationPreferenceKey.nearbyNodes
@@ -379,6 +381,17 @@ struct SettingsView: View {
         some View {
         Section("Automatic Announcements") {
             Toggle(
+                "Share Location on Situation Map",
+                isOn: $shareLocationOnMesh
+            )
+
+            Text(
+                "Includes your latest iPhone GPS position in outgoing messages so Sideband recipients can display this node on their Situation Map."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Toggle(
                 "Auto-Announce Identity",
                 isOn: $automaticAnnounceEnabled
             )
@@ -418,6 +431,15 @@ struct SettingsView: View {
         ) { _, _ in
             ReticulumCoreBridge.shared
                 .automaticAnnounceSettingsDidChange()
+        }
+        .onChange(of: shareLocationOnMesh) { _, enabled in
+            if enabled {
+                locationTelemetry.setEnabled(true)
+                locationTelemetry.refresh()
+            }
+            ReticulumCoreBridge.shared.setAnnounceLocation(
+                enabled ? locationTelemetry.location : nil
+            )
         }
     }
 

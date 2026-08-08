@@ -110,7 +110,7 @@ struct MeshMapView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 18)
         }
-        .navigationTitle("Mesh Map")
+        .navigationTitle("Situation Map")
         .navigationBarTitleDisplayMode(.inline)
     }
 
@@ -222,7 +222,7 @@ struct GeographicMeshMapView: View {
                     Spacer()
 
                     dismissibleStatusBanner(
-                        title: "Geographic Mesh Map",
+                        title: "Situation Map",
                         message:
                             "Your connected RNode is shown at this iPhone's live GPS position. Nodes that opt in to location sharing will appear here.",
                         isPresented:

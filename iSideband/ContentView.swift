@@ -68,7 +68,12 @@ struct ContentView: View {
             let gpsEnabled = UserDefaults.standard.bool(
                 forKey: "gpsInterfaceEnabled"
             )
-            LocationTelemetryManager.shared.setEnabled(gpsEnabled)
+            let meshLocationEnabled = UserDefaults.standard.bool(
+                forKey: "shareLocationOnMesh"
+            )
+            LocationTelemetryManager.shared.setEnabled(
+                gpsEnabled || meshLocationEnabled
+            )
             openPendingNotification()
         }
         .onChange(

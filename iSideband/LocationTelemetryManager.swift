@@ -76,6 +76,12 @@ extension LocationTelemetryManager: CLLocationManagerDelegate {
         Task { @MainActor in
             location = newest
             errorMessage = nil
+            let sharingEnabled = UserDefaults.standard.bool(
+                forKey: "shareLocationOnMesh"
+            )
+            ReticulumCoreBridge.shared.setAnnounceLocation(
+                sharingEnabled ? newest : nil
+            )
         }
     }
 

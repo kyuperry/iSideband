@@ -1,6 +1,7 @@
 import CryptoKit
 import Combine
 import Foundation
+import CoreLocation
 
 enum AutomaticAnnouncePreferenceKey {
     static let enabled =
@@ -305,6 +306,24 @@ final class ReticulumCoreBridge: ObservableObject {
 
     func automaticAnnounceSettingsDidChange() {
         checkScheduledAutomaticAnnounce()
+    }
+
+    func setAnnounceLocation(_ location: CLLocation?) {
+        guard handle != 0 else { return }
+        guard let location else {
+            _ = runcore_set_announce_location(
+                handle, 0, 0, 0, 0, 0
+            )
+            return
+        }
+        _ = runcore_set_announce_location(
+            handle,
+            location.coordinate.latitude,
+            location.coordinate.longitude,
+            location.horizontalAccuracy,
+            Int64(location.timestamp.timeIntervalSince1970),
+            1
+        )
     }
 
     func radioDataChannelReady() {
