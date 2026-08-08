@@ -2,6 +2,7 @@ package rns
 
 import (
 	"testing"
+	"time"
 
 	umsgpack "github.com/svanichkin/go-reticulum/rns/vendor"
 )
@@ -182,6 +183,40 @@ func TestReceiverImmediatelyRequestsGapsAfterWindowTail(t *testing.T) {
 	resource.outstanding = 0
 	if !resource.shouldRequestAfterPart(7) {
 		t.Fatal("did not advance after a complete window")
+	}
+}
+
+func TestReceivePartMatchesTailOfRequestedWindow(t *testing.T) {
+	const window = 4
+	parts := make([][]byte, 8)
+	hashmap := make([][]byte, len(parts))
+	resource := &Resource{
+		status:            ResourceTransferring,
+		link:              &Link{},
+		randomHash:        []byte{1, 2, 3, 4},
+		parts:             parts,
+		hashmap:           hashmap,
+		totalParts:        len(parts),
+		consecutiveHeight: 0,
+		window:            window,
+		windowMax:         window,
+		outstanding:       2,
+		highestRequested:  99,
+		reqResp:           time.Now(),
+		maxRetries:        MaxRetries,
+	}
+
+	// With consecutiveHeight=0, RequestNext requests indices 1 through 4.
+	// Index 4 is the tail and was previously excluded by ReceivePart's range.
+	tailData := []byte("requested-window-tail")
+	resource.hashmap[4] = resource.getMapHash(tailData)
+	resource.ReceivePart(&Packet{Data: tailData})
+
+	if resource.parts[4] == nil {
+		t.Fatal("tail packet of requested window was not accepted")
+	}
+	if resource.receivedCount != 1 {
+		t.Fatalf("received count=%d want 1", resource.receivedCount)
 	}
 }
 

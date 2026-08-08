@@ -73,6 +73,7 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
         return LXMFMessageCodec()
             .decodeAnnounceDisplayName(appData)
     }
+
 }
 
 enum ReticulumAnnounceError: LocalizedError {

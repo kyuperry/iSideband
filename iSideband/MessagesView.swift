@@ -7,6 +7,7 @@ enum DirectMessageType: String, Codable, Hashable {
     case text
     case photo
     case file
+    case voiceNote
 }
 
 struct ChatMessage: Identifiable, Codable, Hashable {
@@ -65,7 +66,7 @@ struct MessagesView: View {
     @State private var showingAttachmentMenu = false
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
-    @State private var showingVoiceMessageNotice = false
+    @State private var showingVoiceRecorder = false
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
@@ -204,17 +205,10 @@ struct MessagesView: View {
         } message: {
             Text("Announcement sent.")
         }
-        .alert(
-            "Voice Message",
-            isPresented: $showingVoiceMessageNotice
-        ) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(
-                """
-                Voice messaging has been added to the attachment menu. Microphone recording and LXMF audio transfer will be connected in the next step.
-                """
-            )
+        .sheet(isPresented: $showingVoiceRecorder) {
+            VoiceNoteRecorderView { url in
+                sendVoiceNote(at: url)
+            }
         }
         .onAppear {
             lxmfManager.start(
@@ -259,7 +253,7 @@ struct MessagesView: View {
             }
 
             Button {
-                showingVoiceMessageNotice = true
+                showingVoiceRecorder = true
             } label: {
                 Label(
                     "Record Voice Message",
@@ -431,6 +425,7 @@ struct MessagesView: View {
             status: displayStatus(for: message),
             isPhoto: message.type == .photo,
             isFile: message.type == .file,
+            isVoiceNote: message.type == .voiceNote,
             attachmentName: message.attachmentName,
             attachmentPath: message.attachmentPath,
             attachmentSize: message.attachmentSize,
@@ -456,7 +451,7 @@ struct MessagesView: View {
     private func saveableAttachmentURL(
         for message: ChatMessage
     ) -> URL? {
-        guard message.type == .photo || message.type == .file,
+        guard message.type == .photo || message.type == .file || message.type == .voiceNote,
               let path = message.attachmentPath else {
             return nil
         }
@@ -664,6 +659,31 @@ struct MessagesView: View {
         )
     }
 
+    private func sendVoiceNote(at url: URL) {
+        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?.intValue
+        guard let peer = contact?.peer,
+              let queued = lxmfManager.sendAttachment(
+                at: url,
+                name: url.lastPathComponent,
+                mimeType: "audio/mp4",
+                type: .voiceNote,
+                to: peer
+              ) else {
+            messages.append(ChatMessage(
+                text: "", isOutgoing: true, status: "Failed",
+                type: .voiceNote, attachmentName: url.lastPathComponent,
+                attachmentPath: url.path, attachmentSize: size
+            ))
+            return
+        }
+        messages.append(ChatMessage(
+            text: "", isOutgoing: true, status: "Sending",
+            lxmfMessageID: queued.id, type: .voiceNote,
+            attachmentName: url.lastPathComponent,
+            attachmentPath: url.path, attachmentSize: size
+        ))
+    }
+
     private func copyMessage(
         _ message: ChatMessage
     ) {
@@ -676,7 +696,7 @@ struct MessagesView: View {
             return
         }
 
-        if message.type == .file {
+        if message.type == .file || message.type == .voiceNote {
             UIPasteboard.general.string =
                 message.attachmentName ?? "Attachment"
 
@@ -747,8 +767,9 @@ struct MessagesView: View {
     }
 
     private func lxmfPhotoData(from image: UIImage) -> Data? {
+        let targetPhotoBytes = 20_000
         var current = image
-        for maximumDimension in [1280.0, 1024.0, 800.0, 640.0, 480.0] {
+        for maximumDimension in [1280.0, 1024.0, 800.0, 640.0, 480.0, 360.0, 240.0] {
             let scale = min(
                 1,
                 maximumDimension / max(current.size.width, current.size.height)
@@ -762,9 +783,9 @@ struct MessagesView: View {
                     current.draw(in: CGRect(origin: .zero, size: size))
                 }
             }
-            for quality in [0.75, 0.6, 0.45, 0.3] {
+            for quality in [0.75, 0.6, 0.45, 0.3, 0.2, 0.15] {
                 if let data = current.jpegData(compressionQuality: quality),
-                   data.count <= LXMFManager.maximumAttachmentBytes {
+                   data.count <= targetPhotoBytes {
                     return data
                 }
             }

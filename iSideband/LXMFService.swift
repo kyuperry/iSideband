@@ -169,6 +169,11 @@ final class LXMFService: ObservableObject {
             return
         }
 
+        guard bluetooth?.isRNodeDataChannelReady == true else {
+            statusMessage = "LXMF queue waiting for RNode data channel"
+            return
+        }
+
         guard let message =
             manager?.nextQueuedMessage()
         else {
@@ -212,16 +217,7 @@ final class LXMFService: ObservableObject {
         }
 
         if let attachment = message.attachment {
-            let attachmentURL: URL
-
-            if attachment.path.hasPrefix("file://"),
-               let parsedURL = URL(string: attachment.path) {
-                attachmentURL = parsedURL
-            } else {
-                attachmentURL = URL(
-                    fileURLWithPath: attachment.path
-                )
-            }
+            let attachmentURL = attachment.resolvedFileURL()
 
             print(
                 """

@@ -237,6 +237,16 @@ func runcore_announce(handle C.uint64_t) C.int32_t {
 	return 0
 }
 
+//export runcore_set_announce_location
+func runcore_set_announce_location(handle C.uint64_t, latitude C.double, longitude C.double, accuracy C.double, timestamp C.int64_t, enabled C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	h.node.SetAnnounceLocation(float64(latitude), float64(longitude), float64(accuracy), int64(timestamp), enabled != 0)
+	return 0
+}
+
 //export runcore_send_text
 func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, direct C.int32_t) C.int32_t {
 	h := getHandle(handle)
@@ -247,7 +257,8 @@ func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, 
 	if direct != 0 {
 		method = lxmf.MethodDirect
 	}
-	_, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: method, Content: C.GoString(content)})
+	fields := h.node.LocationTelemetryFields()
+	_, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: method, Content: C.GoString(content), Fields: fields})
 	if err != nil {
 		rns.Log(fmt.Sprintf("runcore_send_text failed: %v", err), rns.LOG_ERROR)
 		return 2

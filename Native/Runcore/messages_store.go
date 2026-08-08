@@ -51,7 +51,240 @@ func (n *Node) persistInboundMessage(m *lxmf.LXMessage) {
 	prefix := formatMessageMinute(ts)
 	tsUnix := ts.Unix()
 	to := strings.ToLower(strings.TrimSpace(n.DestinationHashHex()))
+	// Android Sideband attachment support
+	// Android Sideband native LXMF file attachment support.
 
+	// Android Sideband native LXMF image support.
+	if m.Fields != nil {
+		if value, ok := m.Fields[lxmf.FieldImage]; ok {
+			imageField, ok := value.([]any)
+			if !ok || len(imageField) < 2 {
+				rns.Logf(
+					rns.LOG_WARNING,
+					"runcore: malformed image field type=%T",
+					value,
+				)
+			} else {
+				var imageExtension string
+				switch value := imageField[0].(type) {
+				case string:
+					imageExtension = value
+				case []byte:
+					imageExtension = string(value)
+				}
+
+				imageExtension = strings.TrimPrefix(
+					strings.ToLower(
+						strings.TrimSpace(imageExtension),
+					),
+					".",
+				)
+
+				if imageExtension == "" {
+					imageExtension = "jpg"
+				}
+
+				imageData, ok := imageField[1].([]byte)
+				if !ok || len(imageData) == 0 {
+					rns.Logf(
+						rns.LOG_WARNING,
+						"runcore: unsupported image data type %T",
+						imageField[1],
+					)
+				} else {
+					imageName :=
+						"image." + imageExtension
+
+					imagePath := uniquePath(
+						filepath.Join(
+							dir,
+							prefix+" "+imageName,
+						),
+					)
+
+					if err := os.WriteFile(
+						imagePath,
+						imageData,
+						0o644,
+					); err != nil {
+						rns.Logf(
+							rns.LOG_WARNING,
+							"runcore: save Sideband image: %v",
+							err,
+						)
+					} else {
+						n.setInboundMessageFileTags(
+							imagePath,
+							tsUnix,
+							src,
+							to,
+						)
+
+						rns.Logf(
+							rns.LOG_NOTICE,
+							"runcore: saved Sideband image name=%s size=%d",
+							imageName,
+							len(imageData),
+						)
+
+						imageCaption :=
+							strings.TrimSpace(
+								m.ContentAsString(),
+							)
+
+						if imageCaption != "" {
+							captionPath := uniquePath(
+								filepath.Join(
+									dir,
+									prefix+".txt",
+								),
+							)
+
+							if err := os.WriteFile(
+								captionPath,
+								[]byte(imageCaption),
+								0o644,
+							); err == nil {
+								n.setInboundMessageFileTags(
+									captionPath,
+									tsUnix,
+									src,
+									to,
+								)
+							}
+						}
+
+						return
+					}
+				}
+			}
+		}
+	}
+	if m.Fields != nil {
+		if value, ok := m.Fields[lxmf.FieldFileAttachments]; ok {
+			attachments, ok := value.([]any)
+			if !ok {
+				rns.Logf(
+					rns.LOG_WARNING,
+					"runcore: unexpected file attachment field type %T",
+					value,
+				)
+			} else {
+				savedAttachment := false
+
+				for _, rawAttachment := range attachments {
+					attachment, ok := rawAttachment.([]any)
+					if !ok || len(attachment) < 2 {
+						rns.Logf(
+							rns.LOG_WARNING,
+							"runcore: malformed file attachment type=%T",
+							rawAttachment,
+						)
+						continue
+					}
+
+					var attachmentName string
+					switch value := attachment[0].(type) {
+					case string:
+						attachmentName = value
+					case []byte:
+						attachmentName = string(value)
+					default:
+						rns.Logf(
+							rns.LOG_WARNING,
+							"runcore: unsupported attachment name type %T",
+							attachment[0],
+						)
+						continue
+					}
+
+					attachmentData, ok := attachment[1].([]byte)
+					if !ok || len(attachmentData) == 0 {
+						rns.Logf(
+							rns.LOG_WARNING,
+							"runcore: unsupported attachment data type %T",
+							attachment[1],
+						)
+						continue
+					}
+
+					attachmentName =
+						sanitizeMessageName(attachmentName)
+
+					if attachmentName == "" {
+						attachmentName = "attachment.bin"
+					}
+
+					attachmentPath := uniquePath(
+						filepath.Join(
+							dir,
+							prefix+" "+attachmentName,
+						),
+					)
+
+					if err := os.WriteFile(
+						attachmentPath,
+						attachmentData,
+						0o644,
+					); err != nil {
+						rns.Logf(
+							rns.LOG_WARNING,
+							"runcore: save Sideband attachment: %v",
+							err,
+						)
+						continue
+					}
+
+					n.setInboundMessageFileTags(
+						attachmentPath,
+						tsUnix,
+						src,
+						to,
+					)
+
+					savedAttachment = true
+
+					rns.Logf(
+						rns.LOG_NOTICE,
+						"runcore: saved Sideband attachment name=%s size=%d",
+						attachmentName,
+						len(attachmentData),
+					)
+				}
+
+				if savedAttachment {
+					attachmentCaption :=
+						strings.TrimSpace(
+							m.ContentAsString(),
+						)
+
+					if attachmentCaption != "" {
+						captionPath := uniquePath(
+							filepath.Join(
+								dir,
+								prefix+".txt",
+							),
+						)
+
+						if err := os.WriteFile(
+							captionPath,
+							[]byte(attachmentCaption),
+							0o644,
+						); err == nil {
+							n.setInboundMessageFileTags(
+								captionPath,
+								tsUnix,
+								src,
+								to,
+							)
+						}
+					}
+
+					return
+				}
+			}
+		}
+	}
 	title := strings.TrimSpace(m.TitleAsString())
 	content := m.ContentAsString()
 

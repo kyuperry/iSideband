@@ -293,6 +293,7 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "iSideband uses Bluetooth to communicate with nearby RNode radios.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "iSideband uses your iPhone location for local GPS telemetry and optional location sharing.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "iSideband uses the microphone when you record an encrypted voice message.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -332,6 +333,7 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "iSideband uses Bluetooth to communicate with nearby RNode radios.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "iSideband uses your iPhone location for local GPS telemetry and optional location sharing.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "iSideband uses the microphone when you record an encrypted voice message.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

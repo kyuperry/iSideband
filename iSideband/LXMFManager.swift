@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 final class LXMFManager: ObservableObject {
@@ -63,6 +64,10 @@ final class LXMFManager: ObservableObject {
 
         isConnected = false
         identityReady = false
+    }
+
+    func radioDataChannelReady() {
+        service.processQueue()
     }
 
     @discardableResult
@@ -229,6 +234,12 @@ final class LXMFManager: ObservableObject {
         outgoingMessages[index].status = status
         persistQueue()
 
+        if outgoingMessages.contains(where: { $0.status == .sending }) {
+            BackgroundTransferKeeper.shared.beginOutboundTransfer()
+        } else {
+            BackgroundTransferKeeper.shared.endOutboundTransfer()
+        }
+
         print(
             "LXMF message \(id) status changed to \(status.rawValue)"
         )
@@ -240,7 +251,65 @@ final class LXMFManager: ObservableObject {
     }
 }
 
-enum LXMFOutgoingAttachmentType: String, Codable, Hashable { case photo, file }
+@MainActor
+final class BackgroundTransferKeeper {
+    static let shared = BackgroundTransferKeeper()
+
+    private var outboundTask: UIBackgroundTaskIdentifier = .invalid
+    private var bluetoothTask: UIBackgroundTaskIdentifier = .invalid
+    private var bluetoothIdleWorkItem: DispatchWorkItem?
+
+    private init() {}
+
+    func beginOutboundTransfer() {
+        guard outboundTask == .invalid else { return }
+        outboundTask = UIApplication.shared.beginBackgroundTask(
+            withName: "LXMF outbound transfer"
+        ) { [weak self] in
+            Task { @MainActor in
+                self?.endOutboundTransfer()
+            }
+        }
+    }
+
+    func endOutboundTransfer() {
+        guard outboundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(outboundTask)
+        outboundTask = .invalid
+    }
+
+    func noteBluetoothActivity() {
+        if bluetoothTask == .invalid {
+            bluetoothTask = UIApplication.shared.beginBackgroundTask(
+                withName: "LXMF inbound Bluetooth activity"
+            ) { [weak self] in
+                Task { @MainActor in
+                    self?.endBluetoothActivity()
+                }
+            }
+        }
+
+        bluetoothIdleWorkItem?.cancel()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.endBluetoothActivity()
+        }
+        bluetoothIdleWorkItem = workItem
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 15,
+            execute: workItem
+        )
+    }
+
+    private func endBluetoothActivity() {
+        bluetoothIdleWorkItem?.cancel()
+        bluetoothIdleWorkItem = nil
+        guard bluetoothTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(bluetoothTask)
+        bluetoothTask = .invalid
+    }
+}
+
+enum LXMFOutgoingAttachmentType: String, Codable, Hashable { case photo, file, voiceNote }
 
 struct LXMFOutgoingAttachment: Codable, Hashable {
     let path: String

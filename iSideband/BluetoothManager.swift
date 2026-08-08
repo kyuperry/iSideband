@@ -1089,8 +1089,7 @@ final class BluetoothManager:
                 withTimeInterval: 2.0,
                 repeats: true
             ) { _ in
-                guard peripheral.state ==
-                        .connected else {
+                guard peripheral.state == .connected else {
                     return
                 }
                 peripheral.readRSSI()

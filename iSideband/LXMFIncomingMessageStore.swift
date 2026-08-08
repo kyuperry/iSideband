@@ -101,7 +101,7 @@ final class LXMFIncomingMessageStore: ObservableObject {
                 status: "Received",
                 lxmfMessageID: existing.lxmfMessageID,
                 lxmfHash: existing.lxmfHash,
-                type: message.attachmentType == .photo ? .photo : .file,
+                type: directMessageType(for: message),
                 attachmentName: savedAttachment.lastPathComponent,
                 attachmentPath: savedAttachment.path,
                 attachmentSize: attachmentSize(at: savedAttachment)
@@ -118,8 +118,7 @@ final class LXMFIncomingMessageStore: ObservableObject {
                 isOutgoing: false,
                 status: "Received",
                 lxmfHash: messageHash,
-                type: message.attachmentType == .photo ? .photo :
-                    (message.attachmentType == .file ? .file : .text),
+                type: directMessageType(for: message),
                 attachmentName: savedAttachment?.lastPathComponent ?? message.attachmentName,
                 attachmentPath: savedAttachment?.path,
                 attachmentSize: savedAttachment.flatMap {
@@ -157,6 +156,15 @@ final class LXMFIncomingMessageStore: ObservableObject {
         } catch {
             print("Could not persist incoming attachment: \(error)")
             return nil
+        }
+    }
+
+    private func directMessageType(for message: LXMFIncomingMessage) -> DirectMessageType {
+        switch message.attachmentType {
+        case .photo: .photo
+        case .file: .file
+        case .voiceNote: .voiceNote
+        case nil: .text
         }
     }
 

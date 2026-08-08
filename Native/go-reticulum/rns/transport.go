@@ -343,6 +343,13 @@ func TransportRegisterDestination(d *Destination) {
 	if d == nil {
 		return
 	}
+	// Only inbound destinations are local endpoints. Registering outbound
+	// destinations makes path requests for remote peers look local, causing us
+	// to try to emit an announce from an OUT destination instead of forwarding
+	// or answering from the cached route.
+	if d.Direction != DestinationIN {
+		return
+	}
 	destinationsMu.Lock()
 	defer destinationsMu.Unlock()
 	for _, existing := range Destinations {

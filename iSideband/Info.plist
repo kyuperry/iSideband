@@ -2,21 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>NSBluetoothAlwaysUsageDescription</key>
-    <string>iSideband uses Bluetooth to discover and connect to nearby RNode radios.</string>
-
-    <key>NSBluetoothPeripheralUsageDescription</key>
-    <string>iSideband uses Bluetooth to communicate with nearby RNode radios.</string>
-
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>iSideband uses your iPhone location for local GPS telemetry and optional location sharing.</string>
-
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>iSideband uses your local network to connect to Raspberry Pi Reticulum gateways and Wi-Fi HaLow mesh interfaces.</string>
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>bluetooth-central</string>
-    </array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>bluetooth-central</string>
+	</array>
 </dict>
 </plist>

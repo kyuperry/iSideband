@@ -9,7 +9,7 @@ import (
 
 func TestRouterMessageStorageSize(t *testing.T) {
 	router := &LXMRouter{
-		PropagationNode:   true,
+		PropagationNode:    true,
 		PropagationEntries: map[string]*propagationEntry{},
 	}
 	router.PropagationEntries["a"] = &propagationEntry{Size: 10}
@@ -41,8 +41,8 @@ func TestRouterGetWeightAndStampValue(t *testing.T) {
 
 func TestRouterAcknowledgeSyncCompletion(t *testing.T) {
 	router := &LXMRouter{
-		PropagationTransferState:    PRComplete,
-		PropagationTransferProgress: 0.5,
+		PropagationTransferState:         PRComplete,
+		PropagationTransferProgress:      0.5,
 		WantsDownloadOnPathAvailableFrom: []byte("from"),
 	}
 	router.AcknowledgeSyncCompletion(true, nil)
@@ -89,6 +89,26 @@ func TestRouterProcessOutboundCancelledCallback(t *testing.T) {
 	}
 	if len(router.PendingOutbound) != 0 {
 		t.Fatalf("expected pending outbound to be empty")
+	}
+}
+
+func TestRouterProcessOutboundRemovesFailedWithoutRepeatingCallback(t *testing.T) {
+	called := 0
+	msg := &LXMessage{
+		State: MessageFailed,
+		FailedCallback: func(*LXMessage) {
+			called++
+		},
+	}
+	router := &LXMRouter{
+		PendingOutbound: []*LXMessage{msg},
+	}
+	router.ProcessOutbound()
+	if called != 0 {
+		t.Fatalf("expected terminal failure callback not to repeat, got %d calls", called)
+	}
+	if len(router.PendingOutbound) != 0 {
+		t.Fatal("expected failed message to be removed from pending outbound")
 	}
 }
 

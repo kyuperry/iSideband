@@ -200,13 +200,14 @@ struct GeographicMeshMapView: View {
                 if let coordinate =
                     locationManager.coordinate {
                     Annotation(
-                        "Connected RNode",
+                        "",
                         coordinate: coordinate,
                         anchor: .bottom
                     ) {
                         geographicRNodeMarker
                     }
                 }
+
             }
             .mapStyle(selectedMapStyle.mapStyle)
             .mapControls {
@@ -263,16 +264,15 @@ struct GeographicMeshMapView: View {
         VStack(spacing: 5) {
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(Color(.white).opacity(0.88))
                     .frame(
-                        width: 58,
-                        height: 58
+                        width: 50,
+                        height: 50
                     )
                     .shadow(
-                        color:
-                            Color.black.opacity(0.16),
-                        radius: 7,
-                        y: 3
+                        color: Color.black.opacity(0.14),
+                        radius: 5,
+                        y: 2
                     )
 
                 Circle()
@@ -281,8 +281,8 @@ struct GeographicMeshMapView: View {
                         lineWidth: 2.5
                     )
                     .frame(
-                        width: 58,
-                        height: 58
+                        width: 54,
+                        height: 54
                     )
 
                 RadioTowerGlyph()
@@ -295,7 +295,7 @@ struct GeographicMeshMapView: View {
                     )
             }
 
-            Text("Connected RNode")
+            Text("RNode 4272")
                 .font(
                     .caption2.weight(.bold)
                 )
@@ -317,6 +317,7 @@ struct GeographicMeshMapView: View {
             "Connected RNode at current GPS location"
         )
     }
+
 
     private var currentLocationButton: some View {
         VStack {
@@ -710,9 +711,9 @@ struct TopologyMeshMapView: View {
                         height: 96
                     )
                     .shadow(
-                        color:
-                            Color.accentColor.opacity(0.20),
-                        radius: 10
+                        color: Color.black.opacity(0.14),
+                        radius: 5,
+                        y: 2
                     )
 
                 Circle()
@@ -721,8 +722,8 @@ struct TopologyMeshMapView: View {
                         lineWidth: 3
                     )
                     .frame(
-                        width: 96,
-                        height: 96
+                        width: 80,
+                        height: 90
                     )
 
                 RadioTowerGlyph()
@@ -735,7 +736,7 @@ struct TopologyMeshMapView: View {
                     )
             }
 
-            Text("Connected RNode")
+            Text("RNode 4272")
                 .font(
                     .caption.weight(.bold)
                 )
@@ -745,7 +746,7 @@ struct TopologyMeshMapView: View {
                 .font(.caption2)
                 .foregroundStyle(Color.accentColor)
         }
-        .frame(width: 140)
+        .frame(width: 100)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Connected RNode, you"
@@ -797,8 +798,8 @@ struct TopologyMeshMapView: View {
                         )
                     )
                     .frame(
-                        width: 58,
-                        height: 58
+                        width: 52,
+                        height: 60
                     )
 
                 Circle()
@@ -806,7 +807,7 @@ struct TopologyMeshMapView: View {
                         isFresh
                             ? Color.green
                             : Color.accentColor.opacity(0.85),
-                        lineWidth: 3
+                        lineWidth: 2
                     )
                     .frame(
                         width: 58,
@@ -819,8 +820,8 @@ struct TopologyMeshMapView: View {
                 )
                 .font(
                     .system(
-                        size: 22,
-                        weight: .semibold
+                        size: 18,
+                        weight: .medium
                     )
                 )
                 .foregroundStyle(
@@ -828,6 +829,12 @@ struct TopologyMeshMapView: View {
                         ? Color.green
                         : Color.accentColor
                 )
+                .frame(
+                    width: 52,
+                    height: 60,
+                    alignment: .center
+                )
+                .offset(y: 1)
             }
 
             Text(peer.resolvedDisplayName)
@@ -847,7 +854,7 @@ struct TopologyMeshMapView: View {
             .foregroundStyle(.secondary)
             .lineLimit(1)
         }
-        .frame(width: 115)
+        .frame(width: 110)
         .opacity(opacity)
         .scaleEffect(
             isFresh
@@ -1211,114 +1218,49 @@ private struct RadioTowerGlyph: View {
         Canvas { context, size in
             let color = Color.accentColor
             let centerX = size.width / 2
-            let topY = size.height * 0.24
-            let baseY = size.height * 0.84
 
-            var mast = Path()
-            mast.move(
-                to: CGPoint(
-                    x: centerX,
-                    y: topY
-                )
-            )
-            mast.addLine(
-                to: CGPoint(
-                    x: size.width * 0.31,
-                    y: baseY
-                )
-            )
-            mast.move(
-                to: CGPoint(
-                    x: centerX,
-                    y: topY
-                )
-            )
-            mast.addLine(
-                to: CGPoint(
-                    x: size.width * 0.69,
-                    y: baseY
-                )
-            )
-            mast.move(
-                to: CGPoint(
-                    x: size.width * 0.31,
-                    y: baseY
-                )
-            )
-            mast.addLine(
-                to: CGPoint(
-                    x: size.width * 0.69,
-                    y: baseY
-                )
+            let transmitterCenter = CGPoint(
+                x: centerX,
+                y: size.height * 0.31
             )
 
-            context.stroke(
-                mast,
-                with: .color(color),
-                style: StrokeStyle(
-                    lineWidth: 4,
-                    lineCap: .round,
-                    lineJoin: .round
-                )
+            let transmitterRadius =
+                min(size.width, size.height) * 0.105
+
+            let mastWidth =
+                min(size.width, size.height) * 0.13
+
+            let mastTop =
+                transmitterCenter.y
+                + transmitterRadius * 0.55
+
+            let mastBottom =
+                size.height * 0.87
+
+            let mastRect = CGRect(
+                x: centerX - mastWidth / 2,
+                y: mastTop,
+                width: mastWidth,
+                height: mastBottom - mastTop
             )
 
-            let braceLevels: [CGFloat] = [
-                0.42,
-                0.57,
-                0.72
-            ]
-
-            for level in braceLevels {
-                let y = size.height * level
-                let progress =
-                    (y - topY)
-                    / (baseY - topY)
-
-                let leftX =
-                    centerX
-                    + (
-                        size.width * 0.31
-                        - centerX
-                    )
-                    * progress
-
-                let rightX =
-                    centerX
-                    + (
-                        size.width * 0.69
-                        - centerX
-                    )
-                    * progress
-
-                var brace = Path()
-                brace.move(
-                    to: CGPoint(
-                        x: leftX,
-                        y: y
-                    )
-                )
-                brace.addLine(
-                    to: CGPoint(
-                        x: rightX,
-                        y: y
-                    )
-                )
-
-                context.stroke(
-                    brace,
-                    with: .color(color),
-                    style: StrokeStyle(
-                        lineWidth: 2.5,
-                        lineCap: .round
-                    )
-                )
-            }
+            context.fill(
+                Path(
+                    roundedRect: mastRect,
+                    cornerRadius: mastWidth / 2
+                ),
+                with: .color(color)
+            )
 
             let transmitterRect = CGRect(
-                x: centerX - 5,
-                y: topY - 5,
-                width: 10,
-                height: 10
+                x:
+                    transmitterCenter.x
+                    - transmitterRadius,
+                y:
+                    transmitterCenter.y
+                    - transmitterRadius,
+                width: transmitterRadius * 2,
+                height: transmitterRadius * 2
             )
 
             context.fill(
@@ -1326,55 +1268,70 @@ private struct RadioTowerGlyph: View {
                 with: .color(color)
             )
 
-            drawWave(
-                centerX: centerX,
-                centerY: topY,
-                radius: size.width * 0.20,
-                startAngle: .degrees(205),
-                endAngle: .degrees(335),
-                in: &context,
-                color: color
+            drawWavePair(
+                radius:
+                    min(size.width, size.height)
+                    * 0.27,
+                center: transmitterCenter,
+                color: color,
+                in: &context
             )
 
-            drawWave(
-                centerX: centerX,
-                centerY: topY,
-                radius: size.width * 0.31,
-                startAngle: .degrees(205),
-                endAngle: .degrees(335),
-                in: &context,
-                color: color
+            drawWavePair(
+                radius:
+                    min(size.width, size.height)
+                    * 0.43,
+                center: transmitterCenter,
+                color: color,
+                in: &context
             )
         }
+        .accessibilityHidden(true)
     }
 
-    private func drawWave(
-        centerX: CGFloat,
-        centerY: CGFloat,
+    private func drawWavePair(
         radius: CGFloat,
-        startAngle: Angle,
-        endAngle: Angle,
-        in context: inout GraphicsContext,
-        color: Color
+        center: CGPoint,
+        color: Color,
+        in context: inout GraphicsContext
     ) {
-        var path = Path()
+        let lineWidth = max(
+            2.5,
+            radius * 0.13
+        )
 
-        path.addArc(
-            center: CGPoint(
-                x: centerX,
-                y: centerY
-            ),
+        var leftWave = Path()
+        leftWave.addArc(
+            center: center,
             radius: radius,
-            startAngle: startAngle,
-            endAngle: endAngle,
+            startAngle: .degrees(130),
+            endAngle: .degrees(230),
             clockwise: false
         )
 
         context.stroke(
-            path,
+            leftWave,
             with: .color(color),
             style: StrokeStyle(
-                lineWidth: 3.5,
+                lineWidth: lineWidth,
+                lineCap: .round
+            )
+        )
+
+        var rightWave = Path()
+        rightWave.addArc(
+            center: center,
+            radius: radius,
+            startAngle: .degrees(-50),
+            endAngle: .degrees(50),
+            clockwise: false
+        )
+
+        context.stroke(
+            rightWave,
+            with: .color(color),
+            style: StrokeStyle(
+                lineWidth: lineWidth,
                 lineCap: .round
             )
         )

@@ -9,6 +9,7 @@ struct MessageBubble: View {
 
     let isPhoto: Bool
     let isFile: Bool
+    let isVoiceNote: Bool
 
     let attachmentName: String?
     let attachmentPath: String?
@@ -17,6 +18,7 @@ struct MessageBubble: View {
 
     @State private var selectedImage: UIImage?
     @State private var selectedFileURL: URL?
+    @StateObject private var voicePlayer = VoiceNotePlayer()
 
     init(
         text: String,
@@ -25,6 +27,7 @@ struct MessageBubble: View {
         status: String?,
         isPhoto: Bool,
         isFile: Bool,
+        isVoiceNote: Bool = false,
         attachmentName: String?,
         attachmentPath: String?,
         attachmentSize: Int?,
@@ -36,6 +39,7 @@ struct MessageBubble: View {
         self.status = status
         self.isPhoto = isPhoto
         self.isFile = isFile
+        self.isVoiceNote = isVoiceNote
         self.attachmentName = attachmentName
         self.attachmentPath = attachmentPath
         self.attachmentSize = attachmentSize
@@ -171,6 +175,8 @@ struct MessageBubble: View {
                 }
             }
             .buttonStyle(.plain)
+        } else if isVoiceNote {
+            voiceNoteBubble
         } else if isFile {
             Button {
                 openFile()
@@ -248,6 +254,35 @@ struct MessageBubble: View {
                 style: .continuous
             )
         )
+    }
+
+    private var voiceNoteBubble: some View {
+        Button {
+            guard let attachmentPath else { return }
+            let url = URL(fileURLWithPath: attachmentPath)
+            guard FileManager.default.fileExists(atPath: url.path) else { return }
+            voicePlayer.toggle(url: url)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: voicePlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.title)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Voice Message").font(.subheadline.bold())
+                    if let attachmentSize {
+                        Text(ByteCountFormatter.string(fromByteCount: Int64(attachmentSize), countStyle: .file))
+                            .font(.caption)
+                            .opacity(0.8)
+                    }
+                }
+                Image(systemName: "waveform")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(bubbleColor)
+            .foregroundStyle(isOutgoing ? .white : .primary)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private var bubbleColor: Color {

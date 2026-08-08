@@ -92,6 +92,8 @@ type Node struct {
 	outboundMsgFiles map[string]string // msgIDHex -> absolute path in messagesDir
 
 	displayName      string
+	locationMu       sync.RWMutex
+	location         *AnnounceLocation
 	avatarPNG        []byte
 	avatarHash       []byte
 	avatarMTime      int64
@@ -107,6 +109,26 @@ type Node struct {
 
 	announceInFlight int32
 	announceQueued   int32
+}
+
+type AnnounceLocation struct {
+	Latitude  float64
+	Longitude float64
+	Accuracy  float64
+	Timestamp int64
+}
+
+func (n *Node) SetAnnounceLocation(latitude, longitude, accuracy float64, timestamp int64, enabled bool) {
+	if n == nil {
+		return
+	}
+	n.locationMu.Lock()
+	defer n.locationMu.Unlock()
+	if !enabled {
+		n.location = nil
+		return
+	}
+	n.location = &AnnounceLocation{Latitude: latitude, Longitude: longitude, Accuracy: accuracy, Timestamp: timestamp}
 }
 
 func (n *Node) ProfileName() string {

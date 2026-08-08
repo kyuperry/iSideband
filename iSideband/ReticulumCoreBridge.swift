@@ -1,6 +1,7 @@
 import CryptoKit
 import Combine
 import Foundation
+import CoreLocation
 
 enum AutomaticAnnouncePreferenceKey {
     static let enabled =
@@ -303,6 +304,24 @@ final class ReticulumCoreBridge: ObservableObject {
         return true
     }
 
+    func setAnnounceLocation(_ location: CLLocation?) {
+        guard handle != 0 else { return }
+        guard let location else {
+            _ = runcore_set_announce_location(
+                handle, 0, 0, 0, 0, 0
+            )
+            return
+        }
+        _ = runcore_set_announce_location(
+            handle,
+            location.coordinate.latitude,
+            location.coordinate.longitude,
+            location.horizontalAccuracy,
+            Int64(location.timestamp.timeIntervalSince1970),
+            1
+        )
+    }
+
     func automaticAnnounceSettingsDidChange() {
         checkScheduledAutomaticAnnounce()
     }
@@ -552,7 +571,9 @@ final class ReticulumCoreBridge: ObservableObject {
             attachmentPath: attachmentPath.isEmpty ? nil : attachmentPath,
             attachmentName: attachmentName.isEmpty ? nil : attachmentName,
             attachmentMIME: attachmentMIME.isEmpty ? nil : attachmentMIME,
-            attachmentType: attachmentType == 1 ? .photo : (attachmentType == 2 ? .file : nil)
+            attachmentType: attachmentType == 1
+                ? .photo
+                : (attachmentMIME.hasPrefix("audio/") ? .voiceNote : (attachmentType == 2 ? .file : nil))
         )
         guard LXMFIncomingMessageStore.shared.save(message) else { return }
         let senderName = LXMFContactStore.shared.contact(for: message.sourceHashHex)?.displayName
