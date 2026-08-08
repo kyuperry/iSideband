@@ -804,7 +804,7 @@ struct MessagesView: View {
               let queued = lxmfManager.sendAttachment(
                 at: url,
                 name: url.lastPathComponent,
-                mimeType: "audio/mp4",
+                mimeType: "audio/ogg",
                 type: .voiceNote,
                 to: peer
               ) else {

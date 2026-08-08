@@ -178,12 +178,24 @@ struct MessageBubble: View {
         } else if isVoiceNote {
             Button {
                 guard let attachmentPath else { return }
+                guard isPlayableVoiceNote else {
+                    return
+                }
                 voicePlayer.toggle(url: URL(fileURLWithPath: attachmentPath))
             } label: {
                 HStack(spacing: 10) {
-                    Image(systemName: voicePlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill")
+                    Image(systemName: voiceIconName)
                         .font(.title)
-                    Text("Voice Message").font(.subheadline.bold())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Voice Message").font(.subheadline.bold())
+                        if isCodec2VoiceNote {
+                            Text("Codec2 audio — use High-quality Voice in Sideband")
+                                .font(.caption2)
+                        } else if let error = voicePlayer.errorMessage {
+                            Text(error)
+                                .font(.caption2)
+                        }
+                    }
                     Image(systemName: "waveform")
                 }
                 .padding(.horizontal, 14).padding(.vertical, 10)
@@ -275,6 +287,24 @@ struct MessageBubble: View {
         isOutgoing
             ? Color.accentColor
             : Color.secondary.opacity(0.2)
+    }
+
+    private var isPlayableVoiceNote: Bool {
+        guard let extensionName = attachmentPath.map({
+            URL(fileURLWithPath: $0).pathExtension.lowercased()
+        }) else {
+            return false
+        }
+        return extensionName == "ogg" || extensionName == "m4a"
+    }
+
+    private var isCodec2VoiceNote: Bool {
+        attachmentPath?.lowercased().hasSuffix(".c2") == true
+    }
+
+    private var voiceIconName: String {
+        guard isPlayableVoiceNote else { return "waveform.badge.exclamationmark" }
+        return voicePlayer.isPlaying ? "pause.circle.fill" : "play.circle.fill"
     }
 
     private func openFile() {

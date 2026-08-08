@@ -295,7 +295,11 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 		mimeName = strings.ToLower(strings.TrimSpace(C.GoString(mimeType)))
 	}
 	fields := map[any]any{}
-	if strings.HasPrefix(mimeName, "image/") {
+	if mimeName == "audio/ogg" || mimeName == "audio/opus" {
+		// Sideband renders and plays voice messages only when they use the
+		// standard LXMF audio field [AM_OPUS_OGG, oggBytes].
+		fields[lxmf.FieldAudio] = []any{lxmf.AMOpusOgg, data}
+	} else if strings.HasPrefix(mimeName, "image/") {
 		format := strings.TrimPrefix(mimeName, "image/")
 		if format == "" {
 			format = strings.TrimPrefix(
@@ -414,6 +418,35 @@ func inboundAttachment(m *lxmf.LXMessage) (path, name, mimeName string, attachme
 			return "", "", "", 0
 		}
 		return path, name, mimeName, 1
+	}
+
+	if value, ok := lxmfFieldValue(m.Fields, lxmf.FieldAudio); ok {
+		pair, pairOK := value.([]any)
+		if !pairOK || len(pair) < 2 {
+			return
+		}
+		mode := numericFieldKey(pair[0])
+		data, dataOK := pair[1].([]byte)
+		if !dataOK || len(data) == 0 {
+			return
+		}
+		if mode == lxmf.AMOpusOgg {
+			name = "voice.ogg"
+			mimeName = "audio/ogg"
+		} else if mode >= lxmf.AMCodec2700C && mode <= lxmf.AMCodec23200 {
+			// Preserve Sideband's low-bandwidth Codec2 payload and identify it as
+			// voice instead of silently producing an empty text message.
+			name = fmt.Sprintf("voice-codec2-%02x.c2", mode)
+			mimeName = fmt.Sprintf("audio/x-codec2; mode=%d", mode)
+		} else {
+			name = fmt.Sprintf("voice-mode-%02x.bin", mode)
+			mimeName = fmt.Sprintf("audio/x-lxmf; mode=%d", mode)
+		}
+		path = persistInboundAttachment(m, name, data)
+		if path == "" {
+			return "", "", "", 0
+		}
+		return path, name, mimeName, 3
 	}
 
 	value, ok := lxmfFieldValue(

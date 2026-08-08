@@ -42,12 +42,12 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let directory = root.appendingPathComponent("DirectAttachments", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let url = directory.appendingPathComponent("voice-\(UUID().uuidString).m4a")
+            let url = directory.appendingPathComponent("voice-\(UUID().uuidString).ogg")
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
             let settings: [String: Any] = [
-                AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
+                AVFormatIDKey: Int(kAudioFormatOpus),
                 AVSampleRateKey: 16_000,
                 AVNumberOfChannelsKey: 1,
                 AVEncoderBitRateKey: 16_000,
@@ -143,21 +143,82 @@ struct VoiceNoteRecorderView: View {
 @MainActor
 final class VoiceNotePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
     @Published private(set) var isPlaying = false
+    @Published private(set) var errorMessage: String?
     private var player: AVAudioPlayer?
+    private var opusPlayer: AVPlayer?
+    private var endObserver: NSObjectProtocol?
+
+    deinit {
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+    }
 
     func toggle(url: URL) {
-        if isPlaying { player?.stop(); isPlaying = false; return }
+        if isPlaying {
+            player?.stop()
+            opusPlayer?.pause()
+            isPlaying = false
+            return
+        }
+        errorMessage = nil
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playback, mode: .spokenAudio)
             try session.setActive(true)
+
+            if url.pathExtension.lowercased() == "ogg" {
+                playOpus(url: url)
+                return
+            }
+
             player = try AVAudioPlayer(contentsOf: url)
             player?.delegate = self
-            isPlaying = player?.play() == true
-        } catch { isPlaying = false }
+            player?.volume = 1
+            guard player?.prepareToPlay() == true,
+                  player?.play() == true else {
+                throw PlaybackError.couldNotStart
+            }
+            isPlaying = true
+        } catch {
+            isPlaying = false
+            errorMessage = "Could not play audio: \(error.localizedDescription)"
+            print("VOICE PLAYBACK FAILED: \(error)")
+        }
+    }
+
+    private func playOpus(url: URL) {
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+        let item = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: item)
+        player.volume = 1
+        opusPlayer = player
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.isPlaying = false }
+        }
+        player.play()
+        isPlaying = true
+        Task {
+            try? await Task.sleep(for: .milliseconds(500))
+            guard item.status == .failed else { return }
+            isPlaying = false
+            errorMessage = "This iPhone could not decode the Sideband Ogg/Opus audio."
+            print("VOICE OPUS PLAYBACK FAILED: \(item.error?.localizedDescription ?? "unknown error")")
+        }
     }
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in isPlaying = false }
+    }
+
+    private enum PlaybackError: LocalizedError {
+        case couldNotStart
+        var errorDescription: String? { "The audio decoder did not start." }
     }
 }
