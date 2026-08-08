@@ -1300,7 +1300,9 @@ func (l *Link) handleLRProof(packet *Packet) {
 	if !l.establishedCB {
 		l.establishedCB = true
 		if cb := l.callbacks.LinkEstablished; cb != nil {
-			go cb(l)
+			// LXMF configures resource acceptance here. Run this before the peer
+			// can advertise its first direct-delivery resource.
+			cb(l)
 		}
 	}
 }
@@ -1337,7 +1339,9 @@ func (l *Link) handleLRRTT(packet *Packet) {
 
 	if l.owner != nil && l.owner.callbacks.LinkEstablished != nil && !l.establishedCB {
 		l.establishedCB = true
-		go l.owner.callbacks.LinkEstablished(l)
+		// Avoid briefly leaving an established incoming Link at
+		// LinkAcceptNone, which rejects an immediate Sideband delivery.
+		l.owner.callbacks.LinkEstablished(l)
 	}
 }
 
