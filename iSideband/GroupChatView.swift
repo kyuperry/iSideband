@@ -272,6 +272,7 @@ struct GroupChatView: View {
             ),
             isPhoto: message.type == .photo,
             isFile: message.type == .file,
+            isVoiceNote: false,
             attachmentName: message.attachmentName,
             attachmentPath: message.attachmentPath,
             attachmentSize: message.attachmentSize

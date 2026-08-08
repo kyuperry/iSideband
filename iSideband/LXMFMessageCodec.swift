@@ -23,6 +23,7 @@ struct LXMFIncomingMessage: Identifiable, Hashable {
 enum LXMFIncomingAttachmentType: String, Hashable {
     case photo
     case file
+    case voiceNote
 }
 
 enum LXMFMessageCodecError: Error {

@@ -181,7 +181,8 @@ struct RNodeDetailView: View {
             }
 
             Section("Radio Telemetry") {
-                if let batteryPercent = bluetooth.batteryPercent {
+                if bluetooth.hasFreshRNodeBatteryTelemetry,
+                   let batteryPercent = bluetooth.batteryPercent {
                     telemetryRow(
                         title: "Battery",
                         value: {

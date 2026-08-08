@@ -240,7 +240,11 @@ final class LXMFManager: ObservableObject {
     }
 }
 
-enum LXMFOutgoingAttachmentType: String, Codable, Hashable { case photo, file }
+enum LXMFOutgoingAttachmentType: String, Codable, Hashable {
+    case photo
+    case file
+    case voiceNote
+}
 
 struct LXMFOutgoingAttachment: Codable, Hashable {
     let path: String

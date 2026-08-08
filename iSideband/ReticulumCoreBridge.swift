@@ -552,7 +552,11 @@ final class ReticulumCoreBridge: ObservableObject {
             attachmentPath: attachmentPath.isEmpty ? nil : attachmentPath,
             attachmentName: attachmentName.isEmpty ? nil : attachmentName,
             attachmentMIME: attachmentMIME.isEmpty ? nil : attachmentMIME,
-            attachmentType: attachmentType == 1 ? .photo : (attachmentType == 2 ? .file : nil)
+            attachmentType: attachmentType == 1
+                ? .photo
+                : (attachmentMIME.hasPrefix("audio/")
+                    ? .voiceNote
+                    : (attachmentType == 2 ? .file : nil))
         )
         guard LXMFIncomingMessageStore.shared.save(message) else { return }
         let senderName = LXMFContactStore.shared.contact(for: message.sourceHashHex)?.displayName

@@ -24,6 +24,8 @@ final class LXMFMessageNotificationManager {
             content.body = message.content
         } else if message.attachmentType == .photo {
             content.body = "Photo"
+        } else if message.attachmentType == .voiceNote {
+            content.body = "Voice message"
         } else if message.attachmentType == .file {
             content.body = "File: \(message.attachmentName ?? "Attachment")"
         } else {
