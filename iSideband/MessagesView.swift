@@ -70,6 +70,9 @@ struct MessagesView: View {
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
+    @FocusState private var isComposerFocused: Bool
+    @State private var isViewingNewestMessage = true
+    @State private var restoreKeyboardAtNewestMessage = false
 
     @State private var selectedPhoto: PhotosPickerItem?
 
@@ -158,6 +161,30 @@ struct MessagesView: View {
                                 .id("BOTTOM")
                         }
                         .padding()
+                    }
+                    .scrollDismissesKeyboard(.immediately)
+                    .onScrollGeometryChange(for: Bool.self) { geometry in
+                        let distanceFromBottom =
+                            geometry.contentSize.height
+                            - geometry.containerSize.height
+                            - geometry.contentOffset.y
+                        return distanceFromBottom <= 24
+                    } action: { _, isAtBottom in
+                        guard isAtBottom != isViewingNewestMessage else {
+                            return
+                        }
+
+                        isViewingNewestMessage = isAtBottom
+                        if isAtBottom {
+                            if restoreKeyboardAtNewestMessage {
+                                isComposerFocused = true
+                                restoreKeyboardAtNewestMessage = false
+                            }
+                        } else {
+                            restoreKeyboardAtNewestMessage =
+                                isComposerFocused
+                            isComposerFocused = false
+                        }
                     }
                     .onChange(of: messages.count) {
                         withAnimation {
@@ -305,6 +332,7 @@ struct MessagesView: View {
     private var messageComposer: some View {
         MessageComposer(
             messageText: $messageText,
+            isFocused: $isComposerFocused,
             onAttachmentTapped: {
                 showingAttachmentMenu = true
             },

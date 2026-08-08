@@ -2,6 +2,7 @@ import SwiftUI
 
 struct MessageComposer: View {
     @Binding var messageText: String
+    @FocusState.Binding var isFocused: Bool
 
     let onAttachmentTapped: () -> Void
     let onSendTapped: () -> Void
@@ -35,6 +36,7 @@ struct MessageComposer: View {
                 text: $messageText,
                 axis: .vertical
             )
+            .focused($isFocused)
             .lineLimit(1...5)
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
@@ -71,9 +73,18 @@ struct MessageComposer: View {
 }
 
 #Preview {
-    MessageComposer(
-        messageText: .constant("Hello"),
-        onAttachmentTapped: { },
-        onSendTapped: { }
-    )
+    MessageComposerPreview()
+}
+
+private struct MessageComposerPreview: View {
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        MessageComposer(
+            messageText: .constant("Hello"),
+            isFocused: $isFocused,
+            onAttachmentTapped: { },
+            onSendTapped: { }
+        )
+    }
 }
