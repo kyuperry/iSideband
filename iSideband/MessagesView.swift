@@ -145,6 +145,18 @@ struct MessagesView: View {
                                             )
                                         }
 
+                                        if canResend(message) {
+                                            Button {
+                                                resend(message)
+                                            } label: {
+                                                Label(
+                                                    "Retry",
+                                                    systemImage:
+                                                        "arrow.clockwise"
+                                                )
+                                            }
+                                        }
+
                                         Button(role: .destructive) {
                                             deleteMessage(message)
                                         } label: {
@@ -490,10 +502,7 @@ struct MessagesView: View {
             isVoiceNote: message.type == .voiceNote,
             attachmentName: message.attachmentName,
             attachmentPath: message.attachmentPath,
-            attachmentSize: message.attachmentSize,
-            onResend: canResend(message) ? {
-                resend(message)
-            } : nil
+            attachmentSize: message.attachmentSize
         )
     }
 

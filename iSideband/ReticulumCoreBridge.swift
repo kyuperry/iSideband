@@ -378,6 +378,7 @@ final class ReticulumCoreBridge: ObservableObject {
     func send(
         text: String,
         destinationHash: String,
+        clientID: UUID,
         direct: Bool = true
     ) -> Bool {
         guard handle != 0 else {
@@ -386,12 +387,16 @@ final class ReticulumCoreBridge: ObservableObject {
         return destinationHash.withCString {
             destination in
             text.withCString { content in
-                runcore_send_text(
-                    handle,
-                    destination,
-                    content,
-                    direct ? 1 : 0
-                ) == 0
+                clientID.uuidString.withCString {
+                    clientIDString in
+                    runcore_send_text(
+                        handle,
+                        destination,
+                        content,
+                        direct ? 1 : 0,
+                        clientIDString
+                    ) == 0
+                }
             }
         }
     }

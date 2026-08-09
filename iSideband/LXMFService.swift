@@ -255,12 +255,9 @@ final class LXMFService: ObservableObject {
             text: message.text,
             destinationHash:
                 message.peer.destinationHash,
+            clientID: message.id,
             direct: false
         ) {
-            manager?.updateMessageStatus(
-                id: message.id,
-                status: .sent
-            )
             statusMessage =
                 "Message handed to Reticulum delivery"
             return

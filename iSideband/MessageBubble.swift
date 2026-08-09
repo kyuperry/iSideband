@@ -14,7 +14,6 @@ struct MessageBubble: View {
     let attachmentName: String?
     let attachmentPath: String?
     let attachmentSize: Int?
-    let onResend: (() -> Void)?
 
     @State private var selectedImage: UIImage?
     @State private var selectedFileURL: URL?
@@ -30,8 +29,7 @@ struct MessageBubble: View {
         isVoiceNote: Bool = false,
         attachmentName: String?,
         attachmentPath: String?,
-        attachmentSize: Int?,
-        onResend: (() -> Void)? = nil
+        attachmentSize: Int?
     ) {
         self.text = text
         self.date = date
@@ -43,7 +41,6 @@ struct MessageBubble: View {
         self.attachmentName = attachmentName
         self.attachmentPath = attachmentPath
         self.attachmentSize = attachmentSize
-        self.onResend = onResend
     }
 
     var body: some View {
@@ -73,19 +70,6 @@ struct MessageBubble: View {
                         Text(status)
                     }
 
-                    if let onResend {
-                        Button(action: onResend) {
-                            Label(
-                                "Resend",
-                                systemImage: "arrow.clockwise"
-                            )
-                        }
-                        .buttonStyle(.borderless)
-                        .fontWeight(.semibold)
-                        .accessibilityHint(
-                            "Attempts to send this message again"
-                        )
-                    }
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)

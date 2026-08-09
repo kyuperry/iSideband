@@ -248,21 +248,36 @@ func runcore_set_announce_location(handle C.uint64_t, latitude C.double, longitu
 }
 
 //export runcore_send_text
-func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, direct C.int32_t) C.int32_t {
+func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, direct C.int32_t, clientID *C.char) C.int32_t {
 	h := getHandle(handle)
-	if h == nil || h.node == nil || destination == nil || content == nil {
+	if h == nil || h.node == nil || destination == nil || content == nil || clientID == nil {
 		return 1
 	}
+	id := C.GoString(clientID)
+	notifyStatus(h, id, "sending")
 	method := byte(lxmf.MethodOpportunistic)
 	if direct != 0 {
 		method = lxmf.MethodDirect
 	}
 	fields := h.node.LocationTelemetryFields()
-	_, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: method, Content: C.GoString(content), Fields: fields})
+	msg, err := h.node.SendHex(C.GoString(destination), runcore.SendOptions{Method: method, Content: C.GoString(content), Fields: fields})
 	if err != nil {
 		rns.Log(fmt.Sprintf("runcore_send_text failed: %v", err), rns.LOG_ERROR)
+		notifyStatus(h, id, "failed")
 		return 2
 	}
+	var terminalStatus sync.Once
+	msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) {
+		terminalStatus.Do(func() {
+			notifyStatus(h, id, "delivered")
+		})
+	})
+	msg.RegisterFailedCallback(func(*lxmf.LXMessage) {
+		terminalStatus.Do(func() {
+			notifyStatus(h, id, "failed")
+		})
+	})
+	notifyStatus(h, id, "sent")
 	return 0
 }
 

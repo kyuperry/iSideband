@@ -35,7 +35,7 @@ int32_t runcore_attach_raw_interface(runcore_handle_t handle, runcore_raw_tx_cb 
 int32_t runcore_raw_interface_receive(runcore_handle_t handle, const uint8_t* data, int32_t len);
 int32_t runcore_announce(runcore_handle_t handle);
 int32_t runcore_set_announce_location(runcore_handle_t handle, double latitude, double longitude, double accuracy, int64_t timestamp, int32_t enabled);
-int32_t runcore_send_text(runcore_handle_t handle, const char* destination, const char* content, int32_t direct);
+int32_t runcore_send_text(runcore_handle_t handle, const char* destination, const char* content, int32_t direct, const char* client_id);
 int32_t runcore_send_attachment(runcore_handle_t handle, const char* destination, const char* content, const char* file_path, const char* file_name, const char* mime_type, const char* client_id);
 int32_t runcore_set_inbound_cb(runcore_handle_t handle, runcore_inbound_cb cb, void* user_data);
 int32_t runcore_set_status_cb(runcore_handle_t handle, runcore_status_cb cb, void* user_data);
