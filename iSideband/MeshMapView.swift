@@ -181,6 +181,8 @@ struct GeographicMeshMapView: View {
 
     @StateObject private var locationManager =
         MeshMapLocationManager()
+    @ObservedObject private var reticulumCore =
+        ReticulumCoreBridge.shared
 
     @State private var cameraPosition: MapCameraPosition
     @State private var showInformationBanner = true
@@ -205,6 +207,15 @@ struct GeographicMeshMapView: View {
                         anchor: .bottom
                     ) {
                         geographicRNodeMarker
+                    }
+                }
+                ForEach(remoteNodeLocations) { node in
+                    Annotation(
+                        remoteNodeLabel(node),
+                        coordinate: node.coordinate,
+                        anchor: .bottom
+                    ) {
+                        remoteNodeMarker(node)
                     }
                 }
             }
@@ -285,36 +296,70 @@ struct GeographicMeshMapView: View {
                         height: 58
                     )
 
-                RadioTowerGlyph()
-                    .foregroundStyle(
-                        Color.accentColor
-                    )
-                    .frame(
-                        width: 39,
-                        height: 39
-                    )
+                Image(
+                    systemName:
+                        "antenna.radiowaves.left.and.right"
+                )
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
             }
 
-            Text("Connected RNode")
-                .font(
-                    .caption2.weight(.bold)
-                )
-                .foregroundStyle(.primary)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .overlay {
-                    Capsule()
-                        .stroke(
-                            Color.secondary.opacity(0.2),
-                            lineWidth: 1
-                        )
-                }
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Connected RNode at current GPS location"
+        )
+    }
+
+    private var remoteNodeLocations: [RemoteNodeLocation] {
+        reticulumCore.remoteNodeLocations.values.sorted {
+            $0.sourceHash < $1.sourceHash
+        }
+    }
+
+    private func remoteNodeLabel(
+        _ node: RemoteNodeLocation
+    ) -> String {
+        LXMFContactStore.shared.contact(
+            for: node.sourceHash
+        )?.displayName ??
+            "Sideband \(node.sourceHash.prefix(8))"
+    }
+
+    private func remoteNodeMarker(
+        _ node: RemoteNodeLocation
+    ) -> some View {
+        VStack(spacing: 5) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 48, height: 48)
+                    .shadow(
+                        color: Color.black.opacity(0.16),
+                        radius: 6,
+                        y: 3
+                    )
+
+                Circle()
+                    .stroke(Color.orange, lineWidth: 2.5)
+                    .frame(width: 48, height: 48)
+
+                Image(systemName: "antenna.radiowaves.left.and.right")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.orange)
+            }
+
+            Text(remoteNodeLabel(node))
+                .font(.caption2.weight(.bold))
+                .lineLimit(1)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 4)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(remoteNodeLabel(node)) on Situation Map"
         )
     }
 
@@ -725,14 +770,17 @@ struct TopologyMeshMapView: View {
                         height: 96
                     )
 
-                RadioTowerGlyph()
-                    .foregroundStyle(
-                        Color.accentColor
+                Image(
+                    systemName:
+                        "antenna.radiowaves.left.and.right"
+                )
+                .font(
+                    .system(
+                        size: 38,
+                        weight: .semibold
                     )
-                    .frame(
-                        width: 66,
-                        height: 66
-                    )
+                )
+                .foregroundStyle(Color.accentColor)
             }
 
             Text("Connected RNode")

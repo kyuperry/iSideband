@@ -5,7 +5,7 @@ package main
  #include <stdlib.h>
 typedef void (*runcore_log_cb)(void* user_data, int32_t level, const char* line);
 typedef void (*runcore_raw_tx_cb)(void* user_data, const uint8_t* data, int32_t len);
-typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type);
+typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type, int32_t has_location, double latitude, double longitude, double accuracy, int64_t location_timestamp);
 typedef void (*runcore_status_cb)(void* user_data, const char* client_id, const char* status);
 
 static inline void runcore_log_cb_call(runcore_log_cb cb, void* user_data, int32_t level, const char* line) {
@@ -14,8 +14,8 @@ static inline void runcore_log_cb_call(runcore_log_cb cb, void* user_data, int32
 static inline void runcore_raw_tx_cb_call(runcore_raw_tx_cb cb, void* user_data, const uint8_t* data, int32_t len) {
   cb(user_data, data, len);
 }
-static inline void runcore_inbound_cb_call(runcore_inbound_cb cb, void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type) {
-  cb(user_data, source, title, content, timestamp, message_id, attachment_path, attachment_name, attachment_mime, attachment_type);
+static inline void runcore_inbound_cb_call(runcore_inbound_cb cb, void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type, int32_t has_location, double latitude, double longitude, double accuracy, int64_t location_timestamp) {
+  cb(user_data, source, title, content, timestamp, message_id, attachment_path, attachment_name, attachment_mime, attachment_type, has_location, latitude, longitude, accuracy, location_timestamp);
 }
 static inline void runcore_status_cb_call(runcore_status_cb cb, void* user_data, const char* client_id, const char* status) {
   cb(user_data, client_id, status);
@@ -589,7 +589,12 @@ func runcore_set_inbound_cb(handle C.uint64_t, cb C.runcore_inbound_cb, userData
 		path := C.CString(pathValue)
 		name := C.CString(nameValue)
 		mimeName := C.CString(mimeValue)
-		C.runcore_inbound_cb_call(h.inboundCB, h.inboundUser, source, title, content, C.double(m.Timestamp), messageID, path, name, mimeName, C.int32_t(attachmentType))
+		location, hasLocation := runcore.DecodeLocationTelemetry(m.Fields)
+		locationFlag := C.int32_t(0)
+		if hasLocation {
+			locationFlag = 1
+		}
+		C.runcore_inbound_cb_call(h.inboundCB, h.inboundUser, source, title, content, C.double(m.Timestamp), messageID, path, name, mimeName, C.int32_t(attachmentType), locationFlag, C.double(location.Latitude), C.double(location.Longitude), C.double(location.Accuracy), C.int64_t(location.Timestamp))
 		C.free(unsafe.Pointer(source))
 		C.free(unsafe.Pointer(title))
 		C.free(unsafe.Pointer(content))

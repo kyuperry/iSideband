@@ -12,7 +12,7 @@ typedef uint64_t runcore_handle_t;
 // Called for every internal log line. The line includes timestamp prefix.
 typedef void (*runcore_log_cb)(void* user_data, int32_t level, const char* line);
 typedef void (*runcore_raw_tx_cb)(void* user_data, const uint8_t* data, int32_t len);
-typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type);
+typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type, int32_t has_location, double latitude, double longitude, double accuracy, int64_t location_timestamp);
 typedef void (*runcore_status_cb)(void* user_data, const char* client_id, const char* status);
 
 // Set a global log callback (applies process-wide). Pass NULL to disable.

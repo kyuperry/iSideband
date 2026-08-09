@@ -12,6 +12,23 @@ enum AutomaticAnnouncePreferenceKey {
         "isideband.reticulum.autoAnnounce.lastAnnouncedAt"
 }
 
+struct RemoteNodeLocation: Identifiable, Hashable, Codable {
+    let sourceHash: String
+    let latitude: Double
+    let longitude: Double
+    let accuracy: Double
+    let telemetryDate: Date?
+    let receivedAt: Date
+
+    var id: String { sourceHash }
+    var coordinate: CLLocationCoordinate2D {
+        CLLocationCoordinate2D(
+            latitude: latitude,
+            longitude: longitude
+        )
+    }
+}
+
 enum AutomaticAnnounceInterval:
     Int,
     CaseIterable,
@@ -74,7 +91,12 @@ nonisolated private func reticulumInboundMessage(
     _ attachmentPath: UnsafePointer<CChar>?,
     _ attachmentName: UnsafePointer<CChar>?,
     _ attachmentMIME: UnsafePointer<CChar>?,
-    _ attachmentType: Int32
+    _ attachmentType: Int32,
+    _ hasLocation: Int32,
+    _ latitude: Double,
+    _ longitude: Double,
+    _ accuracy: Double,
+    _ locationTimestamp: Int64
 ) {
     guard let userData, let source, let content else {
         return
@@ -99,7 +121,22 @@ nonisolated private func reticulumInboundMessage(
             attachmentPath: inboundPath,
             attachmentName: inboundName,
             attachmentMIME: inboundMIME,
-            attachmentType: attachmentType
+            attachmentType: attachmentType,
+            location: hasLocation != 0
+                ? RemoteNodeLocation(
+                    sourceHash: sourceHex,
+                    latitude: latitude,
+                    longitude: longitude,
+                    accuracy: accuracy,
+                    telemetryDate: locationTimestamp > 0
+                        ? Date(
+                            timeIntervalSince1970:
+                                TimeInterval(locationTimestamp)
+                        )
+                        : nil,
+                    receivedAt: Date()
+                )
+                : nil
         )
     }
 }
@@ -145,6 +182,8 @@ final class ReticulumCoreBridge: ObservableObject {
     @Published private(set) var destinationHash = ""
     @Published private(set) var status =
         "Reticulum core not started"
+    @Published private(set) var remoteNodeLocations:
+        [String: RemoteNodeLocation] = [:]
 
     private var handle: runcore_handle_t = 0
     private let inboundPacketQueue = DispatchQueue(
@@ -154,6 +193,8 @@ final class ReticulumCoreBridge: ObservableObject {
     private weak var bluetooth: BluetoothManager?
     private var routeRefreshTimer: Timer?
     private var lastAutomaticAnnounce: Date?
+    private let remoteNodeLocationsStorageKey =
+        "isideband.reticulum.remoteNodeLocations"
 
     private init() {
         UserDefaults.standard.register(
@@ -171,6 +212,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 forKey: AutomaticAnnouncePreferenceKey
                     .lastAnnouncedAt
             ) as? Date
+        loadRemoteNodeLocations()
     }
 
     func start(bluetooth: BluetoothManager) {
@@ -535,7 +577,8 @@ final class ReticulumCoreBridge: ObservableObject {
         attachmentPath: String,
         attachmentName: String,
         attachmentMIME: String,
-        attachmentType: Int32
+        attachmentType: Int32,
+        location: RemoteNodeLocation?
     ) {
         guard let sourceHash = Data(hex: sourceHex),
               let localHash = Data(
@@ -543,6 +586,18 @@ final class ReticulumCoreBridge: ObservableObject {
               ),
               sourceHash != localHash else {
             return
+        }
+        if let location {
+            let existing = remoteNodeLocations[sourceHex]
+            let incomingDate =
+                location.telemetryDate ?? location.receivedAt
+            let existingDate = existing.flatMap {
+                $0.telemetryDate ?? $0.receivedAt
+            }
+            if existingDate.map({ incomingDate >= $0 }) ?? true {
+                remoteNodeLocations[sourceHex] = location
+                persistRemoteNodeLocations()
+            }
         }
         var identifierMaterial = Data()
         identifierMaterial.append(sourceHash)
@@ -585,6 +640,37 @@ final class ReticulumCoreBridge: ObservableObject {
         requestAutomaticAnnounce(
             reason: "Return route refreshed",
             minimumInterval: 15
+        )
+    }
+
+    private func persistRemoteNodeLocations() {
+        let locations = Array(remoteNodeLocations.values)
+        guard let data = try? JSONEncoder().encode(
+            locations
+        ) else {
+            return
+        }
+        UserDefaults.standard.set(
+            data,
+            forKey: remoteNodeLocationsStorageKey
+        )
+    }
+
+    private func loadRemoteNodeLocations() {
+        guard let data = UserDefaults.standard.data(
+                    forKey: remoteNodeLocationsStorageKey
+              ),
+              let locations = try? JSONDecoder().decode(
+                    [RemoteNodeLocation].self,
+                    from: data
+              )
+        else {
+            return
+        }
+        remoteNodeLocations = Dictionary(
+            uniqueKeysWithValues: locations.map {
+                ($0.sourceHash, $0)
+            }
         )
     }
 
