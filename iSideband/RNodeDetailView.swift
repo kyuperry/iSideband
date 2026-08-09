@@ -153,6 +153,20 @@ struct RNodeDetailView: View {
             }
 
             Section("Radio Telemetry") {
+                if bluetooth.hasFreshRNodeBatteryTelemetry,
+                   let batteryPercent = bluetooth.batteryPercent {
+                    telemetryRow(
+                        title: "Battery",
+                        value: {
+                            if bluetooth.batteryState == .charging {
+                                return "\(batteryPercent)% (Charging)"
+                            }
+
+                            return "\(batteryPercent)%"
+                        }(),
+                        systemImage: "battery.50percent"
+                    )
+                }
                 telemetryRow(
                     title: "Reticulum Received",
                     value: kilobyteString(

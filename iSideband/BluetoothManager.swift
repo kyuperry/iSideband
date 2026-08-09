@@ -45,6 +45,7 @@ final class BluetoothManager:
     @Published var boardName = "Unknown"
     @Published var batteryPercent: Int?
     @Published var batteryState: RNodeBatteryState?
+    @Published private(set) var batteryTelemetryDate: Date?
     @Published var radioFrequency: UInt32?
     @Published var radioBandwidth: UInt32?
     @Published var transmitPower: Int?
@@ -82,6 +83,12 @@ final class BluetoothManager:
     private var sentBatteryMilestones = Set<Int>()
     private var lastBatteryNotificationPercent: Int?
     private var hasRNodeBatteryTelemetry = false
+    private var recentRNodeBatteryReadings: [Int] = []
+
+    var hasFreshRNodeBatteryTelemetry: Bool {
+        guard let batteryTelemetryDate else { return false }
+        return Date().timeIntervalSince(batteryTelemetryDate) <= 90
+    }
     
     override init() {
         super.init()
@@ -358,9 +365,11 @@ final class BluetoothManager:
         isRNodeWriteDrainScheduled = false
         batteryPercent = nil
         batteryState = nil
+        batteryTelemetryDate = nil
         satelliteCount = nil
         uptimeSeconds = nil
         hasRNodeBatteryTelemetry = false
+        recentRNodeBatteryReadings.removeAll()
         sentBatteryMilestones.removeAll()
         lastBatteryNotificationPercent = nil
         
@@ -686,6 +695,15 @@ final class BluetoothManager:
             Data([
                 0xC0,
                 0x2B,
+                0xFF,
+                0xC0
+            ]),
+
+            // RNode-reported battery state and percentage. This is requested
+            // once with the other telemetry and never polled on a timer.
+            Data([
+                0xC0,
+                0x27,
                 0xFF,
                 0xC0
             ])
@@ -1429,9 +1447,15 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let batteryPercent = telemetry.batteryPercent {
                         hasRNodeBatteryTelemetry = true
-                        self.batteryPercent = batteryPercent
+                        recentRNodeBatteryReadings.append(batteryPercent)
+                        recentRNodeBatteryReadings = Array(
+                            recentRNodeBatteryReadings.suffix(3)
+                        )
+                        let sorted = recentRNodeBatteryReadings.sorted()
+                        self.batteryPercent = sorted[sorted.count / 2]
+                        batteryTelemetryDate = Date()
                         sendLowBatteryNotification(
-                            percent: batteryPercent
+                            percent: self.batteryPercent ?? batteryPercent
                         )
                     }
 
@@ -1527,6 +1551,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                     if (0...100).contains(reportedLevel),
                        !hasRNodeBatteryTelemetry {
                         batteryPercent = reportedLevel
+                        batteryTelemetryDate = Date()
                         sendLowBatteryNotification(
                             percent: reportedLevel
                         )
