@@ -20,28 +20,6 @@ struct RNodeDetailView: View {
 
     var body: some View {
         List {
-            Section {
-                HStack(spacing: 10) {
-                    Image(
-                        systemName: isConnected
-                            ? "checkmark.circle.fill"
-                            : "xmark.circle.fill"
-                    )
-                    .foregroundStyle(
-                        isConnected ? .green : .red
-                    )
-
-                    Text(
-                        isConnected
-                            ? "RNode Connected"
-                            : "RNode Disconnected"
-                    )
-                    .fontWeight(.semibold)
-
-                    Spacer()
-                }
-            }
-
             Section("Connection") {
                 HStack {
                     Label(
@@ -192,11 +170,6 @@ struct RNodeDetailView: View {
                             )
                     ),
                     systemImage: "arrow.up.circle"
-                )
-                telemetryRow(
-                    title: "Inbound Diagnostic",
-                    value: bluetooth.lastInboundDiagnostic,
-                    systemImage: "stethoscope"
                 )
                 if let packetRSSI = bluetooth.packetRSSI {
                     telemetryRow(
