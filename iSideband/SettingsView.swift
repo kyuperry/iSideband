@@ -18,6 +18,11 @@ struct SettingsView: View {
     private var shareLocationOnMesh = false
 
     @AppStorage(
+        NotificationPreferenceKey.rnodeConnection
+    )
+    private var rnodeConnectionNotifications = true
+
+    @AppStorage(
         NotificationPreferenceKey.nearbyNodes
     )
     private var nearbyNodeNotifications = true
@@ -281,6 +286,11 @@ struct SettingsView: View {
     private var notificationSettingsSection:
         some View {
         Section("Notifications") {
+            Toggle(
+                "RNode Connection",
+                isOn: $rnodeConnectionNotifications
+            )
+
             Toggle(
                 "Nearby Reticulum Nodes",
                 isOn: $nearbyNodeNotifications

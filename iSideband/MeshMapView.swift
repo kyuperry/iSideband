@@ -349,13 +349,6 @@ struct GeographicMeshMapView: View {
                     .foregroundStyle(Color.orange)
             }
 
-            Text(remoteNodeLabel(node))
-                .font(.caption2.weight(.bold))
-                .lineLimit(1)
-                .padding(.horizontal, 7)
-                .padding(.vertical, 4)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(

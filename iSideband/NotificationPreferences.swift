@@ -1,6 +1,7 @@
 import Foundation
 
 enum NotificationPreferenceKey {
+    static let rnodeConnection = "notifications.rnodeConnection"
     static let nearbyNodes = "notifications.nearbyNodes"
     static let lxmfMessages = "notifications.lxmfMessages"
     static let battery50 = "notifications.battery50"
@@ -12,12 +13,19 @@ enum NotificationPreferences {
     static func registerDefaults() {
         UserDefaults.standard.register(
             defaults: [
+                NotificationPreferenceKey.rnodeConnection: true,
                 NotificationPreferenceKey.nearbyNodes: true,
                 NotificationPreferenceKey.lxmfMessages: true,
                 NotificationPreferenceKey.battery50: true,
                 NotificationPreferenceKey.battery25: true,
                 NotificationPreferenceKey.sounds: true
             ]
+        )
+    }
+
+    static var rnodeConnectionEnabled: Bool {
+        UserDefaults.standard.bool(
+            forKey: NotificationPreferenceKey.rnodeConnection
         )
     }
 

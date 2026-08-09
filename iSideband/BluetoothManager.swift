@@ -367,6 +367,40 @@ final class BluetoothManager:
         serviceCount = 0
     }
 
+    private func notifyRNodeConnection(
+        name: String,
+        isConnected: Bool
+    ) {
+        guard NotificationPreferences.rnodeConnectionEnabled else {
+            return
+        }
+
+        let content = UNMutableNotificationContent()
+        content.title = isConnected
+            ? "RNode Connected"
+            : "RNode Disconnected"
+        content.body = isConnected
+            ? "\(name) is connected to iSideband."
+            : "\(name) disconnected from iSideband."
+        if NotificationPreferences.soundsEnabled {
+            content.sound = .default
+        }
+
+        let request = UNNotificationRequest(
+            identifier: "rnode.connection.\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                print(
+                    "RNode connection notification failed:",
+                    error.localizedDescription
+                )
+            }
+        }
+    }
+
     private func scheduleReconnect(
         to peripheral: CBPeripheral
     ) {
@@ -1020,6 +1054,11 @@ final class BluetoothManager:
             connectionMessage =
                 "Connected to \(peripheral.name ?? "RNode")"
 
+            notifyRNodeConnection(
+                name: peripheral.name ?? "RNode",
+                isConnected: true
+            )
+
             peripheral.delegate = self
             peripheral.discoverServices(nil)
             peripheral.readRSSI()
@@ -1065,7 +1104,14 @@ final class BluetoothManager:
         error: Error?
     ) {
         Task { @MainActor in
+            let disconnectedName =
+                connectedDeviceName ?? peripheral.name ?? "RNode"
             clearConnectionState()
+
+            notifyRNodeConnection(
+                name: disconnectedName,
+                isConnected: false
+            )
 
             if manualDisconnectRequested {
                 manualDisconnectRequested = false

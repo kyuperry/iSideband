@@ -18,8 +18,17 @@ final class LXMFMessageNotificationManager {
 
         let content =
             UNMutableNotificationContent()
-        content.title =
-            senderName ?? "New LXMF Message"
+        let sender = senderName ?? "Unknown Node"
+        if message.attachmentType == .photo {
+            content.title = "Photo from \(sender)"
+        } else if message.attachmentType == .file {
+            content.title = "File from \(sender)"
+        } else if message.attachmentType == .voiceNote {
+            content.title = "Voice Message from \(sender)"
+        } else {
+            content.title = "Message from \(sender)"
+        }
+
         if !message.content.isEmpty {
             content.body = message.content
         } else if message.attachmentType == .photo {
