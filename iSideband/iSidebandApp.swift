@@ -10,6 +10,7 @@ import SwiftUI
 @main
 struct iSidebandApp: App {
 
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var lxmfManager = LXMFManager.shared
     @StateObject private var bluetooth = BluetoothManager()
 
@@ -31,6 +32,11 @@ struct iSidebandApp: App {
                         manager: lxmfManager,
                         bluetooth: bluetooth
                     )
+                    RNodeLiveActivityManager.shared.configure(bluetooth: bluetooth)
+                    RNodeLiveActivityManager.shared.setAppIsActive(scenePhase == .active)
+                }
+                .onChange(of: scenePhase) { _, newPhase in
+                    RNodeLiveActivityManager.shared.setAppIsActive(newPhase == .active)
                 }
         }
     }

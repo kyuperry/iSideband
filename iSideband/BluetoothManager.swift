@@ -72,6 +72,7 @@ final class BluetoothManager:
     private var reconnectAttempt = 0
     private let maximumReconnectAttempts = 4
     private var manualDisconnectRequested = false
+    private var notificationConnectedPeripheralID: UUID?
     private var rssiTimer: Timer?
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
@@ -360,6 +361,7 @@ final class BluetoothManager:
         batteryState = nil
         satelliteCount = nil
         uptimeSeconds = nil
+        radioReady = false
         hasRNodeBatteryTelemetry = false
         sentBatteryMilestones.removeAll()
         lastBatteryNotificationPercent = nil
@@ -399,6 +401,36 @@ final class BluetoothManager:
                 )
             }
         }
+    }
+
+    private func notifyRNodeDidConnect(
+        id: UUID,
+        name: String
+    ) {
+        guard notificationConnectedPeripheralID != id else {
+            return
+        }
+
+        notificationConnectedPeripheralID = id
+        notifyRNodeConnection(
+            name: name,
+            isConnected: true
+        )
+    }
+
+    private func notifyRNodeDidDisconnect(
+        id: UUID,
+        name: String
+    ) {
+        guard notificationConnectedPeripheralID == id else {
+            return
+        }
+
+        notificationConnectedPeripheralID = nil
+        notifyRNodeConnection(
+            name: name,
+            isConnected: false
+        )
     }
 
     private func scheduleReconnect(
@@ -938,6 +970,13 @@ final class BluetoothManager:
             bluetoothState = central.state
 
             if central.state != .poweredOn {
+                if let connectedPeripheral {
+                    notifyRNodeDidDisconnect(
+                        id: connectedPeripheral.identifier,
+                        name: connectedDeviceName ??
+                            connectedPeripheral.name ?? "RNode"
+                    )
+                }
                 reconnectTask?.cancel()
                 reconnectTask = nil
                 devices.removeAll()
@@ -984,6 +1023,11 @@ final class BluetoothManager:
             connectedDeviceID = peripheral.identifier
             connectedDeviceName =
                 peripheral.name ?? "RNode"
+            // Restoration resumes an existing connection rather than
+            // creating a new connection transition. Seed the gate so a
+            // repeated callback cannot produce a duplicate alert.
+            notificationConnectedPeripheralID =
+                peripheral.identifier
             connectingDeviceID = nil
             connectionMessage =
                 "Restored connection to \(peripheral.name ?? "RNode")"
@@ -1054,9 +1098,9 @@ final class BluetoothManager:
             connectionMessage =
                 "Connected to \(peripheral.name ?? "RNode")"
 
-            notifyRNodeConnection(
-                name: peripheral.name ?? "RNode",
-                isConnected: true
+            notifyRNodeDidConnect(
+                id: peripheral.identifier,
+                name: peripheral.name ?? "RNode"
             )
 
             peripheral.delegate = self
@@ -1104,14 +1148,19 @@ final class BluetoothManager:
         error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral?.identifier ==
+                    peripheral.identifier else {
+                return
+            }
+
             let disconnectedName =
                 connectedDeviceName ?? peripheral.name ?? "RNode"
-            clearConnectionState()
 
-            notifyRNodeConnection(
-                name: disconnectedName,
-                isConnected: false
+            notifyRNodeDidDisconnect(
+                id: peripheral.identifier,
+                name: disconnectedName
             )
+            clearConnectionState()
 
             if manualDisconnectRequested {
                 manualDisconnectRequested = false

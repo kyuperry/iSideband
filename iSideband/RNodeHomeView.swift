@@ -1,11 +1,13 @@
 import SwiftUI
 import CoreBluetooth
+import UIKit
 
 struct RNodeHomeView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
     @State private var showSwitchConfirmation = false
     @State private var pendingConnectionID: UUID?
+    @State private var liveActivityStatusMessage: String?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -21,6 +23,18 @@ struct RNodeHomeView: View {
         }
         .padding()
         .navigationTitle("RNode")
+        .overlay(alignment: .bottom) {
+            if let liveActivityStatusMessage {
+                Text(liveActivityStatusMessage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.black.opacity(0.82), in: Capsule())
+                    .padding(.bottom, 8)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .confirmationDialog(
             "Switch RNodes?",
             isPresented: $showSwitchConfirmation,
@@ -111,11 +125,43 @@ struct RNodeHomeView: View {
                 } label: {
                     connectedDeviceRow(device)
                 }
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.7)
+                        .onEnded { _ in
+                            toggleLiveActivity()
+                        }
+                )
             } else {
                 availableDeviceRow(device)
             }
         }
         .listStyle(.plain)
+    }
+
+    private func toggleLiveActivity() {
+        let message: String
+        let feedback: UINotificationFeedbackGenerator.FeedbackType
+
+        switch RNodeLiveActivityManager.shared.toggle() {
+        case .started:
+            message = "Live Activity Started"
+            feedback = .success
+        case .stopped:
+            message = "Live Activity Stopped"
+            feedback = .success
+        case .unavailable:
+            message = "Live Activities Are Unavailable"
+            feedback = .error
+        }
+
+        UINotificationFeedbackGenerator().notificationOccurred(feedback)
+        withAnimation { liveActivityStatusMessage = message }
+
+        Task {
+            try? await Task.sleep(for: .seconds(1.5))
+            guard liveActivityStatusMessage == message else { return }
+            withAnimation { liveActivityStatusMessage = nil }
+        }
     }
 
     private func connectedDeviceRow(

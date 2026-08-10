@@ -8,12 +8,24 @@
 
 /* Begin PBXBuildFile section */
 		A10000010000000000000001 /* ThirdParty/Runcore/Runcore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */; };
+		B20000010000000000000001 /* iSidebandLiveActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000020000000000000002 /* iSidebandLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B20000030000000000000003 /* RNodeLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000040000000000000004 /* RNodeLiveActivityAttributes.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B20000050000000000000005 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = 0B11BCDE300DC37B00FC94FB /* Project object */; proxyType = 1; remoteGlobalIDString = B20000060000000000000006; remoteInfo = iSidebandLiveActivity; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B20000070000000000000007 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (B20000010000000000000001 /* iSidebandLiveActivity.appex in Embed App Extensions */, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		0B11BCE6300DC37B00FC94FB /* iSideband.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = iSideband.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0BCE33C130154A54001470C4 /* Untitled.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Untitled.swift; sourceTree = "<group>"; };
 		A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/Runcore/Runcore.xcframework; sourceTree = SOURCE_ROOT; };
+		B20000020000000000000002 /* iSidebandLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = iSidebandLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B20000040000000000000004 /* RNodeLiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iSideband/RNodeLiveActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -24,6 +36,7 @@
 			);
 			target = 0B11BCE5300DC37B00FC94FB /* iSideband */;
 		};
+		B20000080000000000000008 /* Exceptions for "iSidebandLiveActivity" folder */ = {isa = PBXFileSystemSynchronizedBuildFileExceptionSet; membershipExceptions = (Info.plist, ); target = B20000060000000000000006 /* iSidebandLiveActivity */; };
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +48,7 @@
 			path = iSideband;
 			sourceTree = "<group>";
 		};
+		B20000090000000000000009 /* iSidebandLiveActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (B20000080000000000000008 /* Exceptions for "iSidebandLiveActivity" folder */, ); path = iSidebandLiveActivity; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +60,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B200000A000000000000000A /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -53,6 +68,7 @@
 			isa = PBXGroup;
 			children = (
 				0B11BCE8300DC37B00FC94FB /* iSideband */,
+				B20000090000000000000009 /* iSidebandLiveActivity */,
 				A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */,
 				0B11BCE7300DC37B00FC94FB /* Products */,
 				0BCE33C0301549EE001470C4 /* New Group */,
@@ -63,6 +79,7 @@
 			isa = PBXGroup;
 			children = (
 				0B11BCE6300DC37B00FC94FB /* iSideband.app */,
+				B20000020000000000000002 /* iSidebandLiveActivity.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -85,11 +102,11 @@
 				0B11BCE2300DC37B00FC94FB /* Sources */,
 				0B11BCE3300DC37B00FC94FB /* Frameworks */,
 				0B11BCE4300DC37B00FC94FB /* Resources */,
+				B20000070000000000000007 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
-			dependencies = (
-			);
+			dependencies = (B200000B000000000000000B /* PBXTargetDependency */, );
 			fileSystemSynchronizedGroups = (
 				0B11BCE8300DC37B00FC94FB /* iSideband */,
 			);
@@ -100,6 +117,7 @@
 			productReference = 0B11BCE6300DC37B00FC94FB /* iSideband.app */;
 			productType = "com.apple.product-type.application";
 		};
+		B20000060000000000000006 /* iSidebandLiveActivity */ = {isa = PBXNativeTarget; buildConfigurationList = B200000C000000000000000C /* Build configuration list for PBXNativeTarget "iSidebandLiveActivity" */; buildPhases = (B200000D000000000000000D /* Sources */, B200000A000000000000000A /* Frameworks */, B200000E000000000000000E /* Resources */, ); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (B20000090000000000000009 /* iSidebandLiveActivity */, ); name = iSidebandLiveActivity; packageProductDependencies = (); productName = iSidebandLiveActivity; productReference = B20000020000000000000002 /* iSidebandLiveActivity.appex */; productType = "com.apple.product-type.app-extension"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -113,6 +131,7 @@
 					0B11BCE5300DC37B00FC94FB = {
 						CreatedOnToolsVersion = 26.6;
 					};
+					B20000060000000000000006 = {CreatedOnToolsVersion = 26.6; };
 				};
 			};
 			buildConfigurationList = 0B11BCE1300DC37B00FC94FB /* Build configuration list for PBXProject "iSideband" */;
@@ -130,6 +149,7 @@
 			projectRoot = "";
 			targets = (
 				0B11BCE5300DC37B00FC94FB /* iSideband */,
+				B20000060000000000000006 /* iSidebandLiveActivity */,
 			);
 		};
 /* End PBXProject section */
@@ -142,6 +162,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B200000E000000000000000E /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -152,7 +173,12 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		B200000D000000000000000D /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B20000030000000000000003 /* RNodeLiveActivityAttributes.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B200000B000000000000000B /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = B20000060000000000000006 /* iSidebandLiveActivity */; targetProxy = B20000050000000000000005 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		0B11BCEF300DC37D00FC94FB /* Debug */ = {
@@ -358,6 +384,8 @@
 			};
 			name = Release;
 		};
+		B200000F000000000000000F /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 6XYV9P6366; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = iSidebandLiveActivity/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 18.6; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.kyleperry.iSideband.LiveActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_APPROACHABLE_CONCURRENCY = YES; SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		B20000100000000000000010 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 6XYV9P6366; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = iSidebandLiveActivity/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 18.6; LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks", ); MARKETING_VERSION = 1.0; PRODUCT_BUNDLE_IDENTIFIER = com.kyleperry.iSideband.LiveActivity; PRODUCT_NAME = "$(TARGET_NAME)"; SKIP_INSTALL = YES; SWIFT_APPROACHABLE_CONCURRENCY = YES; SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -379,6 +407,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		B200000C000000000000000C /* Build configuration list for PBXNativeTarget "iSidebandLiveActivity" */ = {isa = XCConfigurationList; buildConfigurations = (B200000F000000000000000F /* Debug */, B20000100000000000000010 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = 0B11BCDE300DC37B00FC94FB /* Project object */;
