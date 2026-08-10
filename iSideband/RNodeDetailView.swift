@@ -405,14 +405,14 @@ struct RNodeDetailView: View {
                     spacing: 4
                 ) {
                     RSSISignalBars(
-                        level: rssiSignalLevel(rssi)
+                        level: RNodeSignalQuality.level(for: rssi)
                     )
 
-                    Text(rssiQualityText(rssi))
+                    Text(RNodeSignalQuality.label(for: rssi))
                         .font(.caption)
                         .fontWeight(.semibold)
                         .foregroundStyle(
-                            rssiSignalColor(rssi)
+                            RNodeSignalQuality.color(for: rssi)
                         )
                 }
             } else {
@@ -452,57 +452,6 @@ struct RNodeDetailView: View {
         }
 
         return "\(minutes)m"
-    }
-
-    private func rssiSignalLevel(
-        _ rssi: Int
-    ) -> Int {
-        switch rssi {
-        case -60...0:
-            return 4
-
-        case -70..<(-60):
-            return 3
-
-        case -80..<(-70):
-            return 2
-
-        default:
-            return 1
-        }
-    }
-
-    private func rssiQualityText(
-        _ rssi: Int
-    ) -> String {
-        switch rssiSignalLevel(rssi) {
-        case 4:
-            return "Excellent"
-
-        case 3:
-            return "Good"
-
-        case 2:
-            return "Fair"
-
-        default:
-            return "Weak"
-        }
-    }
-
-    private func rssiSignalColor(
-        _ rssi: Int
-    ) -> Color {
-        switch rssiSignalLevel(rssi) {
-        case 4, 3:
-            return .green
-
-        case 2:
-            return .yellow
-
-        default:
-            return .red
-        }
     }
 
     private func identityRow(

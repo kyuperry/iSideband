@@ -256,7 +256,9 @@ final class LXMFService: ObservableObject {
             destinationHash:
                 message.peer.destinationHash,
             clientID: message.id,
-            direct: false
+            direct: manager?.prefersDirectDelivery(
+                to: message.peer
+            ) ?? false
         ) {
             statusMessage =
                 "Message handed to Reticulum delivery"

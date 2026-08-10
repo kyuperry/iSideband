@@ -73,12 +73,13 @@ final class BluetoothManager:
     private let maximumReconnectAttempts = 4
     private var manualDisconnectRequested = false
     private var notificationConnectedPeripheralID: UUID?
+    private var smoothedConnectedRSSI: Double?
     private var rssiTimer: Timer?
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
     private var pendingRNodeWriteChunks: [Data] = []
-    private var isRNodeWriteDrainScheduled = false
+    private var pendingRNodeWriteHead = 0
     private let batteryNotificationMilestones = [50, 25]
     private var sentBatteryMilestones = Set<Int>()
     private var lastBatteryNotificationPercent: Int?
@@ -261,30 +262,55 @@ final class BluetoothManager:
     }
 
     private func drainRNodeWriteQueue() {
-        guard !isRNodeWriteDrainScheduled,
-              !pendingRNodeWriteChunks.isEmpty,
+        guard pendingRNodeWriteHead < pendingRNodeWriteChunks.count,
               let connectedPeripheral,
               let rnodeWriteCharacteristic,
-              connectedPeripheral.state == .connected,
-              connectedPeripheral.canSendWriteWithoutResponse
+              connectedPeripheral.state == .connected
         else {
             return
         }
 
-        let chunk = pendingRNodeWriteChunks.removeFirst()
-        connectedPeripheral.writeValue(
-            chunk,
-            for: rnodeWriteCharacteristic,
-            type: .withoutResponse
-        )
-        bluetoothBytesWritten += chunk.count
-        print("Wrote \(chunk.count) bytes to RNode BLE stream")
-
-        isRNodeWriteDrainScheduled = true
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
-            self.isRNodeWriteDrainScheduled = false
-            self.drainRNodeWriteQueue()
+        while connectedPeripheral.canSendWriteWithoutResponse,
+              pendingRNodeWriteHead < pendingRNodeWriteChunks.count {
+            let chunk = pendingRNodeWriteChunks[pendingRNodeWriteHead]
+            pendingRNodeWriteHead += 1
+            connectedPeripheral.writeValue(
+                chunk,
+                for: rnodeWriteCharacteristic,
+                type: .withoutResponse
+            )
+            bluetoothBytesWritten += chunk.count
         }
+
+        if pendingRNodeWriteHead == pendingRNodeWriteChunks.count {
+            pendingRNodeWriteChunks.removeAll(keepingCapacity: true)
+            pendingRNodeWriteHead = 0
+        } else if pendingRNodeWriteHead > 128,
+                  pendingRNodeWriteHead * 2 > pendingRNodeWriteChunks.count {
+            pendingRNodeWriteChunks.removeFirst(pendingRNodeWriteHead)
+            pendingRNodeWriteHead = 0
+        }
+    }
+
+    var estimatedRadioBitrate: Int32 {
+        let defaults = UserDefaults.standard
+        let storedBandwidth = defaults.double(
+            forKey: "radioBandwidthKHz"
+        ) * 1_000
+        let bandwidth = Double(radioBandwidth ?? UInt32(storedBandwidth))
+        let sf = spreadingFactor ?? defaults.integer(
+            forKey: "radioSpreadingFactor"
+        )
+        let cr = codingRate ?? defaults.integer(
+            forKey: "radioCodingRate"
+        )
+        guard bandwidth > 0, (5...12).contains(sf) else {
+            return 5_000
+        }
+        let codingDenominator = (5...8).contains(cr) ? cr : 5
+        let rate = Double(sf) * bandwidth /
+            pow(2, Double(sf)) * 4 / Double(codingDenominator)
+        return Int32(min(max(rate.rounded(), 300), 50_000))
     }
     private func escapeKISSFrame(_ frame: Data) -> Data {
         guard frame.count >= 2 else {
@@ -356,12 +382,14 @@ final class BluetoothManager:
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
         pendingRNodeWriteChunks.removeAll()
-        isRNodeWriteDrainScheduled = false
+        pendingRNodeWriteHead = 0
         batteryPercent = nil
         batteryState = nil
         satelliteCount = nil
         uptimeSeconds = nil
         radioReady = false
+        smoothedConnectedRSSI = nil
+        lastRSSI = nil
         hasRNodeBatteryTelemetry = false
         sentBatteryMilestones.removeAll()
         lastBatteryNotificationPercent = nil
@@ -401,6 +429,24 @@ final class BluetoothManager:
                 )
             }
         }
+    }
+
+    private func updateConnectedRSSI(_ rawRSSI: Int) {
+        let smoothed: Double
+        if let previous = smoothedConnectedRSSI {
+            // A low-pass filter keeps the reading representative while
+            // preventing normal 1 dBm radio noise from jumping categories.
+            smoothed = (previous * 0.75) + (Double(rawRSSI) * 0.25)
+        } else {
+            smoothed = Double(rawRSSI)
+        }
+        smoothedConnectedRSSI = smoothed
+
+        let rounded = Int(smoothed.rounded())
+        guard lastRSSI == nil || abs(rounded - (lastRSSI ?? rounded)) >= 2 else {
+            return
+        }
+        lastRSSI = rounded
     }
 
     private func notifyRNodeDidConnect(
@@ -793,9 +839,11 @@ final class BluetoothManager:
         lastPacketTime = Date()
         sendToRNode(frame)
         
+        #if DEBUG
         print(
             "Radio payload handed to RNode: \(payload.count) bytes"
         )
+        #endif
     }
     func sendMessage(_ text: String) {
         guard let payload = text.data(using: .utf8) else {
@@ -1020,6 +1068,8 @@ final class BluetoothManager:
             manualDisconnectRequested = false
             reconnectPeripheral = peripheral
             connectedPeripheral = peripheral
+            smoothedConnectedRSSI = nil
+            lastRSSI = nil
             connectedDeviceID = peripheral.identifier
             connectedDeviceName =
                 peripheral.name ?? "RNode"
@@ -1090,6 +1140,8 @@ final class BluetoothManager:
             manualDisconnectRequested = false
             reconnectPeripheral = peripheral
             connectedPeripheral = peripheral
+            smoothedConnectedRSSI = nil
+            lastRSSI = nil
             connectingDeviceID = nil
             connectedDeviceID = peripheral.identifier
             connectedDeviceName =
@@ -1673,7 +1725,7 @@ extension BluetoothManager: CBPeripheralDelegate {
         }
 
         Task { @MainActor in
-            self.lastRSSI = RSSI.intValue
+            self.updateConnectedRSSI(RSSI.intValue)
             print("Connected RNode RSSI: \(RSSI.intValue) dBm")
         }
     }

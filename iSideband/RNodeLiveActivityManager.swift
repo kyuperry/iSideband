@@ -35,14 +35,22 @@ final class RNodeLiveActivityManager {
         scheduleRefresh(immediately: true)
     }
 
-    func toggle() -> ToggleResult {
-        if !Activity<RNodeLiveActivityAttributes>.activities.isEmpty {
+    var isRunning: Bool {
+        !Activity<RNodeLiveActivityAttributes>.activities.isEmpty
+    }
+
+    func setRunning(_ shouldRun: Bool) -> ToggleResult {
+        if !shouldRun {
             userAllowsActivity = false
             refreshTask?.cancel()
             refreshTask = nil
             let finalStart = connectionStartedAt ?? Date()
             Task { await endActivities(uptimeStartedAt: finalStart) }
             return .stopped
+        }
+
+        if isRunning {
+            return .started
         }
 
         guard appIsActive,
@@ -88,11 +96,15 @@ final class RNodeLiveActivityManager {
         }
 
         if connectionStartedAt == nil { connectionStartedAt = Date() }
+        let rssi = bluetooth.lastRSSI
         let state = RNodeLiveActivityAttributes.ContentState(
             reticulumBytesIn: bluetooth.reticulumBytesReceived,
             reticulumBytesOut: bluetooth.reticulumBytesTransmitted,
             uptimeStartedAt: uptimeStartDate(for: bluetooth),
-            isReticulumAvailable: bluetooth.radioReady
+            isReticulumAvailable: bluetooth.radioReady,
+            bluetoothRSSI: rssi,
+            bluetoothSignalLevel: rssi.map(RNodeSignalQuality.level),
+            bluetoothSignalQuality: rssi.map(RNodeSignalQuality.label)
         )
         let content = ActivityContent(
             state: state,
@@ -129,7 +141,14 @@ final class RNodeLiveActivityManager {
                 reticulumBytesIn: bluetooth?.reticulumBytesReceived ?? 0,
                 reticulumBytesOut: bluetooth?.reticulumBytesTransmitted ?? 0,
                 uptimeStartedAt: uptimeStartedAt,
-                isReticulumAvailable: false
+                isReticulumAvailable: false,
+                bluetoothRSSI: bluetooth?.lastRSSI,
+                bluetoothSignalLevel: bluetooth?.lastRSSI.map(
+                    RNodeSignalQuality.level
+                ),
+                bluetoothSignalQuality: bluetooth?.lastRSSI.map(
+                    RNodeSignalQuality.label
+                )
             ),
             staleDate: nil
         )

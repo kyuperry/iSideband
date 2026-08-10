@@ -185,7 +185,7 @@ struct GeographicMeshMapView: View {
         ReticulumCoreBridge.shared
 
     @State private var cameraPosition: MapCameraPosition
-    @State private var showInformationBanner = true
+    @State private var isShowingInformation = false
     @State private var hasCenteredOnFirstLocation = false
 
     init(startsInHawaii: Bool) {
@@ -228,25 +228,20 @@ struct GeographicMeshMapView: View {
 
             currentLocationButton
 
-            if showInformationBanner {
-                VStack {
-                    Spacer()
-
-                    dismissibleStatusBanner(
+            VStack {
+                HStack {
+                    mapInformationButton(
                         title: "Situation Map",
                         message:
                             "Your connected RNode is shown at this iPhone's live GPS position. Nodes that opt in to location sharing will appear here.",
-                        isPresented:
-                            $showInformationBanner
+                        isPresented: $isShowingInformation
                     )
-                    .padding(.horizontal)
-                    .padding(.bottom, 90)
-                    .transition(
-                        .move(edge: .bottom)
-                            .combined(with: .opacity)
-                    )
+                    Spacer()
                 }
+                Spacer()
             }
+            .padding(.top, 12)
+            .padding(.leading, 16)
         }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -264,10 +259,6 @@ struct GeographicMeshMapView: View {
         ) { _, _ in
             centerOnFirstLocationIfNeeded()
         }
-        .animation(
-            .easeInOut(duration: 0.2),
-            value: showInformationBanner
-        )
     }
 
     private var geographicRNodeMarker: some View {
@@ -550,7 +541,7 @@ struct TopologyMeshMapView: View {
     @ObservedObject private var discoveredStore =
         ReticulumDiscoveredPeerStore.shared
 
-    @State private var showInformationBanner = true
+    @State private var isShowingInformation = false
     @State private var selectedPeer:
         ReticulumDiscoveredPeer?
 
@@ -577,25 +568,20 @@ struct TopologyMeshMapView: View {
                     )
                 }
 
-                if showInformationBanner {
-                    VStack {
-                        Spacer()
-
-                        dismissibleStatusBanner(
+                VStack {
+                    HStack {
+                        mapInformationButton(
                             title: "Live Topology",
                             message:
                                 "Recently heard Reticulum nodes appear around your connected RNode. Older nodes gradually dim and disappear.",
-                            isPresented:
-                                $showInformationBanner
+                            isPresented: $isShowingInformation
                         )
-                        .padding(.horizontal)
-                        .padding(.bottom, 90)
-                        .transition(
-                            .move(edge: .bottom)
-                                .combined(with: .opacity)
-                        )
+                        Spacer()
                     }
+                    Spacer()
                 }
+                .padding(.top, 12)
+                .padding(.leading, 16)
             }
             .animation(
                 .spring(
@@ -1422,62 +1408,56 @@ private struct RadioTowerGlyph: View {
     }
 }
 
-private func dismissibleStatusBanner(
+private func mapInformationButton(
     title: String,
     message: String,
     isPresented: Binding<Bool>
 ) -> some View {
-    HStack(spacing: 12) {
-        Image(
-            systemName:
-                "antenna.radiowaves.left.and.right"
-        )
-        .font(.title3)
-        .foregroundStyle(.blue)
-
-        VStack(
-            alignment: .leading,
-            spacing: 3
-        ) {
-            Text(title)
-                .font(
-                    .subheadline.weight(.semibold)
-                )
-
-            Text(message)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-
-        Spacer()
-
-        Button {
-            isPresented.wrappedValue = false
-        } label: {
-            Image(systemName: "xmark")
-                .font(
-                    .caption.weight(.bold)
-                )
-                .foregroundStyle(.secondary)
-                .frame(width: 28, height: 28)
-                .background(
-                    Color.secondary.opacity(0.12)
-                )
-                .clipShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Dismiss message")
-    }
-    .padding(14)
-    .background(.ultraThinMaterial)
-    .clipShape(
-        RoundedRectangle(cornerRadius: 16)
-    )
-    .overlay {
-        RoundedRectangle(cornerRadius: 16)
-            .stroke(
-                Color.secondary.opacity(0.2),
-                lineWidth: 1
+    Button {
+        isPresented.wrappedValue.toggle()
+    } label: {
+        Image(systemName: "info.circle.fill")
+            .font(.title2)
+            .symbolRenderingMode(.palette)
+            .foregroundStyle(.blue, .ultraThinMaterial)
+            .frame(width: 40, height: 40)
+            .background(.ultraThinMaterial, in: Circle())
+            .overlay {
+                Circle()
+                    .stroke(
+                        Color.secondary.opacity(0.25),
+                        lineWidth: 1
+                    )
+            }
+            .shadow(
+                color: Color.black.opacity(0.14),
+                radius: 5,
+                y: 2
             )
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("About \(title)")
+    .popover(isPresented: isPresented, arrowEdge: .top) {
+        HStack(alignment: .top, spacing: 12) {
+            Image(
+                systemName:
+                    "antenna.radiowaves.left.and.right"
+            )
+            .font(.title3)
+            .foregroundStyle(.blue)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(idealWidth: 310)
+        .presentationCompactAdaptation(.popover)
     }
 }

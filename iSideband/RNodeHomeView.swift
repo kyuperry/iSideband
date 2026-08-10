@@ -8,6 +8,8 @@ struct RNodeHomeView: View {
     @State private var showSwitchConfirmation = false
     @State private var pendingConnectionID: UUID?
     @State private var liveActivityStatusMessage: String?
+    @State private var showLiveActivityConfirmation = false
+    @State private var requestedLiveActivityIsRunning = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -34,6 +36,24 @@ struct RNodeHomeView: View {
                     .padding(.bottom, 8)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
+        }
+        .confirmationDialog(
+            requestedLiveActivityIsRunning
+                ? "Stop Live Activity?"
+                : "Start Live Activity?",
+            isPresented: $showLiveActivityConfirmation,
+            titleVisibility: .visible
+        ) {
+            if requestedLiveActivityIsRunning {
+                Button("Stop Live Activity", role: .destructive) {
+                    setLiveActivityRunning(false)
+                }
+            } else {
+                Button("Start Live Activity") {
+                    setLiveActivityRunning(true)
+                }
+            }
+            Button("Cancel", role: .cancel) { }
         }
         .confirmationDialog(
             "Switch RNodes?",
@@ -128,7 +148,9 @@ struct RNodeHomeView: View {
                 .simultaneousGesture(
                     LongPressGesture(minimumDuration: 0.7)
                         .onEnded { _ in
-                            toggleLiveActivity()
+                            requestedLiveActivityIsRunning =
+                                RNodeLiveActivityManager.shared.isRunning
+                            showLiveActivityConfirmation = true
                         }
                 )
             } else {
@@ -138,11 +160,11 @@ struct RNodeHomeView: View {
         .listStyle(.plain)
     }
 
-    private func toggleLiveActivity() {
+    private func setLiveActivityRunning(_ shouldRun: Bool) {
         let message: String
         let feedback: UINotificationFeedbackGenerator.FeedbackType
 
-        switch RNodeLiveActivityManager.shared.toggle() {
+        switch RNodeLiveActivityManager.shared.setRunning(shouldRun) {
         case .started:
             message = "Live Activity Started"
             feedback = .success

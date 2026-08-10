@@ -270,7 +270,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 handle,
                 reticulumRawTransmit,
                 context,
-                5_000
+                bluetooth.estimatedRadioBitrate
             ) == 0,
             runcore_set_inbound_cb(
                 handle,
@@ -322,6 +322,7 @@ final class ReticulumCoreBridge: ObservableObject {
                     Int32(packet.count)
                 )
 
+                #if DEBUG
                 print(
                     """
                     RETICULUM CORE RECEIVE
@@ -329,6 +330,7 @@ final class ReticulumCoreBridge: ObservableObject {
                     Result: \(result)
                     """
                 )
+                #endif
             }
         }
 
@@ -554,6 +556,7 @@ final class ReticulumCoreBridge: ObservableObject {
             destinationName = "Unknown"
         }
 
+        #if DEBUG
         print(
             """
             RETICULUM CORE TRANSMIT
@@ -569,6 +572,7 @@ final class ReticulumCoreBridge: ObservableObject {
             Bytes: \(packet.count)
             """
         )
+        #endif
 
         bluetooth?.sendRadioPayload(packet)
     }
@@ -723,6 +727,9 @@ final class ReticulumCoreBridge: ObservableObject {
         guard defaults.bool(
             forKey: AutomaticAnnouncePreferenceKey.enabled
         ) else {
+            return
+        }
+        guard !LXMFManager.shared.hasActiveMessageTraffic else {
             return
         }
         let storedMinutes = defaults.integer(

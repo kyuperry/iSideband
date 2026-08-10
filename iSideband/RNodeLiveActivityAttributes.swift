@@ -7,6 +7,9 @@ struct RNodeLiveActivityAttributes: ActivityAttributes {
         var reticulumBytesOut: Int
         var uptimeStartedAt: Date
         var isReticulumAvailable: Bool
+        var bluetoothRSSI: Int?
+        var bluetoothSignalLevel: Int?
+        var bluetoothSignalQuality: String?
     }
 
     var rnodeName: String

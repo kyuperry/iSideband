@@ -11,6 +11,7 @@ final class LXMFManager: ObservableObject {
 
     private let service = LXMFService()
     private var hasStarted = false
+    private var persistenceTask: Task<Void, Never>?
     // Match Sideband's default 1 MB direct-delivery attachment limit.
     static let maximumAttachmentBytes = 1_000_000
 
@@ -181,8 +182,35 @@ final class LXMFManager: ObservableObject {
     }
 
     func nextQueuedMessage() -> LXMFOutgoingMessage? {
-        outgoingMessages.first {
-            $0.status == .queued
+        outgoingMessages
+            .filter { $0.status == .queued }
+            .min { lhs, rhs in
+                let leftPriority = lhs.attachment == nil ? 0 : 1
+                let rightPriority = rhs.attachment == nil ? 0 : 1
+                if leftPriority != rightPriority {
+                    return leftPriority < rightPriority
+                }
+                return lhs.createdAt < rhs.createdAt
+            }
+    }
+
+    func prefersDirectDelivery(to peer: LXMFPeer) -> Bool {
+        guard let announce = ReticulumAnnounceStore.shared.announce(
+            for: peer.destinationHash
+        ),
+        Date().timeIntervalSince(announce.receivedAt) < 10 * 60 else {
+            return false
+        }
+        return outgoingMessages.contains {
+            $0.peer.destinationHash == peer.destinationHash &&
+            ($0.status == .sent || $0.status == .delivered) &&
+            Date().timeIntervalSince($0.createdAt) < 2 * 60
+        }
+    }
+
+    var hasActiveMessageTraffic: Bool {
+        outgoingMessages.contains {
+            $0.status == .sending
         }
     }
 
@@ -211,6 +239,7 @@ final class LXMFManager: ObservableObject {
         }
 
         outgoingMessages[index].status = .queued
+        outgoingMessages[index].transmissionStartedAt = nil
         persistQueue()
         service.processQueue()
         return true
@@ -227,7 +256,14 @@ final class LXMFManager: ObservableObject {
         }
 
         outgoingMessages[index].status = status
-        persistQueue()
+        if status == .sending,
+           outgoingMessages[index].attachment != nil,
+           outgoingMessages[index].transmissionStartedAt == nil {
+            outgoingMessages[index].transmissionStartedAt = Date()
+        } else if status == .queued {
+            outgoingMessages[index].transmissionStartedAt = nil
+        }
+        scheduleQueuePersistence()
 
         print(
             "LXMF message \(id) status changed to \(status.rawValue)"
@@ -237,6 +273,15 @@ final class LXMFManager: ObservableObject {
     private func persistQueue() {
         guard let data = try? JSONEncoder().encode(outgoingMessages) else { return }
         UserDefaults.standard.set(data, forKey: Self.storageKey)
+    }
+
+    private func scheduleQueuePersistence() {
+        persistenceTask?.cancel()
+        persistenceTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled else { return }
+            self?.persistQueue()
+        }
     }
 }
 
@@ -289,6 +334,7 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
     let peer: LXMFPeer
     let createdAt: Date
     var status: LXMFOutgoingStatus
+    var transmissionStartedAt: Date?
     let attachment: LXMFOutgoingAttachment?
 
     init(
@@ -297,6 +343,7 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         peer: LXMFPeer,
         createdAt: Date = Date(),
         status: LXMFOutgoingStatus,
+        transmissionStartedAt: Date? = nil,
         attachment: LXMFOutgoingAttachment? = nil
     ) {
         self.id = id
@@ -304,6 +351,7 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         self.peer = peer
         self.createdAt = createdAt
         self.status = status
+        self.transmissionStartedAt = transmissionStartedAt
         self.attachment = attachment
     }
 }

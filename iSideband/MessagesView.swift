@@ -2,6 +2,7 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
+import CryptoKit
 
 enum DirectMessageType: String, Codable, Hashable {
     case text
@@ -492,11 +493,33 @@ struct MessagesView: View {
     private func messageBubble(
         _ message: ChatMessage
     ) -> some View {
+        if isActivelyEstimating(message) {
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                messageBubbleContent(
+                    message,
+                    status: displayStatus(
+                        for: message,
+                        at: timeline.date
+                    )
+                )
+            }
+        } else {
+            messageBubbleContent(
+                message,
+                status: displayStatus(for: message, at: Date())
+            )
+        }
+    }
+
+    private func messageBubbleContent(
+        _ message: ChatMessage,
+        status: String?
+    ) -> some View {
         MessageBubble(
             text: message.text,
             date: message.date,
             isOutgoing: message.isOutgoing,
-            status: displayStatus(for: message),
+            status: status,
             isPhoto: message.type == .photo,
             isFile: message.type == .file,
             isVoiceNote: message.type == .voiceNote,
@@ -504,6 +527,17 @@ struct MessagesView: View {
             attachmentPath: message.attachmentPath,
             attachmentSize: message.attachmentSize
         )
+    }
+
+    private func isActivelyEstimating(_ message: ChatMessage) -> Bool {
+        guard let id = message.lxmfMessageID,
+              let outgoing = lxmfManager.outgoingMessages.first(
+                where: { $0.id == id }
+              ),
+              outgoing.attachment != nil else {
+            return false
+        }
+        return outgoing.status == .queued || outgoing.status == .sending
     }
 
     private func canResend(
@@ -544,7 +578,8 @@ struct MessagesView: View {
     }
 
     private func displayStatus(
-        for message: ChatMessage
+        for message: ChatMessage,
+        at date: Date
     ) -> String? {
         guard let lxmfMessageID = message.lxmfMessageID else {
             return message.status
@@ -562,10 +597,20 @@ struct MessagesView: View {
 
         switch queuedMessage.status {
         case .queued:
-            return "Queued"
+            return transferStatus(
+                prefix: "Queued",
+                attachment: queuedMessage.attachment,
+                startedAt: nil,
+                now: date
+            )
 
         case .sending:
-            return "Sending"
+            return transferStatus(
+                prefix: "Sending",
+                attachment: queuedMessage.attachment,
+                startedAt: queuedMessage.transmissionStartedAt,
+                now: date
+            )
 
         case .sent:
             return "Sent"
@@ -576,6 +621,36 @@ struct MessagesView: View {
         case .failed:
             return "Failed"
         }
+    }
+
+    private func transferStatus(
+        prefix: String,
+        attachment: LXMFOutgoingAttachment?,
+        startedAt: Date?,
+        now: Date
+    ) -> String {
+        guard let attachment,
+              let size = (try? FileManager.default.attributesOfItem(
+                atPath: attachment.resolvedFileURL().path
+              )[.size] as? NSNumber)?.intValue else {
+            return prefix
+        }
+        let usableBitsPerSecond = max(
+            Double(bluetooth.estimatedRadioBitrate) * 0.65,
+            1
+        )
+        let totalSeconds = Int(ceil(Double(size * 8) / usableBitsPerSecond))
+        let elapsed = startedAt.map {
+            max(Int(now.timeIntervalSince($0)), 0)
+        } ?? 0
+        let seconds = totalSeconds - elapsed
+        guard seconds > 0 else {
+            return "\(prefix) • Finishing"
+        }
+        let estimate = seconds < 60
+            ? "\(seconds)s"
+            : "\(seconds / 60)m \(seconds % 60)s"
+        return "\(prefix) • \(estimate)"
     }
 
     private func handleSelectedPhoto() {
@@ -704,7 +779,9 @@ struct MessagesView: View {
               let queued = lxmfManager.sendAttachment(
                 at: savedURL,
                 name: sourceURL.lastPathComponent,
-                mimeType: "application/octet-stream",
+                mimeType: UTType(
+                    filenameExtension: sourceURL.pathExtension
+                )?.preferredMIMEType ?? "application/octet-stream",
                 type: .file,
                 to: peer
               ) else {
@@ -792,15 +869,16 @@ struct MessagesView: View {
                 withIntermediateDirectories: true
             )
 
+            let digest = SHA256.hash(data: data)
+                .prefix(10)
+                .map { String(format: "%02x", $0) }
+                .joined()
             let fileURL = directory
-                .appendingPathComponent(
-                    "\(UUID().uuidString).jpg"
-                )
+                .appendingPathComponent("photo-\(digest).jpg")
 
-            try data.write(
-                to: fileURL,
-                options: .atomic
-            )
+            if !fileManager.fileExists(atPath: fileURL.path) {
+                try data.write(to: fileURL, options: .atomic)
+            }
 
             return fileURL
         } catch {
@@ -813,7 +891,10 @@ struct MessagesView: View {
     }
 
     private func lxmfPhotoData(from image: UIImage) -> Data? {
-        let targetPhotoBytes = 20_000
+        let bitrate = Int(bluetooth.estimatedRadioBitrate)
+        let targetPhotoBytes = bitrate < 2_500
+            ? 12_000
+            : (bitrate < 7_500 ? 20_000 : 40_000)
         var current = image
         for maximumDimension in [1280.0, 1024.0, 800.0, 640.0, 480.0, 360.0, 240.0] {
             let scale = min(
@@ -871,6 +952,15 @@ struct MessagesView: View {
     ) -> URL? {
         let fileManager = FileManager.default
 
+        guard let size = (try? fileManager.attributesOfItem(
+            atPath: sourceURL.path
+        )[.size] as? NSNumber)?.intValue,
+              size > 0,
+              size <= LXMFManager.maximumAttachmentBytes,
+              let sourceData = try? Data(contentsOf: sourceURL) else {
+            return nil
+        }
+
         guard let documentsDirectory =
                 fileManager.urls(
                     for: .documentDirectory,
@@ -892,18 +982,17 @@ struct MessagesView: View {
                 withIntermediateDirectories: true
             )
 
-            let destinationURL = directory
-                .appendingPathComponent(
-                    """
-                    \(UUID().uuidString)-\
-                    \(sourceURL.lastPathComponent)
-                    """
-                )
-
-            try fileManager.copyItem(
-                at: sourceURL,
-                to: destinationURL
+            let digest = SHA256.hash(data: sourceData)
+                .prefix(10)
+                .map { String(format: "%02x", $0) }
+                .joined()
+            let destinationURL = directory.appendingPathComponent(
+                "\(digest)-\(sourceURL.lastPathComponent)"
             )
+
+            if !fileManager.fileExists(atPath: destinationURL.path) {
+                try sourceData.write(to: destinationURL, options: .atomic)
+            }
 
             return destinationURL
         } catch {
