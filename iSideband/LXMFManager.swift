@@ -25,7 +25,10 @@ final class LXMFManager: ObservableObject {
            let saved = try? JSONDecoder().decode([LXMFOutgoingMessage].self, from: data) {
             outgoingMessages = saved.map { message in
                 var restored = message
-                if restored.status == .sending { restored.status = .queued }
+                if restored.status == .sending ||
+                    restored.status == .waitingForInterface {
+                    restored.status = .queued
+                }
                 return restored
             }
             let normalizedData = try? JSONEncoder().encode(outgoingMessages)
@@ -195,7 +198,12 @@ final class LXMFManager: ObservableObject {
 
     func nextQueuedMessage() -> LXMFOutgoingMessage? {
         outgoingMessages
-            .filter { $0.status == .queued }
+            .filter {
+                $0.status == .queued ||
+                $0.status == .waitingForInterface ||
+                ($0.status == .retryScheduled &&
+                 ($0.nextRetryAt ?? .distantPast) <= Date())
+            }
             .min { lhs, rhs in
                 let leftPriority = lhs.attachment == nil ? 0 : 1
                 let rightPriority = rhs.attachment == nil ? 0 : 1
@@ -226,6 +234,65 @@ final class LXMFManager: ObservableObject {
         }
     }
 
+    func isAwaitingAttachmentCompletion(id: UUID) -> Bool {
+        outgoingMessages.contains {
+            $0.id == id &&
+            $0.attachment != nil &&
+            $0.status == .sending
+        }
+    }
+
+    var nextRetryDate: Date? {
+        outgoingMessages
+            .filter { $0.status == .retryScheduled }
+            .compactMap(\.nextRetryAt)
+            .min()
+    }
+
+    func markWaitingForInterface(id: UUID) {
+        updateMessageStatus(id: id, status: .waitingForInterface)
+    }
+
+    func markAttemptStarted(id: UUID) {
+        guard let index = outgoingMessages.firstIndex(
+            where: { $0.id == id }
+        ) else { return }
+        outgoingMessages[index].attemptCount =
+            (outgoingMessages[index].attemptCount ?? 0) + 1
+        outgoingMessages[index].nextRetryAt = nil
+        outgoingMessages[index].lastError = nil
+        outgoingMessages[index].status = .sending
+        if outgoingMessages[index].attachment != nil {
+            outgoingMessages[index].transmissionStartedAt = Date()
+        }
+        persistQueue()
+    }
+
+    func recordTransientFailure(id: UUID, reason: String) {
+        guard let index = outgoingMessages.firstIndex(
+            where: { $0.id == id }
+        ) else { return }
+        let attempts = outgoingMessages[index].attemptCount ?? 1
+        outgoingMessages[index].lastError = reason
+        outgoingMessages[index].transmissionStartedAt = nil
+        if attempts >= 5 {
+            outgoingMessages[index].status = .failed
+            outgoingMessages[index].nextRetryAt = nil
+        } else {
+            let delay = min(
+                pow(2.0, Double(max(attempts - 1, 0))) * 5,
+                120
+            )
+            outgoingMessages[index].status = .retryScheduled
+            outgoingMessages[index].nextRetryAt = Date()
+                .addingTimeInterval(
+                    delay + Double.random(in: 0...2)
+                )
+        }
+        persistQueue()
+        service.processQueue()
+    }
+
     @discardableResult
     func resendMessage(id: UUID) -> Bool {
         guard let index = outgoingMessages.firstIndex(
@@ -252,6 +319,9 @@ final class LXMFManager: ObservableObject {
 
         outgoingMessages[index].status = .queued
         outgoingMessages[index].transmissionStartedAt = nil
+        outgoingMessages[index].attemptCount = 0
+        outgoingMessages[index].nextRetryAt = nil
+        outgoingMessages[index].lastError = nil
         persistQueue()
         service.processQueue()
         return true
@@ -275,7 +345,15 @@ final class LXMFManager: ObservableObject {
         } else if status == .queued {
             outgoingMessages[index].transmissionStartedAt = nil
         }
+        if status == .sent || status == .delivered {
+            outgoingMessages[index].nextRetryAt = nil
+            outgoingMessages[index].lastError = nil
+        }
         scheduleQueuePersistence()
+
+        if status == .sent || status == .delivered || status == .failed {
+            service.processQueue()
+        }
 
         print(
             "LXMF message \(id) status changed to \(status.rawValue)"
@@ -350,6 +428,9 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
     var status: LXMFOutgoingStatus
     var transmissionStartedAt: Date?
     let attachment: LXMFOutgoingAttachment?
+    var attemptCount: Int?
+    var nextRetryAt: Date?
+    var lastError: String?
 
     init(
         id: UUID = UUID(),
@@ -358,7 +439,10 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         createdAt: Date = Date(),
         status: LXMFOutgoingStatus,
         transmissionStartedAt: Date? = nil,
-        attachment: LXMFOutgoingAttachment? = nil
+        attachment: LXMFOutgoingAttachment? = nil,
+        attemptCount: Int? = 0,
+        nextRetryAt: Date? = nil,
+        lastError: String? = nil
     ) {
         self.id = id
         self.text = text
@@ -367,11 +451,16 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         self.status = status
         self.transmissionStartedAt = transmissionStartedAt
         self.attachment = attachment
+        self.attemptCount = attemptCount
+        self.nextRetryAt = nextRetryAt
+        self.lastError = lastError
     }
 }
 
 enum LXMFOutgoingStatus: String, Codable, Hashable {
     case queued
+    case waitingForInterface
+    case retryScheduled
     case sending
     case sent
     case delivered

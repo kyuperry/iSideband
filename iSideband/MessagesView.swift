@@ -617,6 +617,19 @@ struct MessagesView: View {
                 now: date
             )
 
+        case .waitingForInterface:
+            return "Waiting for interface"
+
+        case .retryScheduled:
+            if let retryDate = queuedMessage.nextRetryAt {
+                let seconds = max(
+                    Int(ceil(retryDate.timeIntervalSince(date))),
+                    1
+                )
+                return "Retrying in \(seconds)s"
+            }
+            return "Retry scheduled"
+
         case .sending:
             return transferStatus(
                 prefix: "Sending",

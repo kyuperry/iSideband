@@ -560,10 +560,17 @@ final class ReticulumCoreBridge: ObservableObject {
             return
         }
 
-        LXMFManager.shared.updateMessageStatus(
-            id: id,
-            status: value
-        )
+        if value == .failed {
+            LXMFManager.shared.recordTransientFailure(
+                id: id,
+                reason: "Reticulum delivery attempt failed"
+            )
+        } else {
+            LXMFManager.shared.updateMessageStatus(
+                id: id,
+                status: value
+            )
+        }
     }
 
     func transmit(_ packet: Data) {

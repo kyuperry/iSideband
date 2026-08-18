@@ -47,6 +47,7 @@ final class LXMFService: ObservableObject {
     private weak var bluetooth: BluetoothManager?
 
     private var isProcessingQueue = false
+    private var retryTask: Task<Void, Never>?
 
     private let announceEncoder =
         ReticulumAnnounceEncoder()
@@ -71,6 +72,8 @@ final class LXMFService: ObservableObject {
     }
 
     func stop() {
+        retryTask?.cancel()
+        retryTask = nil
         isReady = false
         isProcessingQueue = false
         statusMessage = "LXMF service stopped"
@@ -158,6 +161,8 @@ final class LXMFService: ObservableObject {
         }
     }
     func processQueue() {
+        retryTask?.cancel()
+        retryTask = nil
         guard isReady else {
             print(
                 "LXMF queue blocked: service is not ready"
@@ -172,6 +177,14 @@ final class LXMFService: ObservableObject {
         guard let message =
             manager?.nextQueuedMessage()
         else {
+            scheduleNextRetry()
+            return
+        }
+
+        guard packetInterfaceReady else {
+            manager?.markWaitingForInterface(id: message.id)
+            scheduleQueueCheck(after: 5)
+            statusMessage = "Waiting for the selected interface"
             return
         }
 
@@ -182,8 +195,12 @@ final class LXMFService: ObservableObject {
                 of: message
             )
 
+            let awaitingAttachment = manager?
+                .isAwaitingAttachmentCompletion(id: message.id) == true
             isProcessingQueue = false
-            processQueue()
+            if !awaitingAttachment {
+                processQueue()
+            }
         }
     }
 
@@ -194,15 +211,12 @@ final class LXMFService: ObservableObject {
         print("========== TRANSMIT MESSAGE ==========")
         print("Attachment present: \(message.attachment != nil)")
         print("Text: \(message.text)")
-        manager?.updateMessageStatus(
-            id: message.id,
-            status: .sending
-        )
+        manager?.markAttemptStarted(id: message.id)
 
         guard let bluetooth else {
-            manager?.updateMessageStatus(
+            manager?.recordTransientFailure(
                 id: message.id,
-                status: .failed
+                reason: "Bluetooth manager unavailable"
             )
 
             statusMessage =
@@ -262,6 +276,17 @@ final class LXMFService: ObservableObject {
         ) {
             statusMessage =
                 "Message handed to Reticulum delivery"
+            return
+        }
+
+        guard PacketInterfaceManager.shared
+            .isActive(.bluetoothRNode) else {
+            manager?.recordTransientFailure(
+                id: message.id,
+                reason: "Reticulum TCP handoff failed"
+            )
+            statusMessage =
+                "Message queued for another Raspberry Pi attempt"
             return
         }
 
@@ -346,6 +371,35 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Message failed: \(error.localizedDescription)"
             print(statusMessage)
+        }
+    }
+
+    private var packetInterfaceReady: Bool {
+        switch PacketInterfaceManager.shared.activeInterface {
+        case .none:
+            return false
+        case .bluetoothRNode:
+            return bluetooth?.radioReady == true
+        case .raspberryPi:
+            return PiHaLowInterfaceManager.shared.state == .connected
+        }
+    }
+
+    private func scheduleNextRetry() {
+        guard let retryDate = manager?.nextRetryDate else { return }
+        scheduleQueueCheck(
+            after: max(retryDate.timeIntervalSinceNow, 0.25)
+        )
+    }
+
+    private func scheduleQueueCheck(after delay: TimeInterval) {
+        retryTask?.cancel()
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(
+                for: .seconds(max(delay, 0.25))
+            )
+            guard !Task.isCancelled else { return }
+            self?.processQueue()
         }
     }
 }
