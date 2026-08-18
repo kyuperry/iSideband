@@ -18,12 +18,23 @@ final class LXMFManager: ObservableObject {
     private static let storageKey = "isideband.lxmf.outgoing"
 
     private init() {
-        if let data = UserDefaults.standard.data(forKey: Self.storageKey),
+        let legacyData = UserDefaults.standard.data(forKey: Self.storageKey)
+        let storedData = MessageDatabase.shared.data(forKey: Self.storageKey)
+            ?? legacyData
+        if let data = storedData,
            let saved = try? JSONDecoder().decode([LXMFOutgoingMessage].self, from: data) {
             outgoingMessages = saved.map { message in
                 var restored = message
                 if restored.status == .sending { restored.status = .queued }
                 return restored
+            }
+            let normalizedData = try? JSONEncoder().encode(outgoingMessages)
+            if let normalizedData,
+               MessageDatabase.shared.set(
+                normalizedData,
+                forKey: Self.storageKey
+               ) {
+                UserDefaults.standard.removeObject(forKey: Self.storageKey)
             }
         }
     }
@@ -92,6 +103,7 @@ final class LXMFManager: ObservableObject {
         )
 
         outgoingMessages.append(message)
+        persistQueue()
 
         print(
             """
@@ -272,7 +284,9 @@ final class LXMFManager: ObservableObject {
 
     private func persistQueue() {
         guard let data = try? JSONEncoder().encode(outgoingMessages) else { return }
-        UserDefaults.standard.set(data, forKey: Self.storageKey)
+        if !MessageDatabase.shared.set(data, forKey: Self.storageKey) {
+            UserDefaults.standard.set(data, forKey: Self.storageKey)
+        }
     }
 
     private func scheduleQueuePersistence() {

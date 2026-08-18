@@ -28,11 +28,15 @@ final class LXMFIncomingMessageStore: ObservableObject {
     func unreadCount(
         for destinationHash: String
     ) -> Int {
-        let lastRead = UserDefaults.standard.object(
-            forKey: readStorageKey(
-                destinationHash
-            )
-        ) as? Date ?? .distantPast
+        let key = readStorageKey(destinationHash)
+        let lastRead: Date
+        if let data = MessageDatabase.shared.data(forKey: key),
+           let date = try? JSONDecoder().decode(Date.self, from: data) {
+            lastRead = date
+        } else {
+            lastRead = UserDefaults.standard.object(forKey: key)
+                as? Date ?? .distantPast
+        }
 
         return messages(for: destinationHash)
             .filter {
@@ -45,28 +49,26 @@ final class LXMFIncomingMessageStore: ObservableObject {
     func markRead(
         destinationHash: String
     ) {
-        UserDefaults.standard.set(
-            Date(),
-            forKey: readStorageKey(
-                destinationHash
-            )
-        )
+        let key = readStorageKey(destinationHash)
+        let date = Date()
+        if let data = try? JSONEncoder().encode(date),
+           MessageDatabase.shared.set(data, forKey: key) {
+            UserDefaults.standard.removeObject(forKey: key)
+        } else {
+            UserDefaults.standard.set(date, forKey: key)
+        }
         revision += 1
     }
 
     func deleteConversation(
         destinationHash: String
     ) {
-        UserDefaults.standard.removeObject(
-            forKey: messageStorageKey(
-                destinationHash
-            )
-        )
-        UserDefaults.standard.removeObject(
-            forKey: readStorageKey(
-                destinationHash
-            )
-        )
+        let messageKey = messageStorageKey(destinationHash)
+        let readKey = readStorageKey(destinationHash)
+        MessageDatabase.shared.removeValue(forKey: messageKey)
+        MessageDatabase.shared.removeValue(forKey: readKey)
+        UserDefaults.standard.removeObject(forKey: messageKey)
+        UserDefaults.standard.removeObject(forKey: readKey)
         revision += 1
     }
 
@@ -173,9 +175,10 @@ final class LXMFIncomingMessageStore: ObservableObject {
     private func load(
         key: String
     ) -> [ChatMessage] {
-        guard let data = UserDefaults.standard.data(
-                    forKey: key
-              ),
+        let legacyData = UserDefaults.standard.data(forKey: key)
+        let storedData = MessageDatabase.shared.data(forKey: key)
+            ?? legacyData
+        guard let data = storedData,
               let messages = try? JSONDecoder().decode(
                     [ChatMessage].self,
                     from: data
@@ -184,9 +187,10 @@ final class LXMFIncomingMessageStore: ObservableObject {
             return []
         }
         let repaired = messages.map(repairAttachmentPath)
-        if repaired != messages,
-           let repairedData = try? JSONEncoder().encode(repaired) {
-            UserDefaults.standard.set(repairedData, forKey: key)
+        if let repairedData = try? JSONEncoder().encode(repaired),
+           (legacyData != nil || repaired != messages),
+           MessageDatabase.shared.set(repairedData, forKey: key) {
+            UserDefaults.standard.removeObject(forKey: key)
         }
         return repaired
     }
@@ -257,7 +261,9 @@ final class LXMFIncomingMessageStore: ObservableObject {
         guard let data = try? JSONEncoder().encode(messages) else {
             return false
         }
-        UserDefaults.standard.set(data, forKey: key)
+        if !MessageDatabase.shared.set(data, forKey: key) {
+            UserDefaults.standard.set(data, forKey: key)
+        }
         revision += 1
         return true
     }

@@ -792,6 +792,14 @@ func (m *LXMessage) AsQR() (any, error) {
 }
 
 func UnpackFromBytes(lxmfBytes []byte, originalMethod byte) (*LXMessage, error) {
+	minimumEnvelopeLength := 2*DestinationLength + SignatureLength + 1
+	if len(lxmfBytes) < minimumEnvelopeLength {
+		return nil, fmt.Errorf(
+			"invalid LXMF envelope length %d, minimum is %d",
+			len(lxmfBytes),
+			minimumEnvelopeLength,
+		)
+	}
 	destinationHash := lxmfBytes[:DestinationLength]
 	sourceHash := lxmfBytes[DestinationLength : 2*DestinationLength]
 	signature := lxmfBytes[2*DestinationLength : 2*DestinationLength+SignatureLength]
@@ -800,6 +808,12 @@ func UnpackFromBytes(lxmfBytes []byte, originalMethod byte) (*LXMessage, error) 
 	var unpacked []any
 	if err := umsgpack.Unpackb(packedPayload, &unpacked); err != nil {
 		return nil, err
+	}
+	if len(unpacked) < 4 {
+		return nil, fmt.Errorf(
+			"invalid LXMF payload field count %d, minimum is 4",
+			len(unpacked),
+		)
 	}
 
 	var stamp []byte
