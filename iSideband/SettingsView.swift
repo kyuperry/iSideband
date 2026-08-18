@@ -10,10 +10,12 @@ struct SettingsView: View {
     @ObservedObject private var discoveryMode =
         LXMFDiscoveryMode.shared
 
+    @ObservedObject private var packetInterfaces =
+        PacketInterfaceManager.shared
+
     @Environment(\.dismiss) private var dismiss
 
     @State private var gpsEnabled = false
-    @State private var bluetoothEnabled = true
     @AppStorage("shareLocationOnMesh")
     private var shareLocationOnMesh = false
 
@@ -456,13 +458,26 @@ struct SettingsView: View {
     private var interfaceSettingsSection:
         some View {
         Section("Interfaces") {
-            Toggle(
-                isOn: $bluetoothEnabled
-            ) {
-                Label(
-                    "Bluetooth",
-                    systemImage: "bluetooth"
+            Toggle(isOn: bluetoothInterfaceBinding) {
+                Label("Bluetooth RNode", systemImage: "bluetooth")
+            }
+            .disabled(packetInterfaces.activeInterface == .raspberryPi)
+
+            Toggle(isOn: raspberryPiInterfaceBinding) {
+                Label("Raspberry Pi", systemImage: "network")
+            }
+            .disabled(packetInterfaces.activeInterface == .bluetoothRNode)
+
+            if packetInterfaces.activeInterface != .none {
+                Text(
+                    "Turn off \(packetInterfaces.activeInterface.title) before enabling the other packet interface."
                 )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            } else {
+                Text("Both packet interfaces are off.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Toggle(
@@ -523,12 +538,30 @@ struct SettingsView: View {
 
             Text(
                 """
-                These switches control whether iSideband will use Bluetooth and GPS. They do not directly turn the iPhone’s system radios on or off.
+                GPS supplies optional location telemetry and can operate alongside either packet interface.
                 """
             )
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+    }
+
+    private var bluetoothInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.activeInterface == .bluetoothRNode },
+            set: { enabled in
+                packetInterfaces.select(enabled ? .bluetoothRNode : .none)
+            }
+        )
+    }
+
+    private var raspberryPiInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.activeInterface == .raspberryPi },
+            set: { enabled in
+                packetInterfaces.select(enabled ? .raspberryPi : .none)
+            }
+        )
     }
 
     private var identitySection:
@@ -717,17 +750,6 @@ struct SettingsView: View {
                 )
         }
 
-        if defaults.object(
-            forKey:
-                "bluetoothInterfaceEnabled"
-        ) != nil {
-            bluetoothEnabled =
-                defaults.bool(
-                    forKey:
-                        "bluetoothInterfaceEnabled"
-                )
-        }
-
         frequencyMHz =
             defaults.string(
                 forKey:
@@ -786,12 +808,6 @@ struct SettingsView: View {
 
         locationTelemetry.setEnabled(
             gpsEnabled
-        )
-
-        defaults.set(
-            bluetoothEnabled,
-            forKey:
-                "bluetoothInterfaceEnabled"
         )
 
         frequencyMHz =

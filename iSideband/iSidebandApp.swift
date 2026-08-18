@@ -25,6 +25,9 @@ struct iSidebandApp: App {
             )
                 .environmentObject(lxmfManager)
                 .task {
+                    PacketInterfaceManager.shared.configure(
+                        bluetooth: bluetooth
+                    )
                     lxmfManager.start(
                         bluetooth: bluetooth
                     )

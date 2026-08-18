@@ -45,6 +45,10 @@ final class BluetoothManager:
     @Published var boardName = "Unknown"
     @Published var batteryPercent: Int?
     @Published var batteryState: RNodeBatteryState?
+    @Published private(set) var batteryVoltage: Double?
+    @Published private(set) var batteryUpdatedAt: Date?
+    @Published private(set) var batteryTelemetrySource: String?
+    @Published private(set) var batteryTelemetryAvailable: Bool?
     @Published var radioFrequency: UInt32?
     @Published var radioBandwidth: UInt32?
     @Published var transmitPower: Int?
@@ -52,6 +56,8 @@ final class BluetoothManager:
     @Published var codingRate: Int?
     @Published var temperature: Double?
     @Published var radioReady = false
+    @Published var radioLocked: Bool?
+    @Published var radioErrorMessage: String?
     @Published var receivedBytes: UInt32?
     @Published var transmittedBytes: UInt32?
     @Published private(set) var reticulumBytesReceived = 0
@@ -78,12 +84,20 @@ final class BluetoothManager:
     
     private var rnodeWriteCharacteristic: CBCharacteristic?
     private var rnodeNotifyCharacteristic: CBCharacteristic?
+    private var batteryLevelCharacteristic: CBCharacteristic?
+    private var batteryTelemetryTimer: Timer?
+    private var batteryCapabilityTask: Task<Void, Never>?
     private var pendingRNodeWriteChunks: [Data] = []
     private var pendingRNodeWriteHead = 0
     private let batteryNotificationMilestones = [50, 25]
     private var sentBatteryMilestones = Set<Int>()
     private var lastBatteryNotificationPercent: Int?
-    private var hasRNodeBatteryTelemetry = false
+    private var lastRNodeBatteryTelemetryAt: Date?
+    private var rnodeBatteryPercent: Int?
+    private var bleBatteryPercent: Int?
+    private var bleBatteryUpdatedAt: Date?
+    private let rnodeBatteryFreshnessInterval: TimeInterval = 15
+    private let bleBatteryFreshnessInterval: TimeInterval = 60
     
     override init() {
         super.init()
@@ -160,6 +174,11 @@ final class BluetoothManager:
         }
     }
     func startScanning() {
+        guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+            connectionMessage = "Bluetooth RNode interface is not selected"
+            return
+        }
+
         guard centralManager.state == .poweredOn else {
             connectionMessage = "Bluetooth is not ready"
             return
@@ -187,6 +206,11 @@ final class BluetoothManager:
     }
     
     func connect(to device: DiscoveredDevice) {
+        guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+            connectionMessage = "Bluetooth RNode interface is not selected"
+            return
+        }
+
         stopScanning()
 
         reconnectTask?.cancel()
@@ -218,9 +242,31 @@ final class BluetoothManager:
             connectedPeripheral
         )
     }
+
+    func deactivateInterface() {
+        stopScanning()
+        let peripheralToCancel =
+            connectedPeripheral ?? reconnectPeripheral
+        manualDisconnectRequested = true
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        reconnectAttempt = 0
+        reconnectPeripheral = nil
+
+        if let peripheralToCancel {
+            centralManager.cancelPeripheralConnection(peripheralToCancel)
+        } else {
+            connectingDeviceID = nil
+            connectionMessage = "Bluetooth RNode interface disabled"
+        }
+    }
     
     func sendToRNode(_ data: Data)
     {
+        guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+            connectionMessage = "Bluetooth RNode interface is not selected"
+            return
+        }
         
         guard
             let connectedPeripheral,
@@ -374,6 +420,10 @@ final class BluetoothManager:
     private func clearConnectionState() {
         rssiTimer?.invalidate()
         rssiTimer = nil
+        batteryTelemetryTimer?.invalidate()
+        batteryTelemetryTimer = nil
+        batteryCapabilityTask?.cancel()
+        batteryCapabilityTask = nil
 
         connectingDeviceID = nil
         connectedDeviceID = nil
@@ -381,20 +431,34 @@ final class BluetoothManager:
         
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
+        batteryLevelCharacteristic = nil
         pendingRNodeWriteChunks.removeAll()
         pendingRNodeWriteHead = 0
         batteryPercent = nil
         batteryState = nil
+        batteryVoltage = nil
+        batteryUpdatedAt = nil
+        batteryTelemetrySource = nil
+        batteryTelemetryAvailable = nil
         satelliteCount = nil
         uptimeSeconds = nil
         radioReady = false
+        radioLocked = nil
+        radioErrorMessage = nil
         smoothedConnectedRSSI = nil
         lastRSSI = nil
-        hasRNodeBatteryTelemetry = false
+        lastRNodeBatteryTelemetryAt = nil
+        rnodeBatteryPercent = nil
+        bleBatteryPercent = nil
+        bleBatteryUpdatedAt = nil
         sentBatteryMilestones.removeAll()
         lastBatteryNotificationPercent = nil
         
         serviceCount = 0
+    }
+
+    func setRadioConnectionMessage(_ message: String) {
+        connectionMessage = message
     }
 
     private func notifyRNodeConnection(
@@ -482,7 +546,8 @@ final class BluetoothManager:
     private func scheduleReconnect(
         to peripheral: CBPeripheral
     ) {
-        guard !manualDisconnectRequested,
+        guard PacketInterfaceManager.shared.isActive(.bluetoothRNode),
+              !manualDisconnectRequested,
               centralManager.state == .poweredOn,
               reconnectAttempt <
                 maximumReconnectAttempts else {
@@ -618,7 +683,7 @@ final class BluetoothManager:
     func turnRadioOff() {
         let frame = Data([
             0xC0,
-            0x3F,
+            0x06,
             0x00,
             0xC0
         ])
@@ -821,9 +886,49 @@ final class BluetoothManager:
         }
     }
 
+    private func startBatteryTelemetryPolling() {
+        batteryTelemetryTimer?.invalidate()
+        batteryCapabilityTask?.cancel()
+        batteryTelemetryAvailable = nil
+        requestBatteryTelemetry()
+        batteryTelemetryTimer = Timer.scheduledTimer(
+            withTimeInterval: 30,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.requestBatteryTelemetry()
+            }
+        }
+        batteryCapabilityTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(45))
+            guard !Task.isCancelled,
+                  let self,
+                  self.batteryPercent == nil else {
+                return
+            }
+            self.batteryTelemetryAvailable = false
+        }
+    }
+
+    private func requestBatteryTelemetry() {
+        guard connectedDeviceID != nil else { return }
+        // RNode firmware publishes CMD_STAT_BAT (0x27) on the serial/BLE
+        // channel every few seconds. There is no battery query command, so
+        // only explicitly read the standard BLE Battery Service fallback.
+        if let connectedPeripheral,
+           let batteryLevelCharacteristic,
+           batteryLevelCharacteristic.properties.contains(.read) {
+            connectedPeripheral.readValue(for: batteryLevelCharacteristic)
+        }
+    }
+
     func sendRadioPayload(_ payload: Data) {
         guard !payload.isEmpty else {
             print("Cannot send an empty radio payload")
+            return
+        }
+        guard radioReady else {
+            print("Radio payload rejected: RNode LoRa radio is not ready")
             return
         }
         
@@ -1058,6 +1163,11 @@ final class BluetoothManager:
         }
 
         Task { @MainActor in
+            guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+                central.cancelPeripheralConnection(peripheral)
+                return
+            }
+
             // State restoration can be the app's first callback after iOS
             // launches it in the background. This is intentionally idempotent.
             LXMFManager.shared.start(bluetooth: self)
@@ -1100,6 +1210,9 @@ final class BluetoothManager:
         rssi RSSI: NSNumber
     ) {
         Task { @MainActor in
+            guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+                return
+            }
 
             let advertisedName =
                 advertisementData[
@@ -1134,6 +1247,11 @@ final class BluetoothManager:
         didConnect peripheral: CBPeripheral
     ) { print("CONNECTED TO:", peripheral.name ?? "Unnamed", peripheral.identifier)
         Task { @MainActor in
+            guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
+                central.cancelPeripheralConnection(peripheral)
+                return
+            }
+
             reconnectTask?.cancel()
             reconnectTask = nil
             reconnectAttempt = 0
@@ -1312,6 +1430,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                     print("Subscribed to RNode notifications")
                     
                 case "2A19":
+                    batteryLevelCharacteristic = characteristic
                     if characteristic.properties.contains(.notify) {
                         peripheral.setNotifyValue(
                             true,
@@ -1337,6 +1456,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
             if rnodeWriteCharacteristic != nil,
                rnodeNotifyCharacteristic != nil {
+                startBatteryTelemetryPolling()
                 Task { @MainActor in
                     try? await Task.sleep(
                         for: .seconds(1)
@@ -1407,6 +1527,9 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                 for frame in frames {
                     let packet = packetDecoder.decode(frame)
+                    if packet.commandType == .batteryState {
+                        print("RNode battery frame received:", packet.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+                    }
                     print(
                         """
                         RNode decoded command
@@ -1575,15 +1698,24 @@ extension BluetoothManager: CBPeripheralDelegate {
                     }
 
                     if let batteryPercent = telemetry.batteryPercent {
-                        hasRNodeBatteryTelemetry = true
-                        self.batteryPercent = batteryPercent
-                        sendLowBatteryNotification(
-                            percent: batteryPercent
-                        )
+                        let now = Date()
+                        lastRNodeBatteryTelemetryAt = now
+                        // The firmware already averages its ADC samples before
+                        // encoding this integer. Preserve that exact value.
+                        rnodeBatteryPercent = batteryPercent
+                        print("RNode battery telemetry received: \(batteryPercent)%")
+                        reconcileBatteryReadings(updatedAt: now)
                     }
 
                     if let batteryState = telemetry.batteryState {
                         self.batteryState = batteryState
+                        if telemetry.batteryPercent == nil {
+                            batteryUpdatedAt = Date()
+                        }
+                    }
+
+                    if let batteryVoltage = telemetry.batteryVoltage {
+                        self.batteryVoltage = batteryVoltage
                     }
 
                     if let temperature = telemetry.temperature {
@@ -1592,6 +1724,29 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let radioReady = telemetry.radioReady {
                         self.radioReady = radioReady
+                        print(
+                            radioReady
+                                ? "RNode LoRa radio is ON"
+                                : "RNode LoRa radio is OFF"
+                        )
+                    }
+
+                    if let radioLocked = telemetry.radioLocked {
+                        self.radioLocked = radioLocked
+                        print("RNode radio lock: \(radioLocked)")
+                    }
+
+                    if let errorCode = telemetry.errorCode {
+                        let message = Self.rnodeErrorMessage(
+                            for: errorCode
+                        )
+                        radioErrorMessage = message
+                        radioReady = false
+                        print(
+                            "RNode firmware error 0x" +
+                            String(format: "%02X", errorCode) +
+                            ": " + message
+                        )
                     }
                     
                     if let frequency = telemetry.frequency {
@@ -1671,17 +1826,21 @@ extension BluetoothManager: CBPeripheralDelegate {
                     print("BLE Battery data: \(data as NSData)")
                     print("BLE Battery byte count: \(data.count)")
 
-                    if (0...100).contains(reportedLevel),
-                       !hasRNodeBatteryTelemetry {
-                        batteryPercent = reportedLevel
-                        sendLowBatteryNotification(
-                            percent: reportedLevel
-                        )
+                    // Some RNode firmware revisions expose their calculated
+                    // percentage on the standard BLE Battery Level
+                    // characteristic before applying the final 100% cap.
+                    // Reticulum applies the same cap to CMD_STAT_BAT. Preserve
+                    // 0xFF as the BLE "unknown" sentinel instead of treating
+                    // it as a full battery.
+                    if let normalizedLevel =
+                        RNodePacketRouter.decodeBLEBatteryPercent(rawValue) {
+                        let now = Date()
+                        bleBatteryPercent = normalizedLevel
+                        bleBatteryUpdatedAt = now
+                        reconcileBatteryReadings(updatedAt: now)
                     } else {
                         print(
-                            hasRNodeBatteryTelemetry
-                                ? "Ignoring BLE battery fallback because RNode telemetry is active"
-                                : "Ignoring invalid BLE battery level \(reportedLevel)"
+                            "Ignoring unknown BLE battery level"
                         )
                     }
                 }
@@ -1697,6 +1856,70 @@ extension BluetoothManager: CBPeripheralDelegate {
                     "\(characteristic.uuid): \(data as NSData)"
                 )
             }
+        }
+    }
+
+    private func reconcileBatteryReadings(updatedAt: Date) {
+        let now = Date()
+        let nativeFresh = rnodeBatteryPercent != nil &&
+            lastRNodeBatteryTelemetryAt.map {
+                now.timeIntervalSince($0) <=
+                    rnodeBatteryFreshnessInterval
+            } == true
+        let bleFresh = bleBatteryPercent != nil &&
+            bleBatteryUpdatedAt.map {
+                now.timeIntervalSince($0) <=
+                    bleBatteryFreshnessInterval
+            } == true
+
+        let candidate: Int
+        let source: String
+        if nativeFresh, let native = rnodeBatteryPercent {
+            // CMD_STAT_BAT is generated from the firmware's own filtered
+            // battery_percent value and is authoritative when available.
+            candidate = native
+            source = "RNode firmware"
+        } else if bleFresh, let ble = bleBatteryPercent {
+            candidate = ble
+            source = "BLE Battery Service"
+            // The standard Battery Level characteristic carries no charging
+            // state. Do not retain a stale state from an older RNode frame.
+            batteryState = nil
+        } else {
+            return
+        }
+
+        let clamped = min(max(candidate, 0), 100)
+        guard batteryPercent == nil ||
+                clamped != batteryPercent else {
+            batteryUpdatedAt = updatedAt
+            batteryTelemetrySource = source
+            batteryTelemetryAvailable = true
+            return
+        }
+        batteryPercent = clamped
+        batteryUpdatedAt = updatedAt
+        batteryTelemetrySource = source
+        batteryTelemetryAvailable = true
+        sendLowBatteryNotification(percent: clamped)
+    }
+
+    private static func rnodeErrorMessage(for code: UInt8) -> String {
+        switch code {
+        case 0x01:
+            return "The RNode could not initialize its LoRa radio."
+        case 0x02:
+            return "The RNode radio transmission failed."
+        case 0x03:
+            return "The RNode configuration storage is locked."
+        case 0x04:
+            return "The RNode transmit queue is full."
+        case 0x05:
+            return "The RNode is low on memory."
+        case 0x06:
+            return "The RNode modem timed out."
+        default:
+            return "The RNode reported an unknown radio error."
         }
     }
     nonisolated func peripheral(

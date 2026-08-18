@@ -67,9 +67,40 @@ struct MainMenuView: View {
 
 struct InterfacesView: View {
     @ObservedObject var bluetooth: BluetoothManager
+    @ObservedObject private var packetInterfaces =
+        PacketInterfaceManager.shared
+    @ObservedObject private var piInterface =
+        PiHaLowInterfaceManager.shared
+
+    @AppStorage("raspberryPiHost") private var piHost = ""
+    @AppStorage("raspberryPiPort") private var piPort = "4242"
 
     var body: some View {
         Form {
+            Section("Active Interface") {
+                Toggle("Bluetooth RNode", isOn: bluetoothInterfaceBinding)
+                    .disabled(
+                        packetInterfaces.activeInterface == .raspberryPi
+                    )
+
+                Toggle("Raspberry Pi", isOn: raspberryPiInterfaceBinding)
+                    .disabled(
+                        packetInterfaces.activeInterface == .bluetoothRNode
+                    )
+
+                if packetInterfaces.activeInterface == .none {
+                    Text("Both packet interfaces are off.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(
+                        "Turn off \(packetInterfaces.activeInterface.title) before enabling the other interface."
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
             Section("RNode Interface") {
                 LabeledContent(
                     "Connection",
@@ -84,10 +115,58 @@ struct InterfacesView: View {
                         ? "Available"
                         : "Unavailable"
                 )
+
+                if packetInterfaces.activeInterface != .bluetoothRNode {
+                    Text("Disabled while Raspberry Pi is selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
+            Section("Raspberry Pi Interface") {
+                TextField("Host or IP address", text: $piHost)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                TextField("TCP port", text: $piPort)
+                    .keyboardType(.numberPad)
+
+                LabeledContent("Connection", value: piInterface.state.label)
+
+                if piInterface.state == .connected || piInterface.state == .connecting {
+                    Button("Disconnect", role: .destructive) {
+                        piInterface.disconnect()
+                    }
+                } else {
+                    Button("Connect to Raspberry Pi") {
+                        piInterface.connect(host: piHost, port: piPort)
+                    }
+                    .disabled(
+                        packetInterfaces.activeInterface != .raspberryPi ||
+                        piHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                }
+            }
         }
         .navigationTitle("Interfaces")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var bluetoothInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.activeInterface == .bluetoothRNode },
+            set: { enabled in
+                packetInterfaces.select(enabled ? .bluetoothRNode : .none)
+            }
+        )
+    }
+
+    private var raspberryPiInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.activeInterface == .raspberryPi },
+            set: { enabled in
+                packetInterfaces.select(enabled ? .raspberryPi : .none)
+            }
+        )
     }
 }

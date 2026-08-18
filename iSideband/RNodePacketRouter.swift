@@ -24,8 +24,11 @@ struct RNodeTelemetryUpdate {
     var firmwareVersion: String?
     var batteryPercent: Int?
     var batteryState: RNodeBatteryState?
+    var batteryVoltage: Double?
     var temperature: Double?
     var radioReady: Bool?
+    var radioLocked: Bool?
+    var errorCode: UInt8?
 
     var frequency: UInt32?
     var bandwidth: UInt32?
@@ -41,6 +44,14 @@ struct RNodeTelemetryUpdate {
 }
 
 final class RNodePacketRouter {
+    static func decodeBLEBatteryPercent(_ rawValue: UInt8) -> Int? {
+        // Bluetooth Battery Service reserves 0xFF for an unknown level.
+        // RNode firmware otherwise represents this as an integer percentage;
+        // cap over-range readings the same way Reticulum caps CMD_STAT_BAT.
+        guard rawValue != 0xFF else { return nil }
+        return min(Int(rawValue), 100)
+    }
+
     func route(_ packet: RNodePacket) -> RNodeTelemetryUpdate {
         switch packet.commandType {
         case .frequency:
@@ -77,7 +88,8 @@ final class RNodePacketRouter {
                 batteryPercent: decodeBatteryPercent(from: packet),
                 batteryState: packet.payload.first.flatMap {
                     RNodeBatteryState(rawValue: $0)
-                }
+                },
+                batteryVoltage: decodeBatteryVoltage(from: packet)
             )
 
         case .temperature:
@@ -121,7 +133,17 @@ final class RNodePacketRouter {
 
         case .radioState:
             return RNodeTelemetryUpdate(
-                radioReady: true
+                radioReady: packet.payload.first.map { $0 == 0x01 }
+            )
+
+        case .radioLock:
+            return RNodeTelemetryUpdate(
+                radioLocked: packet.payload.first.map { $0 != 0x00 }
+            )
+
+        case .error:
+            return RNodeTelemetryUpdate(
+                errorCode: packet.payload.first
             )
 
         default:
@@ -146,13 +168,23 @@ final class RNodePacketRouter {
             return nil
         }
 
-        let percent = Int(packet.payload[1])
+        // Match Reticulum's RNodeInterface: the second status byte is the
+        // battery percentage, clamped to the valid display range.
+        return min(Int(packet.payload[1]), 100)
+    }
 
-        guard (0...100).contains(percent) else {
-            return nil
-        }
+    private func decodeBatteryVoltage(
+        from packet: RNodePacket
+    ) -> Double? {
+        guard packet.payload.count >= 4 else { return nil }
 
-        return percent
+        let millivolts =
+            UInt16(packet.payload[2]) << 8 |
+            UInt16(packet.payload[3])
+        // Reject malformed extension data rather than showing a plausible-
+        // looking but impossible single-cell battery voltage.
+        guard (2_000...5_000).contains(millivolts) else { return nil }
+        return Double(millivolts) / 1_000.0
     }
 
     private func decodeTemperature(

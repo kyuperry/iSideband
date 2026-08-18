@@ -23,6 +23,8 @@ enum RNodeRadioConfigurationError: LocalizedError {
     case invalidTransmitPower
     case invalidSpreadingFactor
     case invalidCodingRate
+    case radioLocked
+    case radioDidNotStart(String?)
 
     var errorDescription: String? {
         switch self {
@@ -43,6 +45,12 @@ enum RNodeRadioConfigurationError: LocalizedError {
 
         case .invalidCodingRate:
             return "Coding rate must be between 5 and 8."
+
+        case .radioLocked:
+            return "The RNode radio is locked because its modem configuration is incomplete."
+
+        case .radioDidNotStart(let detail):
+            return detail ?? "The RNode did not turn its LoRa radio on."
         }
     }
 }
@@ -54,6 +62,10 @@ extension BluetoothManager {
             Result<RNodeRadioConfiguration, Error>
         ) -> Void
     ) {
+        radioReady = false
+        radioLocked = nil
+        radioErrorMessage = nil
+
         guard connectedDeviceID != nil else {
             completion(
                 .failure(
@@ -217,6 +229,7 @@ extension BluetoothManager {
             frames,
             index: 0,
             configuration: configuration,
+            retryCount: 0,
             completion: completion
         )
     }
@@ -225,6 +238,7 @@ extension BluetoothManager {
         _ frames: [Data],
         index: Int,
         configuration: RNodeRadioConfiguration,
+        retryCount: Int,
         completion: @escaping (
             Result<RNodeRadioConfiguration, Error>
         ) -> Void
@@ -259,8 +273,6 @@ extension BluetoothManager {
             codingRate =
                 configuration.codingRate
 
-            radioReady = true
-
             print(
                 """
                 RNode radio configuration sent
@@ -272,8 +284,10 @@ extension BluetoothManager {
                 """
             )
 
-            completion(
-                .success(configuration)
+            verifyRadioStarted(
+                configuration: configuration,
+                retryCount: retryCount,
+                completion: completion
             )
 
             return
@@ -288,8 +302,60 @@ extension BluetoothManager {
                 frames,
                 index: index + 1,
                 configuration: configuration,
+                retryCount: retryCount,
                 completion: completion
             )
+        }
+    }
+
+    private func verifyRadioStarted(
+        configuration: RNodeRadioConfiguration,
+        retryCount: Int,
+        completion: @escaping (
+            Result<RNodeRadioConfiguration, Error>
+        ) -> Void
+    ) {
+        // Ask for both the lock and state after the firmware has had time to
+        // initialize the modem. These responses are authoritative.
+        sendToRNode(Data([0xC0, 0x07, 0xFF, 0xC0]))
+        sendToRNode(Data([0xC0, 0x06, 0xFF, 0xC0]))
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            guard self.connectedDeviceID != nil else {
+                completion(
+                    .failure(RNodeRadioConfigurationError.rnodeNotConnected)
+                )
+                return
+            }
+
+            if self.radioReady {
+                self.setRadioConnectionMessage("RNode data channel ready")
+                print("RNode radio configuration verified: radio is ON")
+                completion(.success(configuration))
+                return
+            }
+
+            if retryCount == 0, self.radioLocked != true {
+                print("RNode radio stayed off; retrying startup once")
+                self.radioErrorMessage = nil
+                self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]))
+                self.verifyRadioStarted(
+                    configuration: configuration,
+                    retryCount: 1,
+                    completion: completion
+                )
+                return
+            }
+
+            let error: RNodeRadioConfigurationError
+            if self.radioLocked == true {
+                error = .radioLocked
+            } else {
+                error = .radioDidNotStart(self.radioErrorMessage)
+            }
+            self.radioReady = false
+            self.setRadioConnectionMessage(error.localizedDescription)
+            completion(.failure(error))
         }
     }
 

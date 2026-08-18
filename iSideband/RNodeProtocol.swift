@@ -95,6 +95,7 @@ enum RNodeCommand: UInt8 {
     case spreadingFactor = 0x04
     case codingRate = 0x05
     case radioState = 0x06
+    case radioLock = 0x07
     
     case receivedBytes = 0x21
     case transmittedBytes = 0x22
@@ -108,6 +109,7 @@ enum RNodeCommand: UInt8 {
     case uptime = 0x2B
     
     case firmwareVersion = 0x50
+    case error = 0x90
     case unknown = 0xFE
     
     init(byte: UInt8?) {
@@ -142,6 +144,9 @@ enum RNodeCommand: UInt8 {
             
         case .radioState:
             return "Radio State"
+
+        case .radioLock:
+            return "Radio Lock"
             
         case .receivedBytes:
             return "Received Bytes"
@@ -175,6 +180,9 @@ enum RNodeCommand: UInt8 {
             
         case .firmwareVersion:
             return "Firmware Version"
+
+        case .error:
+            return "Error"
             
         case .unknown:
             return "Unknown"
