@@ -215,6 +215,25 @@ final class ReticulumCoreBridge: ObservableObject {
         loadRemoteNodeLocations()
     }
 
+    func ingestPaperMessageURI(_ uri: String) -> String {
+        guard handle != 0 else {
+            return "The Reticulum core is not ready yet."
+        }
+        let result = uri.withCString {
+            runcore_ingest_lxm_uri(handle, $0)
+        }
+        switch result {
+        case 0:
+            return "Message decrypted and added to your conversations."
+        case 1:
+            return "This paper message has already been scanned."
+        case 2:
+            return "This paper message is addressed to a different LXMF identity."
+        default:
+            return "The QR code is not a valid LXMF paper message."
+        }
+    }
+
     func start(bluetooth: BluetoothManager) {
         self.bluetooth = bluetooth
         guard handle == 0 else {

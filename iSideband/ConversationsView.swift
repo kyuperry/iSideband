@@ -1,5 +1,11 @@
 import SwiftUI
 
+private struct ScannedLXMFPeer: Identifiable {
+    let id = UUID()
+    let displayName: String
+    let destinationHash: String
+}
+
 struct ConversationsView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject private var contactStore =
@@ -13,6 +19,9 @@ struct ConversationsView: View {
     @State private var contactPendingDeletion: LXMFContact?
     @State private var contactPendingEdit: LXMFContact?
     @State private var groupPendingDeletion: GroupConversation?
+    @State private var showQRScanner = false
+    @State private var qrScanMessage: String?
+    @State private var scannedPeer: ScannedLXMFPeer?
 
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
@@ -167,6 +176,130 @@ struct ConversationsView: View {
                 }
             }
         }
+        .fullScreenCover(isPresented: $showQRScanner) {
+            LXMFQRCodeScannerView { result in
+                showQRScanner = false
+                switch result {
+                case .success(let value):
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        handleScannedQRCode(value)
+                    }
+                case .failure(let error):
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        qrScanMessage = error.localizedDescription
+                    }
+                }
+            }
+        }
+        .alert(
+            "QR Code",
+            isPresented: Binding(
+                get: { qrScanMessage != nil },
+                set: { if !$0 { qrScanMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { qrScanMessage = nil }
+        } message: {
+            Text(qrScanMessage ?? "")
+        }
+        .sheet(item: $scannedPeer) { peer in
+            AddLXMFContactView(
+                initialDisplayName: peer.displayName,
+                initialDestinationHash: peer.destinationHash
+            ) { contact in
+                do {
+                    try contactStore.add(contact)
+                    qrScanMessage = "Peer added to your contacts."
+                } catch {
+                    qrScanMessage = error.localizedDescription
+                }
+                scannedPeer = nil
+            }
+        }
+    }
+
+    private func handleScannedQRCode(_ rawValue: String) {
+        let value = rawValue.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        if value.lowercased().hasPrefix("lxm://") {
+            qrScanMessage = ReticulumCoreBridge.shared
+                .ingestPaperMessageURI(value)
+            return
+        }
+
+        if let peer = Self.decodePeerQRCode(value) {
+            if contactStore.contains(destinationHash: peer.destinationHash) {
+                qrScanMessage = "That peer is already in your contacts."
+            } else {
+                scannedPeer = peer
+            }
+            return
+        }
+
+        qrScanMessage =
+            "The QR code is not a valid LXMF paper message or 32-character peer destination."
+    }
+
+    private static func decodePeerQRCode(
+        _ value: String
+    ) -> ScannedLXMFPeer? {
+        if let data = value.data(using: .utf8),
+           let object = try? JSONSerialization.jsonObject(with: data)
+                as? [String: Any] {
+            let hash = object["destination_hash"] as? String
+                ?? object["destinationHash"] as? String
+                ?? object["lxmf_address"] as? String
+            if let hash, let cleaned = validDestinationHash(hash) {
+                let name = object["display_name"] as? String
+                    ?? object["displayName"] as? String
+                    ?? object["name"] as? String
+                    ?? ""
+                return ScannedLXMFPeer(
+                    displayName: name,
+                    destinationHash: cleaned
+                )
+            }
+        }
+
+        if let components = URLComponents(string: value) {
+            let queryHash = components.queryItems?.first {
+                ["destination", "destination_hash", "hash", "address"]
+                    .contains($0.name.lowercased())
+            }?.value
+            let pathCandidate = components.host ??
+                components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            if let cleaned = validDestinationHash(queryHash ?? pathCandidate) {
+                let name = components.queryItems?.first {
+                    ["name", "display_name"].contains($0.name.lowercased())
+                }?.value ?? ""
+                return ScannedLXMFPeer(
+                    displayName: name,
+                    destinationHash: cleaned
+                )
+            }
+        }
+
+        guard let cleaned = validDestinationHash(value) else {
+            return nil
+        }
+        return ScannedLXMFPeer(
+            displayName: "",
+            destinationHash: cleaned
+        )
+    }
+
+    private static func validDestinationHash(
+        _ candidate: String
+    ) -> String? {
+        let cleaned = candidate
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard cleaned.count == 32,
+              cleaned.allSatisfy({ $0.isHexDigit }) else {
+            return nil
+        }
+        return cleaned
     }
 
     private var floatingAddButton: some View {
@@ -212,7 +345,7 @@ struct ConversationsView: View {
             }
 
             Button {
-                print("QR scanner selected")
+                showQRScanner = true
             } label: {
                 Label(
                     "Scan QR Code",

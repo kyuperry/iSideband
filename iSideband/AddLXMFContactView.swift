@@ -13,15 +13,17 @@ struct AddLXMFContactView: View {
 
     init(
         contact: LXMFContact? = nil,
+        initialDisplayName: String = "",
+        initialDestinationHash: String = "",
         onSave: @escaping (LXMFContact) -> Void
     ) {
         editingContact = contact
         self.onSave = onSave
         _displayName = State(
-            initialValue: contact?.displayName ?? ""
+            initialValue: contact?.displayName ?? initialDisplayName
         )
         _destinationHash = State(
-            initialValue: contact?.destinationHash ?? ""
+            initialValue: contact?.destinationHash ?? initialDestinationHash
         )
         _notes = State(
             initialValue: contact?.notes ?? ""

@@ -73,6 +73,24 @@ func runcore_free_string(p *C.char) {
 	C.free(unsafe.Pointer(p))
 }
 
+//export runcore_ingest_lxm_uri
+func runcore_ingest_lxm_uri(handle C.uint64_t, uri *C.char) C.int32_t {
+	if uri == nil {
+		return -1
+	}
+	nodesMu.RLock()
+	h := nodes[uint64(handle)]
+	nodesMu.RUnlock()
+	if h == nil || h.node == nil {
+		return -1
+	}
+	result, err := h.node.IngestLXMURI(C.GoString(uri))
+	if err != nil {
+		return -1
+	}
+	return C.int32_t(result)
+}
+
 //export runcore_default_lxmd_config
 func runcore_default_lxmd_config() *C.char {
 	return allocCString(runcore.DefaultLXMDConfigText(""))

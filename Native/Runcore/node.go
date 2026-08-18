@@ -3,6 +3,7 @@ package runcore
 import (
 	"bytes"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -22,6 +23,38 @@ import (
 	"github.com/svanichkin/go-reticulum/rns"
 	umsgpack "github.com/svanichkin/go-reticulum/rns/vendor"
 )
+
+// IngestLXMURI decodes and delivers an LXMF paper-message URI.
+// Result values: 0 delivered locally, 1 duplicate, 2 not addressed locally.
+func (n *Node) IngestLXMURI(uri string) (int, error) {
+	value := strings.TrimSpace(uri)
+	if len(value) < 6 || !strings.EqualFold(value[:6], "lxm://") {
+		return -1, errors.New("QR code does not contain an lxm:// paper message")
+	}
+	encoded := value[6:]
+	padding := (4 - len(encoded)%4) % 4
+	encoded += strings.Repeat("=", padding)
+	packed, err := base64.URLEncoding.DecodeString(encoded)
+	if err != nil || len(packed) < lxmf.LXMFOverhead {
+		return -1, errors.New("paper message payload is invalid")
+	}
+
+	processed, duplicate := n.router.LXMPropagation(
+		packed, nil, 0, nil, false, true,
+	)
+	if duplicate {
+		return 1, nil
+	}
+	if !processed {
+		return -1, errors.New("paper message could not be decoded")
+	}
+	if n.deliveryDestIn != nil && bytes.Equal(
+		packed[:lxmf.DestinationLength], n.deliveryDestIn.Hash(),
+	) {
+		return 0, nil
+	}
+	return 2, nil
+}
 
 type LogDest = any
 

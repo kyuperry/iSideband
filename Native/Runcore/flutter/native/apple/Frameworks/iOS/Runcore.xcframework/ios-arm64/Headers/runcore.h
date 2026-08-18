@@ -39,6 +39,9 @@ int32_t runcore_send_text(runcore_handle_t handle, const char* destination, cons
 int32_t runcore_send_attachment(runcore_handle_t handle, const char* destination, const char* content, const char* file_path, const char* file_name, const char* mime_type, const char* client_id);
 int32_t runcore_set_inbound_cb(runcore_handle_t handle, runcore_inbound_cb cb, void* user_data);
 int32_t runcore_set_status_cb(runcore_handle_t handle, runcore_status_cb cb, void* user_data);
+// Ingest an lxm:// paper-message URI. Returns 0 when delivered locally,
+// 1 for a duplicate, 2 when addressed elsewhere, and -1 on invalid input.
+int32_t runcore_ingest_lxm_uri(runcore_handle_t handle, const char* uri);
 
 // Outbound message statuses are reflected via xattr on message files.
 
