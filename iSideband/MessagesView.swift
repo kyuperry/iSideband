@@ -76,6 +76,8 @@ struct MessagesView: View {
     @State private var restoreKeyboardAtNewestMessage = false
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var photoErrorMessage: String?
+    @State private var isPreparingPhoto = false
 
     init(
         bluetooth: BluetoothManager,
@@ -297,6 +299,17 @@ struct MessagesView: View {
             }
 
             handleSelectedPhoto()
+        }
+        .alert(
+            "Photo Could Not Be Added",
+            isPresented: Binding(
+                get: { photoErrorMessage != nil },
+                set: { if !$0 { photoErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { photoErrorMessage = nil }
+        } message: {
+            Text(photoErrorMessage ?? "")
         }
         .onChange(of: messages) {
             saveMessages()
@@ -658,87 +671,89 @@ struct MessagesView: View {
             return
         }
 
+        isPreparingPhoto = true
         Task {
-            guard
-                let originalData = try? await selectedPhoto
-                    .loadTransferable(type: Data.self),
-                let originalImage = UIImage(
-                    data: originalData
-                ),
-                let photoData = lxmfPhotoData(from: originalImage),
-                let savedURL = savePhotoToDisk(photoData)
-            else {
+            do {
+                let photoData = try await PhotoAttachmentProcessor
+                    .prepare(selectedPhoto)
+                guard let savedURL = savePhotoToDisk(photoData) else {
+                    throw PhotoAttachmentError.couldNotLoad
+                }
+
                 await MainActor.run {
-                    self.selectedPhoto = nil
+                    queuePreparedPhoto(photoData, savedURL: savedURL)
                 }
-
-                return
+            } catch {
+                await MainActor.run {
+                    photoErrorMessage = error.localizedDescription
+                }
             }
-
             await MainActor.run {
-                guard let peer = contact?.peer else {
-                    print("PHOTO SEND FAILED: contact peer is missing")
-
-                    messages.append(
-                        ChatMessage(
-                            text: "",
-                            isOutgoing: true,
-                            status: "Failed",
-                            type: .photo,
-                            attachmentName: savedURL.lastPathComponent,
-                            attachmentPath: savedURL.path,
-                            attachmentSize: photoData.count
-                        )
-                    )
-
-                    self.selectedPhoto = nil
-                    return
-                }
-
-                print(
-                    """
-                    PHOTO SEND QUEUE ATTEMPT
-                    Destination: \(peer.destinationHash)
-                    Path: \(savedURL.path)
-                    Exists: \(FileManager.default.fileExists(
-                        atPath: savedURL.path
-                    ))
-                    Size: \(photoData.count) bytes
-                    """
-                )
-
-                guard let queued = lxmfManager.sendAttachment(
-                    at: savedURL,
-                    name: savedURL.lastPathComponent,
-                    mimeType: "image/jpeg",
-                    type: .photo,
-                    to: peer
-                ) else {
-                    messages.append(ChatMessage(
-                        text: "", isOutgoing: true, status: "Failed",
-                        type: .photo, attachmentName: savedURL.lastPathComponent,
-                        attachmentPath: savedURL.path, attachmentSize: photoData.count
-                    ))
-                    self.selectedPhoto = nil
-                    return
-                }
-                messages.append(
-                    ChatMessage(
-                        text: "",
-                        isOutgoing: true,
-                        status: "Sending",
-                        lxmfMessageID: queued.id,
-                        type: .photo,
-                        attachmentName:
-                            savedURL.lastPathComponent,
-                        attachmentPath: savedURL.path,
-                        attachmentSize: photoData.count
-                    )
-                )
-
                 self.selectedPhoto = nil
+                isPreparingPhoto = false
             }
         }
+    }
+
+    private func queuePreparedPhoto(_ photoData: Data, savedURL: URL) {
+        guard let peer = contact?.peer else {
+            print("PHOTO SEND FAILED: contact peer is missing")
+            messages.append(
+                ChatMessage(
+                    text: "",
+                    isOutgoing: true,
+                    status: "Failed",
+                    type: .photo,
+                    attachmentName: savedURL.lastPathComponent,
+                    attachmentPath: savedURL.path,
+                    attachmentSize: photoData.count
+                )
+            )
+            return
+        }
+
+        print(
+            """
+            PHOTO SEND QUEUE ATTEMPT
+            Destination: \(peer.destinationHash)
+            Path: \(savedURL.path)
+            Exists: \(FileManager.default.fileExists(atPath: savedURL.path))
+            Size: \(photoData.count) bytes
+            """
+        )
+
+        guard let queued = lxmfManager.sendAttachment(
+            at: savedURL,
+            name: savedURL.lastPathComponent,
+            mimeType: "image/jpeg",
+            type: .photo,
+            to: peer
+        ) else {
+            messages.append(
+                ChatMessage(
+                    text: "",
+                    isOutgoing: true,
+                    status: "Failed",
+                    type: .photo,
+                    attachmentName: savedURL.lastPathComponent,
+                    attachmentPath: savedURL.path,
+                    attachmentSize: photoData.count
+                )
+            )
+            return
+        }
+        messages.append(
+            ChatMessage(
+                text: "",
+                isOutgoing: true,
+                status: "Sending",
+                lxmfMessageID: queued.id,
+                type: .photo,
+                attachmentName: savedURL.lastPathComponent,
+                attachmentPath: savedURL.path,
+                attachmentSize: photoData.count
+            )
+        )
     }
 
     private func handleSelectedFile(
@@ -888,36 +903,6 @@ struct MessagesView: View {
 
             return nil
         }
-    }
-
-    private func lxmfPhotoData(from image: UIImage) -> Data? {
-        let bitrate = Int(bluetooth.estimatedRadioBitrate)
-        let targetPhotoBytes = bitrate < 2_500
-            ? 12_000
-            : (bitrate < 7_500 ? 20_000 : 40_000)
-        var current = image
-        for maximumDimension in [1280.0, 1024.0, 800.0, 640.0, 480.0, 360.0, 240.0] {
-            let scale = min(
-                1,
-                maximumDimension / max(current.size.width, current.size.height)
-            )
-            if scale < 1 {
-                let size = CGSize(
-                    width: current.size.width * scale,
-                    height: current.size.height * scale
-                )
-                current = UIGraphicsImageRenderer(size: size).image { _ in
-                    current.draw(in: CGRect(origin: .zero, size: size))
-                }
-            }
-            for quality in [0.75, 0.6, 0.45, 0.3, 0.2, 0.15] {
-                if let data = current.jpegData(compressionQuality: quality),
-                   data.count <= targetPhotoBytes {
-                    return data
-                }
-            }
-        }
-        return nil
     }
 
     private func sendVoiceNote(at url: URL) {

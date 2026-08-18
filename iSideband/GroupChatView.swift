@@ -10,6 +10,7 @@ struct GroupChatView: View {
     @State private var draft = ""
 
     @State private var selectedPhoto: PhotosPickerItem?
+    @State private var photoErrorMessage: String?
     @State private var isShowingPhotoPicker = false
     @State private var isShowingFilePicker = false
     @State private var isShowingCamera = false
@@ -103,6 +104,17 @@ struct GroupChatView: View {
             selection: $selectedPhoto,
             matching: .images
         )
+        .alert(
+            "Photo Could Not Be Added",
+            isPresented: Binding(
+                get: { photoErrorMessage != nil },
+                set: { if !$0 { photoErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { photoErrorMessage = nil }
+        } message: {
+            Text(photoErrorMessage ?? "")
+        }
         .fileImporter(
             isPresented: $isShowingFilePicker,
             allowedContentTypes: [.item],
@@ -318,33 +330,21 @@ struct GroupChatView: View {
         }
 
         Task {
-            guard
-                let originalData = try? await selectedPhoto
-                    .loadTransferable(type: Data.self),
-                let originalImage = UIImage(
-                    data: originalData
-                ),
-                let photoData = originalImage.jpegData(
-                    compressionQuality: 0.8
-                ),
-                let savedURL = savePhotoToDisk(
-                    photoData
-                )
-            else {
+            do {
+                let photoData = try await PhotoAttachmentProcessor
+                    .prepare(selectedPhoto)
+                guard let savedURL = savePhotoToDisk(photoData) else {
+                    throw PhotoAttachmentError.couldNotLoad
+                }
                 await MainActor.run {
+                    appendPhotoMessage(url: savedURL, size: photoData.count)
                     self.selectedPhoto = nil
                 }
-
-                return
-            }
-
-            await MainActor.run {
-                appendPhotoMessage(
-                    url: savedURL,
-                    size: photoData.count
-                )
-
-                self.selectedPhoto = nil
+            } catch {
+                await MainActor.run {
+                    photoErrorMessage = error.localizedDescription
+                    self.selectedPhoto = nil
+                }
             }
         }
     }
@@ -352,8 +352,8 @@ struct GroupChatView: View {
     private func handleCapturedImage() {
         guard
             let capturedImage,
-            let photoData = capturedImage.jpegData(
-                compressionQuality: 0.8
+            let photoData = PhotoAttachmentProcessor.jpegData(
+                from: capturedImage
             ),
             let savedURL = savePhotoToDisk(
                 photoData
