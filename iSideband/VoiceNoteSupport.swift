@@ -8,7 +8,9 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     @Published private(set) var elapsed: TimeInterval = 0
     @Published var errorMessage: String?
 
-    static let maximumDuration: TimeInterval = 20
+    static let maximumDuration: TimeInterval = 15
+    private static let sampleRate = 12_000
+    private static let opusBitRate = 8_000
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private(set) var outputURL: URL?
@@ -48,9 +50,12 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             try session.setActive(true)
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatOpus),
-                AVSampleRateKey: 16_000,
+                // Sideband-compatible Ogg/Opus, tuned for speech over LoRa.
+                // At 8 kbps, a full 15-second note is approximately 15 KB
+                // before the small Ogg container overhead.
+                AVSampleRateKey: Self.sampleRate,
                 AVNumberOfChannelsKey: 1,
-                AVEncoderBitRateKey: 16_000,
+                AVEncoderBitRateKey: Self.opusBitRate,
                 AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
             ]
             let recorder = try AVAudioRecorder(url: url, settings: settings)
@@ -109,7 +114,7 @@ struct VoiceNoteRecorderView: View {
                     .foregroundStyle(recorder.isRecording ? Color.red : Color.accentColor)
                 Text(String(format: "0:%02d", Int(recorder.elapsed)))
                     .font(.system(.title, design: .monospaced).bold())
-                Text("Voice messages stop after 20 seconds to keep radio transfers reliable.")
+                Text("Voice messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers.")
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Button(recorder.isRecording ? "Stop Recording" : "Start Recording") {
                     if recorder.isRecording {

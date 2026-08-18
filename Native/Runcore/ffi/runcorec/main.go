@@ -37,12 +37,14 @@ import (
 	"github.com/svanichkin/go-lxmf/lxmf"
 	"github.com/svanichkin/go-reticulum/rns"
 
+	ifaces "github.com/svanichkin/go-reticulum/rns/interfaces"
 	"runcore"
 )
 
 type nodeHandle struct {
 	node         *runcore.Node
 	rawInterface *rns.Interface
+	tcpInterface *rns.Interface
 	rawTxCB      C.runcore_raw_tx_cb
 	rawTxUser    unsafe.Pointer
 	inboundCB    C.runcore_inbound_cb
@@ -201,8 +203,80 @@ func runcore_stop(handle C.uint64_t) C.int32_t {
 	if h.rawInterface != nil {
 		h.rawInterface.Detach()
 	}
+	if h.tcpInterface != nil {
+		h.tcpInterface.Detach()
+	}
 	_ = h.node.Close()
 	return 0
+}
+
+//export runcore_set_raw_interface_enabled
+func runcore_set_raw_interface_enabled(handle C.uint64_t, enabled C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.rawInterface == nil {
+		return 1
+	}
+	h.rawInterface.Online = enabled != 0
+	return 0
+}
+
+//export runcore_connect_tcp_interface
+func runcore_connect_tcp_interface(handle C.uint64_t, host *C.char, port C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || rns.Owner == nil || host == nil || port <= 0 || port > 65535 {
+		return 1
+	}
+	targetHost := strings.TrimSpace(C.GoString(host))
+	if targetHost == "" {
+		return 1
+	}
+	if h.tcpInterface != nil {
+		h.tcpInterface.Detach()
+		h.tcpInterface = nil
+	}
+	ifc, err := ifaces.NewTCPClientInterfaceFromConfig(ifaces.TCPClientConfig{
+		Name:           "iSideband Raspberry Pi",
+		TargetHost:     targetHost,
+		TargetPort:     int(port),
+		KISSFraming:    false,
+		ReconnectWait:  2 * time.Second,
+		ConnectTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		rns.Logf(rns.LOG_ERROR, "runcore: create TCP interface: %v", err)
+		return 1
+	}
+	rns.Owner.AddInterface(ifc, rns.InterfaceModeFull, nil, nil, nil, nil, nil, nil, nil, nil)
+	h.tcpInterface = ifc
+	if h.rawInterface != nil {
+		h.rawInterface.Online = false
+	}
+	return 0
+}
+
+//export runcore_disconnect_tcp_interface
+func runcore_disconnect_tcp_interface(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil {
+		return 1
+	}
+	if h.tcpInterface != nil {
+		h.tcpInterface.Detach()
+		h.tcpInterface = nil
+	}
+	return 0
+}
+
+//export runcore_tcp_interface_state
+func runcore_tcp_interface_state(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.tcpInterface == nil {
+		return 0
+	}
+	if h.tcpInterface.Online && !h.tcpInterface.Detached {
+		return 2
+	}
+	return 1
 }
 
 //export runcore_attach_raw_interface

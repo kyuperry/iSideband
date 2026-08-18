@@ -33,6 +33,11 @@ runcore_handle_t runcore_start(const char* contacts_dir, const char* send_dir, c
 int32_t runcore_stop(runcore_handle_t handle);
 int32_t runcore_attach_raw_interface(runcore_handle_t handle, runcore_raw_tx_cb cb, void* user_data, int32_t bitrate);
 int32_t runcore_raw_interface_receive(runcore_handle_t handle, const uint8_t* data, int32_t len);
+int32_t runcore_set_raw_interface_enabled(runcore_handle_t handle, int32_t enabled);
+int32_t runcore_connect_tcp_interface(runcore_handle_t handle, const char* host, int32_t port);
+int32_t runcore_disconnect_tcp_interface(runcore_handle_t handle);
+// 0 = disconnected, 1 = connecting/reconnecting, 2 = connected.
+int32_t runcore_tcp_interface_state(runcore_handle_t handle);
 int32_t runcore_announce(runcore_handle_t handle);
 int32_t runcore_set_announce_location(runcore_handle_t handle, double latitude, double longitude, double accuracy, int64_t timestamp, int32_t enabled);
 int32_t runcore_send_text(runcore_handle_t handle, const char* destination, const char* content, int32_t direct, const char* client_id);

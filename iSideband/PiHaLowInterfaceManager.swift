@@ -1,6 +1,5 @@
 import Combine
 import Foundation
-@preconcurrency import Network
 
 enum ActivePacketInterface: String, CaseIterable, Identifiable {
     case none
@@ -83,9 +82,11 @@ final class PacketInterfaceManager: ObservableObject {
 
         case .bluetoothRNode:
             PiHaLowInterfaceManager.shared.disconnect()
+            ReticulumCoreBridge.shared.synchronizeActivePacketInterface()
 
         case .raspberryPi:
             bluetooth?.deactivateInterface()
+            ReticulumCoreBridge.shared.synchronizeActivePacketInterface()
         }
     }
 }
@@ -117,7 +118,7 @@ final class PiHaLowInterfaceManager: ObservableObject {
     @Published private(set) var state:
         ConnectionState = .disconnected
 
-    private var connection: NWConnection?
+    private var stateTimer: Timer?
 
     private init() {}
 
@@ -134,69 +135,50 @@ final class PiHaLowInterfaceManager: ObservableObject {
         )
 
         guard !cleanedHost.isEmpty,
-              let portNumber = UInt16(port),
-              let networkPort = NWEndpoint.Port(
-                rawValue: portNumber
-              )
+              let portNumber = UInt16(port)
         else {
             state = .failed("Invalid host or port")
             return
         }
 
-        let connection = NWConnection(
-            host: NWEndpoint.Host(cleanedHost),
-            port: networkPort,
-            using: .tcp
-        )
-
-        self.connection = connection
-        state = .connecting
-
-        let manager = self
-        let connectionIdentifier =
-            ObjectIdentifier(connection)
-
-        connection.stateUpdateHandler = {
-            newState in
-            Task { @MainActor in
-                guard let activeConnection =
-                        manager.connection,
-                      ObjectIdentifier(
-                        activeConnection
-                      ) == connectionIdentifier else {
-                    return
-                }
-
-                switch newState {
-                case .ready:
-                    manager.state = .connected
-
-                case .failed(let error):
-                    manager.state = .failed(
-                        error.localizedDescription
-                    )
-                    manager.connection = nil
-
-                case .cancelled:
-                    manager.state = .disconnected
-                    manager.connection = nil
-
-                default:
-                    break
-                }
-            }
+        guard ReticulumCoreBridge.shared.connectRaspberryPi(
+            host: cleanedHost,
+            port: portNumber
+        ) else {
+            state = .failed("Reticulum TCP interface could not start")
+            return
         }
 
-        connection.start(
-            queue: DispatchQueue(
-                label: "iSideband.PiHaLowGateway"
-            )
-        )
+        state = .connecting
+        startStateMonitoring()
     }
 
     func disconnect() {
-        connection?.cancel()
-        connection = nil
+        stateTimer?.invalidate()
+        stateTimer = nil
+        ReticulumCoreBridge.shared.disconnectRaspberryPi()
         state = .disconnected
+    }
+
+    private func startStateMonitoring() {
+        stateTimer?.invalidate()
+        stateTimer = Timer.scheduledTimer(
+            withTimeInterval: 0.75,
+            repeats: true
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                switch ReticulumCoreBridge.shared
+                    .raspberryPiConnectionState {
+                case 2:
+                    self.state = .connected
+                case 1:
+                    self.state = .connecting
+                default:
+                    self.state = .disconnected
+                }
+            }
+        }
+        stateTimer?.tolerance = 0.15
     }
 }

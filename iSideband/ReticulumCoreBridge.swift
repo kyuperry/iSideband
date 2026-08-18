@@ -314,11 +314,46 @@ final class ReticulumCoreBridge: ObservableObject {
             }
             isRunning = true
             status = "Reticulum Link core ready"
+            synchronizeActivePacketInterface()
             startRouteMaintenance()
         } catch {
             status =
                 "Reticulum core failed: \(error.localizedDescription)"
         }
+    }
+
+    func synchronizeActivePacketInterface() {
+        guard handle != 0 else { return }
+        let useBluetooth = PacketInterfaceManager.shared
+            .isActive(.bluetoothRNode)
+        _ = runcore_set_raw_interface_enabled(
+            handle,
+            useBluetooth ? 1 : 0
+        )
+        if !PacketInterfaceManager.shared.isActive(.raspberryPi) {
+            _ = runcore_disconnect_tcp_interface(handle)
+        }
+    }
+
+    func connectRaspberryPi(host: String, port: UInt16) -> Bool {
+        guard handle != 0,
+              PacketInterfaceManager.shared.isActive(.raspberryPi) else {
+            return false
+        }
+        let result = host.withCString {
+            runcore_connect_tcp_interface(handle, $0, Int32(port))
+        }
+        return result == 0
+    }
+
+    func disconnectRaspberryPi() {
+        guard handle != 0 else { return }
+        _ = runcore_disconnect_tcp_interface(handle)
+    }
+
+    var raspberryPiConnectionState: Int32 {
+        guard handle != 0 else { return 0 }
+        return runcore_tcp_interface_state(handle)
     }
 
     func feed(_ packet: Data) {
