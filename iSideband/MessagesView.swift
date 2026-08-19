@@ -220,6 +220,11 @@ struct MessagesView: View {
 
             Divider()
 
+            if pushToTalkRecorder.isRecording {
+                pushToTalkRecordingStatus
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             messageComposer
         }
         .navigationTitle("Messages")
@@ -258,24 +263,34 @@ struct MessagesView: View {
                 sendVoiceNote(at: url)
             }
         }
-        .alert(
-            "Send Voice Message?",
-            isPresented: $showingPushToTalkSendPrompt
+        .confirmationDialog(
+            "Voice Message Ready",
+            isPresented: $showingPushToTalkSendPrompt,
+            titleVisibility: .visible
         ) {
-            Button("Send Voice Message") {
+            Button("Send") {
                 if let url = pendingPushToTalkURL {
                     sendVoiceNote(at: url)
                 }
                 pendingPushToTalkURL = nil
             }
-            Button("Delete Recording", role: .destructive) {
+            Button("Delete", role: .destructive) {
                 discardPushToTalkRecording()
             }
             Button("Cancel", role: .cancel) {
                 discardPushToTalkRecording()
             }
         } message: {
-            Text("The recording will only be transmitted after you press Send Voice Message.")
+            Text("Send this PTT recording?")
+        }
+        .onChange(of: showingPushToTalkSendPrompt) { wasShowing, isShowing in
+            guard wasShowing, !isShowing else { return }
+            Task { @MainActor in
+                await Task.yield()
+                if pendingPushToTalkURL != nil {
+                    discardPushToTalkRecording()
+                }
+            }
         }
         .onAppear {
             lxmfManager.start(
@@ -384,6 +399,36 @@ struct MessagesView: View {
             onSendTapped: {
                 sendMessage()
             }
+        )
+    }
+
+    private var pushToTalkRecordingStatus: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(.red)
+                .frame(width: 9, height: 9)
+
+            Text("Recording PTT")
+                .font(.subheadline.weight(.semibold))
+
+            Spacer()
+
+            Text(
+                String(
+                    format: "0:%02d / 0:%02d",
+                    Int(pushToTalkRecorder.elapsed),
+                    Int(VoiceNoteRecorder.maximumDuration)
+                )
+            )
+            .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+            .foregroundStyle(.red)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.thinMaterial)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "Recording push to talk, \(Int(pushToTalkRecorder.elapsed)) seconds"
         )
     }
 
