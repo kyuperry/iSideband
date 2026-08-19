@@ -44,38 +44,6 @@ struct RNodeDetailView: View {
                     )
                 }
 
-                if let batteryPercent = bluetooth.batteryPercent {
-                    telemetryRow(
-                        title: "RNode Battery",
-                        value: bluetooth.batteryVoltage.map {
-                            "\(batteryPercent)% · " +
-                            String(format: "%.2f V", $0)
-                        } ?? "\(batteryPercent)%",
-                        systemImage: batterySymbol(
-                            percent: batteryPercent,
-                            state: bluetooth.batteryState
-                        )
-                    )
-                } else if isConnected,
-                          bluetooth.batteryTelemetryAvailable == false {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(
-                            "Battery telemetry unavailable",
-                            systemImage: "battery.0percent"
-                        )
-                        Text(
-                            "This RNode is not publishing Reticulum battery status or the standard BLE Battery Service. Check that its firmware and board configuration support battery monitoring."
-                        )
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                } else if isConnected {
-                    Label(
-                        "Waiting for battery telemetry…",
-                        systemImage: "battery.0percent"
-                    )
-                    .foregroundStyle(.secondary)
-                }
             }
 
             Section("Reticulum Identity") {
@@ -636,26 +604,6 @@ struct RNodeDetailView: View {
         )
     }
 
-    private func batterySymbol(
-        percent: Int,
-        state: RNodeBatteryState?
-    ) -> String {
-        if state == .charging {
-            return "battery.100percent.bolt"
-        }
-        switch percent {
-        case 76...100:
-            return "battery.100percent"
-        case 51...75:
-            return "battery.75percent"
-        case 26...50:
-            return "battery.50percent"
-        case 1...25:
-            return "battery.25percent"
-        default:
-            return "battery.0percent"
-        }
-    }
 }
 
 private struct RSSISignalBars: View {

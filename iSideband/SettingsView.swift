@@ -35,16 +35,6 @@ struct SettingsView: View {
     private var lxmfMessageNotifications = true
 
     @AppStorage(
-        NotificationPreferenceKey.battery50
-    )
-    private var battery50Notifications = true
-
-    @AppStorage(
-        NotificationPreferenceKey.battery25
-    )
-    private var battery25Notifications = true
-
-    @AppStorage(
         NotificationPreferenceKey.sounds
     )
     private var notificationSounds = true
@@ -301,16 +291,6 @@ struct SettingsView: View {
             Toggle(
                 "LXMF Messages",
                 isOn: $lxmfMessageNotifications
-            )
-
-            Toggle(
-                "RNode Battery at 50%",
-                isOn: $battery50Notifications
-            )
-
-            Toggle(
-                "RNode Battery at 25%",
-                isOn: $battery25Notifications
             )
 
             Toggle(

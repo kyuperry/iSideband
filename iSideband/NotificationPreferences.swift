@@ -4,8 +4,6 @@ enum NotificationPreferenceKey {
     static let rnodeConnection = "notifications.rnodeConnection"
     static let nearbyNodes = "notifications.nearbyNodes"
     static let lxmfMessages = "notifications.lxmfMessages"
-    static let battery50 = "notifications.battery50"
-    static let battery25 = "notifications.battery25"
     static let sounds = "notifications.sounds"
 }
 
@@ -16,8 +14,6 @@ enum NotificationPreferences {
                 NotificationPreferenceKey.rnodeConnection: true,
                 NotificationPreferenceKey.nearbyNodes: true,
                 NotificationPreferenceKey.lxmfMessages: true,
-                NotificationPreferenceKey.battery50: true,
-                NotificationPreferenceKey.battery25: true,
                 NotificationPreferenceKey.sounds: true
             ]
         )
@@ -41,19 +37,8 @@ enum NotificationPreferences {
         )
     }
 
-    static func batteryEnabled(at milestone: Int) -> Bool {
-        let key: String
-
-        switch milestone {
-        case 50:
-            key = NotificationPreferenceKey.battery50
-        case 25:
-            key = NotificationPreferenceKey.battery25
-        default:
-            return false
-        }
-
-        return UserDefaults.standard.bool(forKey: key)
+    static func batteryEnabled(at _: Int) -> Bool {
+        false
     }
 
     static var soundsEnabled: Bool {
