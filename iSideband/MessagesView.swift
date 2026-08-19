@@ -60,8 +60,6 @@ struct MessagesView: View {
     private var lxmfManager: LXMFManager
     @ObservedObject private var incomingStore =
         LXMFIncomingMessageStore.shared
-    @StateObject private var pushToTalkRecorder = VoiceNoteRecorder()
-
     @AppStorage(PushToTalkPreferenceKey.enabled)
     private var pushToTalkEnabled = false
 
@@ -74,10 +72,6 @@ struct MessagesView: View {
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
-    @State private var pushToTalkWasRecording = false
-    @State private var isPushToTalkArmed = false
-    @State private var isPushToTalkPressed = false
-    @State private var pendingPushToTalkURL: URL?
     @FocusState private var isComposerFocused: Bool
     @State private var isViewingNewestMessage = true
     @State private var restoreKeyboardAtNewestMessage = false
@@ -221,14 +215,6 @@ struct MessagesView: View {
 
             Divider()
 
-            if isPushToTalkArmed || pushToTalkRecorder.isRecording {
-                pushToTalkHoldControl
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if pendingPushToTalkURL != nil {
-                pushToTalkReadyPrompt
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-
             messageComposer
         }
         .navigationTitle("Messages")
@@ -263,7 +249,7 @@ struct MessagesView: View {
             Text("Announcement sent.")
         }
         .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceNoteRecorderView { url in
+            VoiceNoteRecorderView(isPushToTalk: pushToTalkEnabled) { url in
                 sendVoiceNote(at: url)
             }
         }
@@ -279,9 +265,6 @@ struct MessagesView: View {
             }
         }
         .onDisappear {
-            if pushToTalkRecorder.isRecording || pendingPushToTalkURL != nil {
-                discardPushToTalkRecording()
-            }
             if let contact {
                 incomingStore.markRead(
                     destinationHash:
@@ -331,29 +314,6 @@ struct MessagesView: View {
                 for: contact
             )
         }
-        .onChange(of: pushToTalkRecorder.isRecording) { _, isRecording in
-            if isRecording {
-                pushToTalkWasRecording = true
-            } else if pushToTalkWasRecording {
-                pushToTalkWasRecording = false
-                isPushToTalkArmed = false
-                isPushToTalkPressed = false
-                if let url = pushToTalkRecorder.outputURL {
-                    pendingPushToTalkURL = url
-                }
-            }
-        }
-        .alert(
-            "Recording Unavailable",
-            isPresented: Binding(
-                get: { pushToTalkRecorder.errorMessage != nil },
-                set: { if !$0 { pushToTalkRecorder.errorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(pushToTalkRecorder.errorMessage ?? "")
-        }
     }
 
     private var messageComposer: some View {
@@ -361,7 +321,6 @@ struct MessagesView: View {
             messageText: $messageText,
             isFocused: $isComposerFocused,
             showsPushToTalk: pushToTalkEnabled,
-            isPushToTalkRecording: pushToTalkRecorder.isRecording,
             onPhotoTapped: {
                 showingPhotoPicker = true
             },
@@ -371,130 +330,10 @@ struct MessagesView: View {
             onVoiceTapped: {
                 showingVoiceRecorder = true
             },
-            onPushToTalkTapped: armPushToTalk,
             onSendTapped: {
                 sendMessage()
             }
         )
-    }
-
-    private var pushToTalkHoldControl: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "mic.fill")
-                .font(.headline.weight(.bold))
-                .foregroundStyle(.white)
-                .frame(width: 38, height: 38)
-                .background(Circle().fill(.red))
-                .scaleEffect(isPushToTalkPressed ? 0.92 : 1)
-                .gesture(
-                    DragGesture(minimumDistance: 0)
-                        .onChanged { _ in
-                            beginPushToTalkHold()
-                        }
-                        .onEnded { _ in
-                            endPushToTalkHold()
-                        }
-                )
-                .accessibilityLabel("Hold to record push to talk")
-
-            Text(
-                pushToTalkRecorder.isRecording
-                    ? "Recording PTT"
-                    : "Hold the red button"
-            )
-                .font(.subheadline.weight(.semibold))
-
-            Spacer()
-
-            Text(
-                String(
-                    format: "0:%02d / 0:%02d",
-                    Int(pushToTalkRecorder.elapsed),
-                    Int(VoiceNoteRecorder.maximumDuration)
-                )
-            )
-            .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-            .foregroundStyle(
-                pushToTalkRecorder.isRecording ? Color.red : Color.secondary
-            )
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .padding(.horizontal, 12)
-        .accessibilityElement(children: .contain)
-    }
-
-    private var pushToTalkReadyPrompt: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "waveform")
-                .foregroundStyle(Color.accentColor)
-
-            Text("PTT ready")
-                .font(.subheadline.weight(.semibold))
-
-            Spacer(minLength: 4)
-
-            Button("Send") {
-                if let url = pendingPushToTalkURL {
-                    sendVoiceNote(at: url)
-                }
-                pendingPushToTalkURL = nil
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.small)
-
-            Button("Delete", role: .destructive) {
-                discardPushToTalkRecording()
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-
-            Button("Cancel") {
-                discardPushToTalkRecording()
-            }
-            .buttonStyle(.borderless)
-            .controlSize(.small)
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(
-            .regularMaterial,
-            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-        )
-        .padding(.horizontal, 12)
-        .accessibilityElement(children: .contain)
-    }
-
-    private func armPushToTalk() {
-        isComposerFocused = false
-        pendingPushToTalkURL = nil
-        isPushToTalkArmed = true
-    }
-
-    private func beginPushToTalkHold() {
-        guard !isPushToTalkPressed else { return }
-        isPushToTalkPressed = true
-        pendingPushToTalkURL = nil
-        pushToTalkRecorder.start()
-    }
-
-    private func endPushToTalkHold() {
-        guard isPushToTalkPressed else { return }
-        isPushToTalkPressed = false
-        isPushToTalkArmed = false
-        _ = pushToTalkRecorder.stop()
-    }
-
-    private func discardPushToTalkRecording() {
-        pendingPushToTalkURL = nil
-        pushToTalkWasRecording = false
-        isPushToTalkArmed = false
-        isPushToTalkPressed = false
-        pushToTalkRecorder.cancel()
     }
 
     private func sendAnnounce() {

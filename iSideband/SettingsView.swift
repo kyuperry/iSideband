@@ -319,7 +319,7 @@ struct SettingsView: View {
             }
 
             Text(
-                "Adds PTT to the Photo, File, and Voice menu opened with the plus button. Tap PTT to record, tap Stop to finish, then confirm before sending."
+                "Replaces Voice with Push to Talk in the plus-button menu. It uses the same voice recording screen, 15-second limit, and Send or Cancel controls."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

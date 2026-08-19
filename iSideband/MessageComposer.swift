@@ -5,11 +5,9 @@ struct MessageComposer: View {
     @FocusState.Binding var isFocused: Bool
 
     let showsPushToTalk: Bool
-    let isPushToTalkRecording: Bool
     let onPhotoTapped: () -> Void
     let onFileTapped: () -> Void
     let onVoiceTapped: () -> Void
-    let onPushToTalkTapped: () -> Void
     let onSendTapped: () -> Void
 
     private var canSend: Bool {
@@ -24,25 +22,16 @@ struct MessageComposer: View {
                 Button(action: onPhotoTapped) {
                     Label("Photo", systemImage: "photo.fill")
                 }
-                .disabled(isPushToTalkRecording)
 
                 Button(action: onFileTapped) {
                     Label("File", systemImage: "doc.fill")
                 }
-                .disabled(isPushToTalkRecording)
 
-                if showsPushToTalk {
-                    Button(action: onPushToTalkTapped) {
-                        Label(
-                            "Push to Talk",
-                            systemImage: "mic.fill"
-                        )
-                    }
-                    .disabled(isPushToTalkRecording)
-                } else {
-                    Button(action: onVoiceTapped) {
-                        Label("Voice", systemImage: "waveform")
-                    }
+                Button(action: onVoiceTapped) {
+                    Label(
+                        showsPushToTalk ? "Push to Talk" : "Voice",
+                        systemImage: showsPushToTalk ? "mic.fill" : "waveform"
+                    )
                 }
             } label: {
                 Image(systemName: "plus")
@@ -112,11 +101,9 @@ private struct MessageComposerPreview: View {
             messageText: .constant("Hello"),
             isFocused: $isFocused,
             showsPushToTalk: true,
-            isPushToTalkRecording: false,
             onPhotoTapped: { },
             onFileTapped: { },
             onVoiceTapped: { },
-            onPushToTalkTapped: { },
             onSendTapped: { }
         )
     }

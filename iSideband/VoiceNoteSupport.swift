@@ -150,7 +150,16 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
 struct VoiceNoteRecorderView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = VoiceNoteRecorder()
+    let isPushToTalk: Bool
     let onSend: (URL) -> Void
+
+    init(
+        isPushToTalk: Bool = false,
+        onSend: @escaping (URL) -> Void
+    ) {
+        self.isPushToTalk = isPushToTalk
+        self.onSend = onSend
+    }
 
     var body: some View {
         NavigationStack {
@@ -160,7 +169,11 @@ struct VoiceNoteRecorderView: View {
                     .foregroundStyle(recorder.isRecording ? Color.red : Color.accentColor)
                 Text(String(format: "0:%02d", Int(recorder.elapsed)))
                     .font(.system(.title, design: .monospaced).bold())
-                Text("Voice messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers.")
+                Text(
+                    isPushToTalk
+                        ? "PTT messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers."
+                        : "Voice messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers."
+                )
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Button(recorder.isRecording ? "Stop Recording" : "Start Recording") {
                     if recorder.isRecording {
@@ -171,12 +184,14 @@ struct VoiceNoteRecorderView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 if !recorder.isRecording, let url = recorder.outputURL {
-                    Button("Send Voice Message") { onSend(url); dismiss() }
+                    Button(
+                        isPushToTalk ? "Send PTT Message" : "Send Voice Message"
+                    ) { onSend(url); dismiss() }
                         .buttonStyle(.borderedProminent)
                 }
             }
             .padding(28)
-            .navigationTitle("Voice Message")
+            .navigationTitle(isPushToTalk ? "PTT Message" : "Voice Message")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { recorder.cancel(); dismiss() }
