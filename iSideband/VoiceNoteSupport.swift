@@ -14,6 +14,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     private static let minimumRecordingBytes = 64
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
+    private var hasFinalizedCurrentRecording = false
     private(set) var outputURL: URL?
 
     func start() {
@@ -45,7 +46,9 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             let root = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let directory = root.appendingPathComponent("DirectAttachments", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let url = directory.appendingPathComponent("voice-\(UUID().uuidString).ogg")
+            let identifier = UUID().uuidString
+            let recordingURL = directory.appendingPathComponent("voice-\(identifier).caf")
+            let outputURL = directory.appendingPathComponent("voice-\(identifier).ogg")
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(.playAndRecord, mode: .spokenAudio, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
@@ -59,7 +62,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
                 AVEncoderBitRateKey: Self.opusBitRate,
                 AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue
             ]
-            let recorder = try AVAudioRecorder(url: url, settings: settings)
+            let recorder = try AVAudioRecorder(url: recordingURL, settings: settings)
             recorder.delegate = self
             guard recorder.prepareToRecord() else {
                 throw RecorderError.couldNotStart
@@ -68,7 +71,8 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
                 throw RecorderError.couldNotStart
             }
             self.recorder = recorder
-            outputURL = url
+            self.outputURL = outputURL
+            hasFinalizedCurrentRecording = false
             elapsed = 0
             isRecording = true
             timer = .scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
@@ -84,22 +88,27 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     }
 
     private func finishRecording() {
+        guard !hasFinalizedCurrentRecording else { return }
+        hasFinalizedCurrentRecording = true
         timer?.invalidate()
         timer = nil
         isRecording = false
+        let recordingURL = recorder?.url
         recorder = nil
-        if let outputURL {
-            let size = (try? FileManager.default.attributesOfItem(
-                atPath: outputURL.path
-            )[.size] as? NSNumber)?.intValue ?? 0
-            let isReadable = (try? AVAudioFile(
-                forReading: outputURL
-            )) != nil
-            if size < Self.minimumRecordingBytes || !isReadable {
+        if let recordingURL, let outputURL {
+            do {
+                try OpusOggMuxer.convert(cafURL: recordingURL, to: outputURL)
+                try? FileManager.default.removeItem(at: recordingURL)
+                let data = try Data(contentsOf: outputURL, options: .mappedIfSafe)
+                guard data.count >= Self.minimumRecordingBytes,
+                      data.starts(with: Data("OggS".utf8)) else {
+                    throw RecorderError.emptyRecording
+                }
+            } catch {
+                try? FileManager.default.removeItem(at: recordingURL)
                 try? FileManager.default.removeItem(at: outputURL)
                 self.outputURL = nil
-                errorMessage =
-                    "The voice recording was empty. Please record it again."
+                errorMessage = "The voice recording could not be completed: \(error.localizedDescription)"
             }
         }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
@@ -114,7 +123,13 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
 
     private enum RecorderError: LocalizedError {
         case couldNotStart
-        var errorDescription: String? { "The microphone did not start." }
+        case emptyRecording
+        var errorDescription: String? {
+            switch self {
+            case .couldNotStart: "The microphone did not start."
+            case .emptyRecording: "The voice recording was empty."
+            }
+        }
     }
 }
 
