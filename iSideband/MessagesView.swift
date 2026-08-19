@@ -76,7 +76,6 @@ struct MessagesView: View {
     @State private var isSendingAnnounce = false
     @State private var pushToTalkWasRecording = false
     @State private var pendingPushToTalkURL: URL?
-    @State private var showingPushToTalkSendPrompt = false
     @FocusState private var isComposerFocused: Bool
     @State private var isViewingNewestMessage = true
     @State private var restoreKeyboardAtNewestMessage = false
@@ -223,6 +222,9 @@ struct MessagesView: View {
             if pushToTalkRecorder.isRecording {
                 pushToTalkRecordingStatus
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if pendingPushToTalkURL != nil {
+                pushToTalkReadyPrompt
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
             messageComposer
@@ -261,35 +263,6 @@ struct MessagesView: View {
         .sheet(isPresented: $showingVoiceRecorder) {
             VoiceNoteRecorderView { url in
                 sendVoiceNote(at: url)
-            }
-        }
-        .confirmationDialog(
-            "Voice Message Ready",
-            isPresented: $showingPushToTalkSendPrompt,
-            titleVisibility: .visible
-        ) {
-            Button("Send") {
-                if let url = pendingPushToTalkURL {
-                    sendVoiceNote(at: url)
-                }
-                pendingPushToTalkURL = nil
-            }
-            Button("Delete", role: .destructive) {
-                discardPushToTalkRecording()
-            }
-            Button("Cancel", role: .cancel) {
-                discardPushToTalkRecording()
-            }
-        } message: {
-            Text("Send this PTT recording?")
-        }
-        .onChange(of: showingPushToTalkSendPrompt) { wasShowing, isShowing in
-            guard wasShowing, !isShowing else { return }
-            Task { @MainActor in
-                await Task.yield()
-                if pendingPushToTalkURL != nil {
-                    discardPushToTalkRecording()
-                }
             }
         }
         .onAppear {
@@ -363,7 +336,6 @@ struct MessagesView: View {
                 pushToTalkWasRecording = false
                 if let url = pushToTalkRecorder.outputURL {
                     pendingPushToTalkURL = url
-                    showingPushToTalkSendPrompt = true
                 }
             }
         }
@@ -425,11 +397,56 @@ struct MessagesView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
-        .background(.thinMaterial)
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .padding(.horizontal, 12)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "Recording push to talk, \(Int(pushToTalkRecorder.elapsed)) seconds"
         )
+    }
+
+    private var pushToTalkReadyPrompt: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "waveform")
+                .foregroundStyle(Color.accentColor)
+
+            Text("PTT ready")
+                .font(.subheadline.weight(.semibold))
+
+            Spacer(minLength: 4)
+
+            Button("Send") {
+                if let url = pendingPushToTalkURL {
+                    sendVoiceNote(at: url)
+                }
+                pendingPushToTalkURL = nil
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+
+            Button("Delete", role: .destructive) {
+                discardPushToTalkRecording()
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Button("Cancel") {
+                discardPushToTalkRecording()
+            }
+            .buttonStyle(.borderless)
+            .controlSize(.small)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            .regularMaterial,
+            in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        )
+        .padding(.horizontal, 12)
+        .accessibilityElement(children: .contain)
     }
 
     private func togglePushToTalk() {
@@ -443,7 +460,6 @@ struct MessagesView: View {
     }
 
     private func discardPushToTalkRecording() {
-        showingPushToTalkSendPrompt = false
         pendingPushToTalkURL = nil
         pushToTalkWasRecording = false
         pushToTalkRecorder.cancel()
