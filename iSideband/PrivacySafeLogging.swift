@@ -6,7 +6,7 @@ import Foundation
 /// peer identifiers, and identity hashes. User-facing status properties remain
 /// available for troubleshooting without exposing private content to device
 /// logs in Debug or Release builds.
-func privacySafeLog(
+nonisolated func privacySafeLog(
     _ items: Any...,
     separator: String = " ",
     terminator: String = "\n"
