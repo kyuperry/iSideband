@@ -4,7 +4,12 @@ struct MessageComposer: View {
     @Binding var messageText: String
     @FocusState.Binding var isFocused: Bool
 
-    let onAttachmentTapped: () -> Void
+    let showsPushToTalk: Bool
+    let isPushToTalkRecording: Bool
+    let onPhotoTapped: () -> Void
+    let onFileTapped: () -> Void
+    let onVoiceTapped: () -> Void
+    let onPushToTalkTapped: () -> Void
     let onSendTapped: () -> Void
 
     private var canSend: Bool {
@@ -15,12 +20,43 @@ struct MessageComposer: View {
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 10) {
-            Button {
-                onAttachmentTapped()
+            Menu {
+                Button(action: onPhotoTapped) {
+                    Label("Photo", systemImage: "photo.fill")
+                }
+                .disabled(isPushToTalkRecording)
+
+                Button(action: onFileTapped) {
+                    Label("File", systemImage: "doc.fill")
+                }
+                .disabled(isPushToTalkRecording)
+
+                Button(action: onVoiceTapped) {
+                    Label("Voice", systemImage: "waveform")
+                }
+                .disabled(isPushToTalkRecording)
+
+                if showsPushToTalk {
+                    Divider()
+                    Button(action: onPushToTalkTapped) {
+                        Label(
+                            isPushToTalkRecording ? "Stop PTT" : "Push to Talk",
+                            systemImage: isPushToTalkRecording
+                                ? "stop.fill"
+                                : "mic.fill"
+                        )
+                    }
+                }
             } label: {
-                Image(systemName: "plus")
+                Image(
+                    systemName: isPushToTalkRecording
+                        ? "mic.fill"
+                        : "plus"
+                )
                     .font(.headline.weight(.bold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(
+                        isPushToTalkRecording ? Color.red : Color.primary
+                    )
                     .frame(width: 42, height: 42)
                     .background(
                         Circle()
@@ -29,7 +65,8 @@ struct MessageComposer: View {
                             )
                     )
             }
-            .buttonStyle(.plain)
+            .menuOrder(.fixed)
+            .accessibilityLabel("Add attachment")
 
             TextField(
                 "Message",
@@ -83,7 +120,12 @@ private struct MessageComposerPreview: View {
         MessageComposer(
             messageText: .constant("Hello"),
             isFocused: $isFocused,
-            onAttachmentTapped: { },
+            showsPushToTalk: true,
+            isPushToTalkRecording: false,
+            onPhotoTapped: { },
+            onFileTapped: { },
+            onVoiceTapped: { },
+            onPushToTalkTapped: { },
             onSendTapped: { }
         )
     }

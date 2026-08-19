@@ -68,7 +68,6 @@ struct MessagesView: View {
     @State private var messageText = ""
     @State private var messages: [ChatMessage]
 
-    @State private var showingAttachmentMenu = false
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingVoiceRecorder = false
@@ -203,9 +202,6 @@ struct MessagesView: View {
                                 restoreKeyboardAtNewestMessage = false
                             }
                         } else {
-                            if !pushToTalkRecorder.isRecording {
-                                showingAttachmentMenu = false
-                            }
                             restoreKeyboardAtNewestMessage =
                                 isComposerFocused
                             isComposerFocused = false
@@ -223,11 +219,6 @@ struct MessagesView: View {
             }
 
             Divider()
-
-            if showingAttachmentMenu {
-                attachmentTray
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
 
             messageComposer
         }
@@ -355,7 +346,6 @@ struct MessagesView: View {
                 pushToTalkWasRecording = true
             } else if pushToTalkWasRecording {
                 pushToTalkWasRecording = false
-                showingAttachmentMenu = false
                 if let url = pushToTalkRecorder.outputURL {
                     pendingPushToTalkURL = url
                     showingPushToTalkSendPrompt = true
@@ -379,12 +369,18 @@ struct MessagesView: View {
         MessageComposer(
             messageText: $messageText,
             isFocused: $isComposerFocused,
-            onAttachmentTapped: {
-                guard !pushToTalkRecorder.isRecording else { return }
-                withAnimation(.snappy(duration: 0.22)) {
-                    showingAttachmentMenu.toggle()
-                }
+            showsPushToTalk: pushToTalkEnabled,
+            isPushToTalkRecording: pushToTalkRecorder.isRecording,
+            onPhotoTapped: {
+                showingPhotoPicker = true
             },
+            onFileTapped: {
+                showingFilePicker = true
+            },
+            onVoiceTapped: {
+                showingVoiceRecorder = true
+            },
+            onPushToTalkTapped: togglePushToTalk,
             onSendTapped: {
                 sendMessage()
             }
@@ -406,90 +402,6 @@ struct MessagesView: View {
         pendingPushToTalkURL = nil
         pushToTalkWasRecording = false
         pushToTalkRecorder.cancel()
-    }
-
-    private var attachmentTray: some View {
-        HStack(spacing: 12) {
-            if pushToTalkEnabled {
-                attachmentTrayButton(
-                    title: pushToTalkRecorder.isRecording ? "Stop" : "PTT",
-                    systemImage: pushToTalkRecorder.isRecording
-                        ? "stop.fill"
-                        : "mic.fill",
-                    tint: pushToTalkRecorder.isRecording ? .red : .accentColor
-                ) {
-                    togglePushToTalk()
-                }
-            }
-
-            attachmentTrayButton(
-                title: "Photo",
-                systemImage: "photo.fill"
-            ) {
-                showingAttachmentMenu = false
-                showingPhotoPicker = true
-            }
-            .disabled(pushToTalkRecorder.isRecording)
-
-            attachmentTrayButton(
-                title: "File",
-                systemImage: "doc.fill"
-            ) {
-                showingAttachmentMenu = false
-                showingFilePicker = true
-            }
-            .disabled(pushToTalkRecorder.isRecording)
-
-            attachmentTrayButton(
-                title: "Voice",
-                systemImage: "mic.fill"
-            ) {
-                showingAttachmentMenu = false
-                showingVoiceRecorder = true
-            }
-            .disabled(pushToTalkRecorder.isRecording)
-
-            Button {
-                withAnimation(.snappy(duration: 0.22)) {
-                    showingAttachmentMenu = false
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.headline)
-                    .frame(width: 42, height: 42)
-                    .background(Color.secondary.opacity(0.12), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .disabled(pushToTalkRecorder.isRecording)
-            .accessibilityLabel("Close attachments")
-        }
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .background(.bar)
-    }
-
-    private func attachmentTrayButton(
-        title: String,
-        systemImage: String,
-        tint: Color = .accentColor,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                Text(title)
-                    .font(.caption.weight(.medium))
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .background(
-                tint.opacity(0.12),
-                in: RoundedRectangle(cornerRadius: 14, style: .continuous)
-            )
-            .foregroundStyle(tint)
-        }
-        .buttonStyle(.plain)
     }
 
     private func sendAnnounce() {
