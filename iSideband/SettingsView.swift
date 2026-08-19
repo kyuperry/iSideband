@@ -322,7 +322,7 @@ struct SettingsView: View {
     private var displaySettingsSection: some View {
         Section("Display") {
             Toggle(isOn: $nightVisionModeEnabled) {
-                Label("Night Vision Compatible", systemImage: "moon.stars.fill")
+                Label("NVG Mode", systemImage: "moon.stars.fill")
             }
 
             VStack(alignment: .leading, spacing: 8) {
