@@ -5,6 +5,9 @@ import UIKit
 struct RNodeHomeView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
+    @AppStorage(NightVisionPreferenceKey.enabled)
+    private var nightVisionModeEnabled = false
+
     @State private var showSwitchConfirmation = false
     @State private var pendingConnectionID: UUID?
     @State private var liveActivityStatusMessage: String?
@@ -25,6 +28,20 @@ struct RNodeHomeView: View {
         }
         .padding()
         .navigationTitle("RNode")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Toggle("NVG", isOn: $nightVisionModeEnabled)
+                    .toggleStyle(.switch)
+                    .controlSize(.mini)
+                    .font(.caption2.weight(.semibold))
+                    .tint(.red)
+                    .fixedSize()
+                    .accessibilityLabel("NVG Mode")
+                    .accessibilityHint(
+                        "Turns the night vision display on or off"
+                    )
+            }
+        }
         .overlay(alignment: .bottom) {
             if let liveActivityStatusMessage {
                 Text(liveActivityStatusMessage)

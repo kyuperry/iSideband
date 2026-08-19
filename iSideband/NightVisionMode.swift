@@ -53,11 +53,6 @@ struct NightVisionModeModifier: ViewModifier {
                         .accessibilityHidden(true)
                 }
             }
-            .overlay(alignment: .topLeading) {
-                quickToggle
-                    .padding(.top, 96)
-                    .padding(.leading, 8)
-            }
             .simultaneousGesture(
                 TapGesture(count: 3).onEnded {
                     guard isEnabled else { return }
@@ -73,35 +68,6 @@ struct NightVisionModeModifier: ViewModifier {
             .onChange(of: scenePhase) { _, _ in
                 updateBrightness()
             }
-    }
-
-    private var quickToggle: some View {
-        Toggle("NVG", isOn: $isEnabled)
-            .toggleStyle(.switch)
-            .controlSize(.mini)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(isEnabled ? Color.red : Color.secondary)
-            .tint(.red)
-            .fixedSize()
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                .ultraThinMaterial,
-                in: Capsule()
-            )
-            .overlay {
-                Capsule()
-                    .stroke(
-                        isEnabled
-                            ? Color.red.opacity(0.65)
-                            : Color.secondary.opacity(0.2),
-                        lineWidth: 0.5
-                    )
-            }
-            .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
-            .opacity(isEnabled ? 0.9 : 0.65)
-            .accessibilityLabel("NVG Mode")
-            .accessibilityHint("Turns the night vision display on or off")
     }
 
     private func updateBrightness() {
