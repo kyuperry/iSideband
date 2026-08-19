@@ -6,9 +6,6 @@ struct MessageComposer: View {
 
     let onAttachmentTapped: () -> Void
     let onSendTapped: () -> Void
-    var showsPushToTalk = false
-    var isPushToTalkRecording = false
-    var onPushToTalkTapped: (() -> Void)?
 
     private var canSend: Bool {
         !messageText.trimmingCharacters(
@@ -52,34 +49,6 @@ struct MessageComposer: View {
                     style: .continuous
                 )
             )
-
-            if showsPushToTalk {
-                Button {
-                    onPushToTalkTapped?()
-                } label: {
-                    Image(
-                        systemName: isPushToTalkRecording
-                            ? "stop.fill"
-                            : "mic.fill"
-                    )
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 42, height: 42)
-                    .background(
-                        Circle().fill(
-                            isPushToTalkRecording
-                                ? Color.red
-                                : Color.accentColor
-                        )
-                    )
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(
-                    isPushToTalkRecording
-                        ? "Stop voice recording"
-                        : "Start push-to-talk recording"
-                )
-            }
 
             Button {
                 onSendTapped()

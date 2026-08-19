@@ -319,7 +319,7 @@ struct SettingsView: View {
             }
 
             Text(
-                "Shows a microphone button beside the message field. Tap it to record, tap again to stop, then confirm before the voice message is sent."
+                "Adds PTT to the Photo, File, and Voice menu opened with the plus button. Tap PTT to record, tap Stop to finish, then confirm before sending."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

@@ -203,7 +203,9 @@ struct MessagesView: View {
                                 restoreKeyboardAtNewestMessage = false
                             }
                         } else {
-                            showingAttachmentMenu = false
+                            if !pushToTalkRecorder.isRecording {
+                                showingAttachmentMenu = false
+                            }
                             restoreKeyboardAtNewestMessage =
                                 isComposerFocused
                             isComposerFocused = false
@@ -353,6 +355,7 @@ struct MessagesView: View {
                 pushToTalkWasRecording = true
             } else if pushToTalkWasRecording {
                 pushToTalkWasRecording = false
+                showingAttachmentMenu = false
                 if let url = pushToTalkRecorder.outputURL {
                     pendingPushToTalkURL = url
                     showingPushToTalkSendPrompt = true
@@ -377,21 +380,18 @@ struct MessagesView: View {
             messageText: $messageText,
             isFocused: $isComposerFocused,
             onAttachmentTapped: {
+                guard !pushToTalkRecorder.isRecording else { return }
                 withAnimation(.snappy(duration: 0.22)) {
                     showingAttachmentMenu.toggle()
                 }
             },
             onSendTapped: {
                 sendMessage()
-            },
-            showsPushToTalk: pushToTalkEnabled,
-            isPushToTalkRecording: pushToTalkRecorder.isRecording,
-            onPushToTalkTapped: togglePushToTalk
+            }
         )
     }
 
     private func togglePushToTalk() {
-        showingAttachmentMenu = false
         isComposerFocused = false
         if pushToTalkRecorder.isRecording {
             _ = pushToTalkRecorder.stop()
@@ -410,6 +410,18 @@ struct MessagesView: View {
 
     private var attachmentTray: some View {
         HStack(spacing: 12) {
+            if pushToTalkEnabled {
+                attachmentTrayButton(
+                    title: pushToTalkRecorder.isRecording ? "Stop" : "PTT",
+                    systemImage: pushToTalkRecorder.isRecording
+                        ? "stop.fill"
+                        : "mic.fill",
+                    tint: pushToTalkRecorder.isRecording ? .red : .accentColor
+                ) {
+                    togglePushToTalk()
+                }
+            }
+
             attachmentTrayButton(
                 title: "Photo",
                 systemImage: "photo.fill"
@@ -417,6 +429,7 @@ struct MessagesView: View {
                 showingAttachmentMenu = false
                 showingPhotoPicker = true
             }
+            .disabled(pushToTalkRecorder.isRecording)
 
             attachmentTrayButton(
                 title: "File",
@@ -425,6 +438,7 @@ struct MessagesView: View {
                 showingAttachmentMenu = false
                 showingFilePicker = true
             }
+            .disabled(pushToTalkRecorder.isRecording)
 
             attachmentTrayButton(
                 title: "Voice",
@@ -433,6 +447,7 @@ struct MessagesView: View {
                 showingAttachmentMenu = false
                 showingVoiceRecorder = true
             }
+            .disabled(pushToTalkRecorder.isRecording)
 
             Button {
                 withAnimation(.snappy(duration: 0.22)) {
@@ -445,6 +460,7 @@ struct MessagesView: View {
                     .background(Color.secondary.opacity(0.12), in: Circle())
             }
             .buttonStyle(.plain)
+            .disabled(pushToTalkRecorder.isRecording)
             .accessibilityLabel("Close attachments")
         }
         .padding(.horizontal)
@@ -455,6 +471,7 @@ struct MessagesView: View {
     private func attachmentTrayButton(
         title: String,
         systemImage: String,
+        tint: Color = .accentColor,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
@@ -467,9 +484,10 @@ struct MessagesView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 54)
             .background(
-                Color.accentColor.opacity(0.12),
+                tint.opacity(0.12),
                 in: RoundedRectangle(cornerRadius: 14, style: .continuous)
             )
+            .foregroundStyle(tint)
         }
         .buttonStyle(.plain)
     }
