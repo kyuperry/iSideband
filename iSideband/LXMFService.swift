@@ -68,7 +68,7 @@ final class LXMFService: ObservableObject {
         isReady = true
         statusMessage = "LXMF service ready"
 
-        print("LXMF Service started")
+        privacySafeLog("LXMF Service started")
     }
 
     func stop() {
@@ -78,7 +78,7 @@ final class LXMFService: ObservableObject {
         isProcessingQueue = false
         statusMessage = "LXMF service stopped"
 
-        print("LXMF Service stopped")
+        privacySafeLog("LXMF Service stopped")
     }
 
     func announceIdentity() {
@@ -86,7 +86,7 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Cannot announce: LXMF service is not ready"
 
-            print(statusMessage)
+            privacySafeLog(statusMessage)
             return
         }
 
@@ -94,7 +94,7 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Cannot announce: RNode is unavailable"
 
-            print(statusMessage)
+            privacySafeLog(statusMessage)
             return
         }
 
@@ -142,7 +142,7 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Reticulum identity announced"
 
-            print(
+            privacySafeLog(
                 """
                 RETICULUM ANNOUNCE TRANSMITTED
                 Destination name: lxmf.delivery
@@ -154,7 +154,7 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Announce failed: \(error.localizedDescription)"
 
-            print(
+            privacySafeLog(
                 "RETICULUM ANNOUNCE FAILED:",
                 error.localizedDescription
             )
@@ -164,7 +164,7 @@ final class LXMFService: ObservableObject {
         retryTask?.cancel()
         retryTask = nil
         guard isReady else {
-            print(
+            privacySafeLog(
                 "LXMF queue blocked: service is not ready"
             )
             return
@@ -208,9 +208,9 @@ final class LXMFService: ObservableObject {
         of message: LXMFOutgoingMessage
     ) async {
         
-        print("========== TRANSMIT MESSAGE ==========")
-        print("Attachment present: \(message.attachment != nil)")
-        print("Text: \(message.text)")
+        privacySafeLog("========== TRANSMIT MESSAGE ==========")
+        privacySafeLog("Attachment present: \(message.attachment != nil)")
+        privacySafeLog("Text: \(message.text)")
         manager?.markAttemptStarted(id: message.id)
 
         guard let bluetooth else {
@@ -228,7 +228,7 @@ final class LXMFService: ObservableObject {
         if let attachment = message.attachment {
             let attachmentURL = attachment.resolvedFileURL()
 
-            print(
+            privacySafeLog(
                 """
                 LXMF ATTACHMENT REQUEST
                 Stored path: \(attachment.path)
@@ -356,7 +356,7 @@ final class LXMFService: ObservableObject {
             statusMessage =
                 "Message sent to \(message.peer.displayName)"
 
-            print(
+            privacySafeLog(
                 """
                 LXMF PACKET HANDED TO RNODE
                 Destination: \(message.peer.destinationHash)
@@ -370,7 +370,7 @@ final class LXMFService: ObservableObject {
             )
             statusMessage =
                 "Message failed: \(error.localizedDescription)"
-            print(statusMessage)
+            privacySafeLog(statusMessage)
         }
     }
 

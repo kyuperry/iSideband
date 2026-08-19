@@ -144,7 +144,7 @@ struct AddLXMFContactView: View {
 
 #Preview {
     AddLXMFContactView { contact in
-        print(
+        privacySafeLog(
             """
             Saved contact:
             \(contact.displayName)

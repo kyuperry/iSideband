@@ -303,7 +303,7 @@ struct MessageBubble: View {
         guard FileManager.default.fileExists(
             atPath: fileURL.path
         ) else {
-            print(
+            privacySafeLog(
                 "Attachment file is missing: \(fileURL.path)"
             )
             return

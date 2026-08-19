@@ -377,7 +377,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 )
 
                 #if DEBUG
-                print(
+                privacySafeLog(
                     """
                     RETICULUM CORE RECEIVE
                     Bytes: \(packet.count)
@@ -466,7 +466,7 @@ final class ReticulumCoreBridge: ObservableObject {
         clientID: UUID
     ) -> Bool {
         guard handle != 0 else {
-            print(
+            privacySafeLog(
                 "ATTACHMENT SEND FAILED: Reticulum core not running"
             )
             return false
@@ -475,7 +475,7 @@ final class ReticulumCoreBridge: ObservableObject {
         guard FileManager.default.fileExists(
             atPath: fileURL.path
         ) else {
-            print(
+            privacySafeLog(
                 """
                 ATTACHMENT SEND FAILED
                 File does not exist at:
@@ -494,7 +494,7 @@ final class ReticulumCoreBridge: ObservableObject {
             (attributes?[.size] as? NSNumber)?
             .intValue ?? 0
 
-        print(
+        privacySafeLog(
             """
             ATTACHMENT SEND START
             Path: \(fileURL.path)
@@ -531,7 +531,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 }
             }
 
-        print(
+        privacySafeLog(
             "ATTACHMENT SEND RESULT: \(result)"
         )
 
@@ -542,19 +542,19 @@ final class ReticulumCoreBridge: ObservableObject {
         clientID: String,
         status: String
     ) {
-        print("STATUS CALLBACK ENTERED")
+        privacySafeLog("STATUS CALLBACK ENTERED")
 
-        print("clientID='\(clientID)' status='\(status)'")
+        privacySafeLog("clientID='\(clientID)' status='\(status)'")
 
         guard let id = UUID(uuidString: clientID) else {
-            print("LXMF STATUS FAILED: invalid client ID")
+            privacySafeLog("LXMF STATUS FAILED: invalid client ID")
             return
         }
 
         guard let value =
                 LXMFOutgoingStatus(rawValue: status)
         else {
-            print(
+            privacySafeLog(
                 "LXMF STATUS FAILED: unknown status \(status)"
             )
             return
@@ -575,7 +575,7 @@ final class ReticulumCoreBridge: ObservableObject {
 
     func transmit(_ packet: Data) {
         guard !packet.isEmpty else {
-            print("Reticulum core attempted empty transmission")
+            privacySafeLog("Reticulum core attempted empty transmission")
             return
         }
 
@@ -618,7 +618,7 @@ final class ReticulumCoreBridge: ObservableObject {
         }
 
         #if DEBUG
-        print(
+        privacySafeLog(
             """
             RETICULUM CORE TRANSMIT
             Type: \(typeName)
@@ -765,7 +765,7 @@ final class ReticulumCoreBridge: ObservableObject {
             return
         }
         status = message
-        print(
+        privacySafeLog(
             "Reticulum core [\(level)]: \(message)"
         )
     }

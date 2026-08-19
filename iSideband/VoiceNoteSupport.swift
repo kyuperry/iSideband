@@ -291,7 +291,7 @@ final class VoiceNotePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
         } catch {
             isPlaying = false
             errorMessage = "Could not play audio: \(error.localizedDescription)"
-            print("VOICE PLAYBACK FAILED: \(error)")
+            privacySafeLog("VOICE PLAYBACK FAILED: \(error)")
         }
     }
 
@@ -317,7 +317,7 @@ final class VoiceNotePlayer: NSObject, ObservableObject, AVAudioPlayerDelegate {
             guard item.status == .failed else { return }
             isPlaying = false
             errorMessage = "This iPhone could not decode the Sideband Ogg/Opus audio."
-            print("VOICE OPUS PLAYBACK FAILED: \(item.error?.localizedDescription ?? "unknown error")")
+            privacySafeLog("VOICE OPUS PLAYBACK FAILED: \(item.error?.localizedDescription ?? "unknown error")")
         }
     }
 

@@ -143,7 +143,7 @@ struct ConversationsView: View {
                         contact
                     )
 
-                    print(
+                    privacySafeLog(
                         """
                         SAVED LXMF CONTACT
                         Name: \(contact.displayName)
@@ -153,7 +153,7 @@ struct ConversationsView: View {
 
                     showAddLXMFContact = false
                 } catch {
-                    print(
+                    privacySafeLog(
                         "Failed to save LXMF contact: " +
                         error.localizedDescription
                     )
@@ -169,7 +169,7 @@ struct ConversationsView: View {
                         updatedContact
                     )
                 } catch {
-                    print(
+                    privacySafeLog(
                         "Failed to update LXMF contact: " +
                         error.localizedDescription
                     )
@@ -380,7 +380,7 @@ struct ConversationsView: View {
     }
 
     private func announceIdentity() {
-        print("RETICULUM ANNOUNCE BUTTON PRESSED")
+        privacySafeLog("RETICULUM ANNOUNCE BUTTON PRESSED")
 
         LXMFManager.shared.announceIdentity()
 

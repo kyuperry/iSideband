@@ -167,7 +167,7 @@ final class LXMFIncomingMessageStore: ObservableObject {
             }
             return destination
         } catch {
-            print("Could not persist incoming attachment: \(error)")
+            privacySafeLog("Could not persist incoming attachment: \(error)")
             return nil
         }
     }

@@ -59,7 +59,7 @@ final class LXMFManager: ObservableObject {
 
         ReticulumDecoderSelfTest.run()
         ReticulumCompatibilitySelfTest.run()
-        print("Starting LXMF Manager")
+        privacySafeLog("Starting LXMF Manager")
 
         isConnected = true
         identityReady = true
@@ -72,7 +72,7 @@ final class LXMFManager: ObservableObject {
     }
 
     func stop() {
-        print("Stopping LXMF Manager")
+        privacySafeLog("Stopping LXMF Manager")
 
         service.stop()
 
@@ -90,12 +90,12 @@ final class LXMFManager: ObservableObject {
         )
 
         guard !trimmedText.isEmpty else {
-            print("Cannot send an empty LXMF message")
+            privacySafeLog("Cannot send an empty LXMF message")
             return nil
         }
 
         guard peer.isDestinationValid else {
-            print("Invalid LXMF destination")
+            privacySafeLog("Invalid LXMF destination")
             return nil
         }
 
@@ -108,7 +108,7 @@ final class LXMFManager: ObservableObject {
         outgoingMessages.append(message)
         persistQueue()
 
-        print(
+        privacySafeLog(
             """
             LXMF SEND
             Peer: \(peer.displayName)
@@ -133,14 +133,14 @@ final class LXMFManager: ObservableObject {
         to peer: LXMFPeer
     ) -> LXMFOutgoingMessage? {
         guard peer.isDestinationValid else {
-            print("ATTACHMENT QUEUE FAILED: invalid destination")
+            privacySafeLog("ATTACHMENT QUEUE FAILED: invalid destination")
             return nil
         }
 
         guard FileManager.default.fileExists(
             atPath: fileURL.path
         ) else {
-            print(
+            privacySafeLog(
                 "ATTACHMENT QUEUE FAILED: file missing at \(fileURL.path)"
             )
             return nil
@@ -153,11 +153,11 @@ final class LXMFManager: ObservableObject {
               let byteCount =
                 attributes[.size] as? NSNumber
         else {
-            print("ATTACHMENT QUEUE FAILED: could not read file size")
+            privacySafeLog("ATTACHMENT QUEUE FAILED: could not read file size")
             return nil
         }
 
-        print(
+        privacySafeLog(
             """
             ATTACHMENT QUEUE CHECK
             File: \(fileURL.path)
@@ -169,7 +169,7 @@ final class LXMFManager: ObservableObject {
         guard byteCount.intValue <=
                 Self.maximumAttachmentBytes
         else {
-            print(
+            privacySafeLog(
                 "ATTACHMENT QUEUE FAILED: attachment exceeds maximum size"
             )
             return nil
@@ -355,7 +355,7 @@ final class LXMFManager: ObservableObject {
             service.processQueue()
         }
 
-        print(
+        privacySafeLog(
             "LXMF message \(id) status changed to \(status.rawValue)"
         )
     }

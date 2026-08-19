@@ -108,12 +108,12 @@ final class BluetoothManager:
             options: [.alert, .sound, .badge]
         ) { granted, error in
             if let error {
-                print(
+                privacySafeLog(
                     "Notification permission error: " +
                     error.localizedDescription
                 )
             } else {
-                print("Notification permission granted: \(granted)")
+                privacySafeLog("Notification permission granted: \(granted)")
             }
         }
         
@@ -139,7 +139,7 @@ final class BluetoothManager:
         withCompletionHandler completionHandler:
         @escaping (UNNotificationPresentationOptions) -> Void
     ) {
-        print("Foreground notification delegate called")
+        privacySafeLog("Foreground notification delegate called")
         completionHandler([.banner, .list, .sound])
     }
     nonisolated func userNotificationCenter(
@@ -487,7 +487,7 @@ final class BluetoothManager:
         )
         UNUserNotificationCenter.current().add(request) { error in
             if let error {
-                print(
+                privacySafeLog(
                     "RNode connection notification failed:",
                     error.localizedDescription
                 )
@@ -651,7 +651,7 @@ final class BluetoothManager:
                     || settings.authorizationStatus == .provisional
                     || settings.authorizationStatus == .ephemeral
             else {
-                print(
+                privacySafeLog(
                     "Low-battery notification skipped: notifications are not authorized"
                 )
                 return
@@ -659,9 +659,9 @@ final class BluetoothManager:
 
             do {
                 try await center.add(request)
-                print("Low-battery notification sent")
+                privacySafeLog("Low-battery notification sent")
             } catch {
-                print(
+                privacySafeLog(
                     "Low-battery notification failed: " +
                     error.localizedDescription
                 )
@@ -785,7 +785,7 @@ final class BluetoothManager:
                 self.connectionMessage =
                     "RNode data channel ready"
 
-                print(
+                privacySafeLog(
                     """
                     Saved LoRa configuration applied on connection
                     Frequency: \(frequencyMHz) MHz
@@ -800,7 +800,7 @@ final class BluetoothManager:
                 self.connectionMessage =
                     "Radio configuration failed: \(error.localizedDescription)"
 
-                print(
+                privacySafeLog(
                     "Could not apply saved LoRa configuration:",
                     error.localizedDescription
                 )
@@ -924,11 +924,11 @@ final class BluetoothManager:
 
     func sendRadioPayload(_ payload: Data) {
         guard !payload.isEmpty else {
-            print("Cannot send an empty radio payload")
+            privacySafeLog("Cannot send an empty radio payload")
             return
         }
         guard radioReady else {
-            print("Radio payload rejected: RNode LoRa radio is not ready")
+            privacySafeLog("Radio payload rejected: RNode LoRa radio is not ready")
             return
         }
         
@@ -945,20 +945,20 @@ final class BluetoothManager:
         sendToRNode(frame)
         
         #if DEBUG
-        print(
+        privacySafeLog(
             "Radio payload handed to RNode: \(payload.count) bytes"
         )
         #endif
     }
     func sendMessage(_ text: String) {
         guard let payload = text.data(using: .utf8) else {
-            print("Unable to encode message")
+            privacySafeLog("Unable to encode message")
             return
         }
         
         sendRadioPayload(payload)
         
-        print("Sent raw radio-data test: \(text)")
+        privacySafeLog("Sent raw radio-data test: \(text)")
     }
     private func reticulumPacketHash(
         for packet: DecodedReticulumPacket
@@ -1097,7 +1097,7 @@ final class BluetoothManager:
             packetsReceived += 1
             lastPacketTime = Date()
 
-            print(
+            privacySafeLog(
                 """
                 VALID LXMF MESSAGE RECEIVED
                 Source: \(message.sourceHashHex)
@@ -1107,7 +1107,7 @@ final class BluetoothManager:
         } catch {
             lastInboundDiagnostic =
                 "LXMF rejected: \(error)"
-            print(
+            privacySafeLog(
                 "Incoming LXMF message rejected:",
                 error.localizedDescription
             )
@@ -1196,7 +1196,7 @@ final class BluetoothManager:
             peripheral.discoverServices(nil)
             peripheral.readRSSI()
 
-            print(
+            privacySafeLog(
                 "Restored RNode Bluetooth connection:",
                 peripheral.identifier
             )
@@ -1223,7 +1223,7 @@ final class BluetoothManager:
                 advertisedName ??
                 peripheral.name ??
                 ""
-            print("DISCOVERED:", name.isEmpty ? "Unnamed" : name, peripheral.identifier, RSSI)
+            privacySafeLog("DISCOVERED:", name.isEmpty ? "Unnamed" : name, peripheral.identifier, RSSI)
             
             //guard name.localizedCaseInsensitiveContains("RNode") else {
             //return
@@ -1245,7 +1245,7 @@ final class BluetoothManager:
     nonisolated func centralManager(
         _ central: CBCentralManager,
         didConnect peripheral: CBPeripheral
-    ) { print("CONNECTED TO:", peripheral.name ?? "Unnamed", peripheral.identifier)
+    ) { privacySafeLog("CONNECTED TO:", peripheral.name ?? "Unnamed", peripheral.identifier)
         Task { @MainActor in
             guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
                 central.cancelPeripheralConnection(peripheral)
@@ -1295,7 +1295,7 @@ final class BluetoothManager:
         _ central: CBCentralManager,
         didFailToConnect peripheral: CBPeripheral,
         error: Error?
-    ) { print(
+    ) { privacySafeLog(
         "FAILED TO CONNECT:",
         peripheral.name ?? "Unnamed",
         error?.localizedDescription ?? "Unknown error"
@@ -1376,7 +1376,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 "Found \(services.count) BLE service(s)"
 
             for service in services {
-                print("RNode service UUID: \(service.uuid)")
+                privacySafeLog("RNode service UUID: \(service.uuid)")
 
                 peripheral.discoverCharacteristics(
                     nil,
@@ -1393,7 +1393,7 @@ extension BluetoothManager: CBPeripheralDelegate {
     ) {
         Task { @MainActor in
             if let error {
-                print(
+                privacySafeLog(
                     "Characteristic discovery error: " +
                     error.localizedDescription
                 )
@@ -1406,7 +1406,7 @@ extension BluetoothManager: CBPeripheralDelegate {
             }
 
             for characteristic in characteristics {
-                print(
+                privacySafeLog(
                     "Characteristic \(characteristic.uuid), " +
                     "properties: \(characteristic.properties)"
                 )
@@ -1417,7 +1417,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 switch uuid {
                 case "6E400002-B5A3-F393-E0A9-E50E24DCCA9E":
                     rnodeWriteCharacteristic = characteristic
-                    print("Saved RNode write characteristic")
+                    privacySafeLog("Saved RNode write characteristic")
 
                 case "6E400003-B5A3-F393-E0A9-E50E24DCCA9E":
                     rnodeNotifyCharacteristic = characteristic
@@ -1427,7 +1427,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         for: characteristic
                     )
 
-                    print("Subscribed to RNode notifications")
+                    privacySafeLog("Subscribed to RNode notifications")
                     
                 case "2A19":
                     batteryLevelCharacteristic = characteristic
@@ -1444,7 +1444,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         )
                     }
 
-                    print("Subscribed to BLE battery updates")
+                    privacySafeLog("Subscribed to BLE battery updates")
                 default:
                     if characteristic.properties.contains(.read) {
                         peripheral.readValue(
@@ -1478,7 +1478,7 @@ extension BluetoothManager: CBPeripheralDelegate {
     ) {
         Task { @MainActor in
             if let error {
-                print(
+                privacySafeLog(
                     "Notification subscription failed: " +
                     error.localizedDescription
                 )
@@ -1489,7 +1489,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                characteristic.uuid ==
                     rnodeNotifyCharacteristic?.uuid {
                 connectionMessage = "RNode data channel ready"
-                print("RNode notification channel is active")
+                privacySafeLog("RNode notification channel is active")
 
                 DispatchQueue.main.asyncAfter(
                     deadline: .now() + 0.5
@@ -1507,7 +1507,7 @@ extension BluetoothManager: CBPeripheralDelegate {
     ) {
         Task { @MainActor in
             if let error {
-                print(
+                privacySafeLog(
                     "Characteristic read failed: " +
                     error.localizedDescription
                 )
@@ -1528,9 +1528,9 @@ extension BluetoothManager: CBPeripheralDelegate {
                 for frame in frames {
                     let packet = packetDecoder.decode(frame)
                     if packet.commandType == .batteryState {
-                        print("RNode battery frame received:", packet.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
+                        privacySafeLog("RNode battery frame received:", packet.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
                     }
-                    print(
+                    privacySafeLog(
                         """
                         RNode decoded command
                         Type: \(packet.commandType)
@@ -1538,7 +1538,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         """
                     )
                     if packet.commandType == .data {
-                        print(
+                        privacySafeLog(
                             "RNode RADIO DATA received: \(packet.payload.count) bytes"
                         )
                         let payloadData = Data(packet.payload)
@@ -1546,7 +1546,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         do {
                             let reticulumPacket =
                                 try reticulumDecoder.decode(payloadData)
-                            print(
+                            privacySafeLog(
                                 """
                                 ===== RETICULUM PACKET =====
                                 Classification: \(reticulumPacket.diagnosticClassification)
@@ -1567,12 +1567,12 @@ extension BluetoothManager: CBPeripheralDelegate {
                                 reticulumPacket.raw
                             )
 
-                            print("Reticulum packet received")
-                            print("Destination:", reticulumPacket.destinationHashHex)
-                            print("Type:", reticulumPacket.packetType)
+                            privacySafeLog("Reticulum packet received")
+                            privacySafeLog("Destination:", reticulumPacket.destinationHashHex)
+                            privacySafeLog("Type:", reticulumPacket.packetType)
 
                             if reticulumPacket.isAnnounce {
-                                print("Announce packet detected")
+                                privacySafeLog("Announce packet detected")
 
                                 do {
                                     let announce = try announceDecoder.decode(
@@ -1592,7 +1592,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                                     guard linkDestination.isEmpty ||
                                             announce.destinationHashHex !=
                                             linkDestination else {
-                                        print(
+                                        privacySafeLog(
                                             "Ignored local Link-core announce"
                                         )
                                         continue
@@ -1610,14 +1610,14 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         )
 
                                     guard decision != .ownAnnounce else {
-                                        print(
+                                        privacySafeLog(
                                             "Ignored local Reticulum announce"
                                         )
                                         continue
                                     }
 
                                     guard decision != .duplicate else {
-                                        print(
+                                        privacySafeLog(
                                             "Ignored duplicate Reticulum announce"
                                         )
                                         continue
@@ -1647,12 +1647,12 @@ extension BluetoothManager: CBPeripheralDelegate {
                                             eventID: announceID
                                         )
                                     } else {
-                                        print(
+                                        privacySafeLog(
                                             "Known contact announce updated without nearby notification"
                                         )
                                     }
 
-                                    print(
+                                    privacySafeLog(
                                         """
                                         VALID RETICULUM ANNOUNCE RECEIVED
                                         Destination: \(announce.destinationHashHex)
@@ -1660,7 +1660,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                                         """
                                     )
                                 } catch {
-                                    print(
+                                    privacySafeLog(
                                         "Reticulum announce rejected: " +
                                         error.localizedDescription
                                     )
@@ -1672,10 +1672,10 @@ extension BluetoothManager: CBPeripheralDelegate {
                             }
 
                         } catch {
-                            print("Not a decoded Reticulum packet:", error)
+                            privacySafeLog("Not a decoded Reticulum packet:", error)
                         }
 
-                        print(
+                        privacySafeLog(
                             "Radio data received:",
                             payloadData.map {
                                 String(format: "%02X", $0)
@@ -1686,7 +1686,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                             data: payloadData,
                             encoding: .utf8
                         ) {
-                            print("Radio data as text: \(text)")
+                            privacySafeLog("Radio data as text: \(text)")
                         }
 
                         continue
@@ -1703,7 +1703,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         // The firmware already averages its ADC samples before
                         // encoding this integer. Preserve that exact value.
                         rnodeBatteryPercent = batteryPercent
-                        print("RNode battery telemetry received: \(batteryPercent)%")
+                        privacySafeLog("RNode battery telemetry received: \(batteryPercent)%")
                         reconcileBatteryReadings(updatedAt: now)
                     }
 
@@ -1724,7 +1724,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let radioReady = telemetry.radioReady {
                         self.radioReady = radioReady
-                        print(
+                        privacySafeLog(
                             radioReady
                                 ? "RNode LoRa radio is ON"
                                 : "RNode LoRa radio is OFF"
@@ -1733,7 +1733,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                     if let radioLocked = telemetry.radioLocked {
                         self.radioLocked = radioLocked
-                        print("RNode radio lock: \(radioLocked)")
+                        privacySafeLog("RNode radio lock: \(radioLocked)")
                     }
 
                     if let errorCode = telemetry.errorCode {
@@ -1742,7 +1742,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         )
                         radioErrorMessage = message
                         radioReady = false
-                        print(
+                        privacySafeLog(
                             "RNode firmware error 0x" +
                             String(format: "%02X", errorCode) +
                             ": " + message
@@ -1797,7 +1797,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         String(format: "0x%02X", $0)
                     } ?? "Unavailable"
 
-                    print("""
+                    privacySafeLog("""
                     Complete RNode frame received
                     Length: \(packet.length) bytes
                     Starts with C0: \(packet.startsWithFrame)
@@ -1809,22 +1809,22 @@ extension BluetoothManager: CBPeripheralDelegate {
                 
             } else if characteristic.uuid == CBUUID(string: "2A24") {
                 if let text = String(data: data, encoding: .utf8) {
-                    print("BLE Model Number String: \(text)")
+                    privacySafeLog("BLE Model Number String: \(text)")
                     boardName = text == "RAK4640" ? "RAK4631" : text
                 }
 
             } else if characteristic.uuid == CBUUID(string: "2A26") {
                 if let text = String(data: data, encoding: .utf8) {
-                    print("BLE Firmware Revision: \(text)")
+                    privacySafeLog("BLE Firmware Revision: \(text)")
                 }
 
             } else if characteristic.uuid == CBUUID(string: "2A19") {
                 if let rawValue = data.first {
                     let reportedLevel = Int(rawValue)
-                    print("Battery UUID: \(characteristic.uuid.uuidString)")
-                    print("BLE Battery raw byte: \(reportedLevel)")
-                    print("BLE Battery data: \(data as NSData)")
-                    print("BLE Battery byte count: \(data.count)")
+                    privacySafeLog("Battery UUID: \(characteristic.uuid.uuidString)")
+                    privacySafeLog("BLE Battery raw byte: \(reportedLevel)")
+                    privacySafeLog("BLE Battery data: \(data as NSData)")
+                    privacySafeLog("BLE Battery byte count: \(data.count)")
 
                     // Some RNode firmware revisions expose their calculated
                     // percentage on the standard BLE Battery Level
@@ -1839,7 +1839,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                         bleBatteryUpdatedAt = now
                         reconcileBatteryReadings(updatedAt: now)
                     } else {
-                        print(
+                        privacySafeLog(
                             "Ignoring unknown BLE battery level"
                         )
                     }
@@ -1848,11 +1848,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                 data: data,
                 encoding: .utf8
             ) {
-                print(
+                privacySafeLog(
                     "\(characteristic.uuid): \(text)"
                 )
             } else {
-                print(
+                privacySafeLog(
                     "\(characteristic.uuid): \(data as NSData)"
                 )
             }
@@ -1932,7 +1932,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                 connectionMessage =
                     "RNode write failed: \(error.localizedDescription)"
             } else {
-                print("Successfully wrote data to \(characteristic.uuid)"
+                privacySafeLog("Successfully wrote data to \(characteristic.uuid)"
                 )
             }
         }
@@ -1943,13 +1943,13 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         guard error == nil else {
-            print("RSSI read failed: \(error?.localizedDescription ?? "Unknown error")")
+            privacySafeLog("RSSI read failed: \(error?.localizedDescription ?? "Unknown error")")
             return
         }
 
         Task { @MainActor in
             self.updateConnectedRSSI(RSSI.intValue)
-            print("Connected RNode RSSI: \(RSSI.intValue) dBm")
+            privacySafeLog("Connected RNode RSSI: \(RSSI.intValue) dBm")
         }
     }
 

@@ -285,7 +285,7 @@ struct MessagesView: View {
             handleSelectedFile(result)
         }
         .onChange(of: selectedPhoto) { _, newPhoto in
-            print(
+            privacySafeLog(
                 "PHOTO PICKER CHANGED: \(newPhoto != nil)"
             )
 
@@ -341,7 +341,7 @@ struct MessagesView: View {
             return
         }
 
-        print("RETICULUM ANNOUNCE BUTTON PRESSED")
+        privacySafeLog("RETICULUM ANNOUNCE BUTTON PRESSED")
 
         isSendingAnnounce = true
         announceButtonText = "Sending…"
@@ -644,7 +644,7 @@ struct MessagesView: View {
 
     private func queuePreparedPhoto(_ photoData: Data, savedURL: URL) {
         guard let peer = contact?.peer else {
-            print("PHOTO SEND FAILED: contact peer is missing")
+            privacySafeLog("PHOTO SEND FAILED: contact peer is missing")
             messages.append(
                 ChatMessage(
                     text: "",
@@ -659,7 +659,7 @@ struct MessagesView: View {
             return
         }
 
-        print(
+        privacySafeLog(
             """
             PHOTO SEND QUEUE ATTEMPT
             Destination: \(peer.destinationHash)
@@ -844,7 +844,7 @@ struct MessagesView: View {
 
             return fileURL
         } catch {
-            print(
+            privacySafeLog(
                 "Could not save direct photo: \(error)"
             )
 
@@ -929,7 +929,7 @@ struct MessagesView: View {
 
             return destinationURL
         } catch {
-            print(
+            privacySafeLog(
                 "Could not save direct file: \(error)"
             )
 

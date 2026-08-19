@@ -475,7 +475,7 @@ struct GroupChatView: View {
 
             return fileURL
         } catch {
-            print(
+            privacySafeLog(
                 "Could not save group photo: \(error)"
             )
 
@@ -522,7 +522,7 @@ struct GroupChatView: View {
 
             return destinationURL
         } catch {
-            print(
+            privacySafeLog(
                 "Could not save group file: \(error)"
             )
 

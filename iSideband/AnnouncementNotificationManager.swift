@@ -19,13 +19,13 @@ final class AnnouncementNotificationManager {
             ) { granted, error in
 
                 if let error {
-                    print(
+                    privacySafeLog(
                         "Notification permission error:",
                         error
                     )
                 }
 
-                print(
+                privacySafeLog(
                     "Notifications granted:",
                     granted
                 )

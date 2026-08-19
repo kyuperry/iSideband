@@ -59,7 +59,7 @@ final class LXMFMessageNotificationManager {
         UNUserNotificationCenter.current()
             .add(request) { error in
                 if let error {
-                    print(
+                    privacySafeLog(
                         "LXMF notification failed:",
                         error.localizedDescription
                     )

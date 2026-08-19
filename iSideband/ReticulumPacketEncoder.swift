@@ -162,7 +162,7 @@ struct ReticulumPacketEncoder {
         packet.append(context)
         packet.append(payload)
 
-        print(
+        privacySafeLog(
             """
             RETICULUM ANNOUNCE PACKET ENCODED
             Destination: \(destinationHash.map {

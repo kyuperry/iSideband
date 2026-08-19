@@ -526,7 +526,7 @@ struct RNodeDetailView: View {
             identityHash = "Unavailable"
             destinationHash = "Unavailable"
 
-            print(
+            privacySafeLog(
                 """
                 Could not load Reticulum identity: \
                 \(error)

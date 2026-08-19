@@ -123,7 +123,7 @@ final class RNodeLiveActivityManager {
                     pushType: nil
                 )
             } catch {
-                print("RNode Live Activity could not start:", error.localizedDescription)
+                privacySafeLog("RNode Live Activity could not start:", error.localizedDescription)
             }
         }
     }

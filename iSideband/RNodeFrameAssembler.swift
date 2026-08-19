@@ -19,7 +19,7 @@ final class RNodeFrameAssembler {
 
                     if frame.count > 2 {
                         frames.append(frame)
-                        print("Frame assembled: \(frame as NSData)")
+                        privacySafeLog("Frame assembled: \(frame as NSData)")
                     }
                     frameStartIndex = index
                 } else {

@@ -531,7 +531,7 @@ final class MeshMapLocationManager:
         _ manager: CLLocationManager,
         didFailWithError error: Error
     ) {
-        print(
+        privacySafeLog(
             "Mesh map location error: \(error.localizedDescription)"
         )
     }

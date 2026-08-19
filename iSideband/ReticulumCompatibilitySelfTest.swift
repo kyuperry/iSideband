@@ -70,7 +70,7 @@ enum ReticulumCompatibilitySelfTest {
             } catch {
             }
 
-            print(
+            privacySafeLog(
                 """
                 RETICULUM/LXMF COMPATIBILITY SELF-TEST PASSED
                 Encryption, packet framing, MessagePack and signature validation are operational.

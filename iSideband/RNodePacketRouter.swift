@@ -206,7 +206,7 @@ final class RNodePacketRouter {
         guard packet.payload.count >= 4 else {
             return nil
         }
-        print(
+        privacySafeLog(
             "UInt32 telemetry payload:",
             packet.payload.prefix(4)
                 .map { String(format: "%02X", $0) }

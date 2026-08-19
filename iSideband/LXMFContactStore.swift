@@ -107,7 +107,7 @@ final class LXMFContactStore: ObservableObject {
                 forKey: storageKey
             )
         } catch {
-            print(
+            privacySafeLog(
                 "Failed to save LXMF contacts: " +
                 error.localizedDescription
             )
@@ -136,7 +136,7 @@ final class LXMFContactStore: ObservableObject {
         } catch {
             contacts = []
 
-            print(
+            privacySafeLog(
                 "Failed to load LXMF contacts: " +
                 error.localizedDescription
             )

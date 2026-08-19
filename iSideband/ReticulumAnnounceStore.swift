@@ -46,7 +46,7 @@ final class ReticulumAnnounceStore: ObservableObject {
             $0.receivedAt > $1.receivedAt
         }
 
-        print(
+        privacySafeLog(
             """
             RETICULUM ANNOUNCE SAVED
             Destination: \(announce.destinationHashHex)

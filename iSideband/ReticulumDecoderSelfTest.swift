@@ -9,7 +9,7 @@ enum ReticulumDecoderSelfTest {
             let decoder = ReticulumPacketDecoder()
             let decodedPacket = try decoder.decode(samplePacket)
 
-            print(
+            privacySafeLog(
                 """
                 RETICULUM DECODER SELF-TEST PASSED
                 Type: \(decodedPacket.packetType)
@@ -27,7 +27,7 @@ enum ReticulumDecoderSelfTest {
             assert(decodedPacket.payload == Data([0xAA, 0xBB, 0xCC]))
 
         } catch {
-            print(
+            privacySafeLog(
                 "RETICULUM DECODER SELF-TEST FAILED:",
                 error.localizedDescription
             )

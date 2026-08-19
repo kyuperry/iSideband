@@ -273,7 +273,7 @@ extension BluetoothManager {
             codingRate =
                 configuration.codingRate
 
-            print(
+            privacySafeLog(
                 """
                 RNode radio configuration sent
                 Frequency: \(configuration.frequencyHz) Hz
@@ -330,13 +330,13 @@ extension BluetoothManager {
 
             if self.radioReady {
                 self.setRadioConnectionMessage("RNode data channel ready")
-                print("RNode radio configuration verified: radio is ON")
+                privacySafeLog("RNode radio configuration verified: radio is ON")
                 completion(.success(configuration))
                 return
             }
 
             if retryCount == 0, self.radioLocked != true {
-                print("RNode radio stayed off; retrying startup once")
+                privacySafeLog("RNode radio stayed off; retrying startup once")
                 self.radioErrorMessage = nil
                 self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]))
                 self.verifyRadioStarted(
