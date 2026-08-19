@@ -52,6 +52,9 @@ struct SettingsView: View {
             .thirtyMinutes
             .rawValue
 
+    @AppStorage(PushToTalkPreferenceKey.enabled)
+    private var pushToTalkEnabled = false
+
     @State private var frequencyMHz = "915.000"
     @State private var bandwidthKHz = "125"
     @State private var transmitPowerDBm = "22"
@@ -86,6 +89,7 @@ struct SettingsView: View {
             interfaceSettingsSection
             nearbyDiscoverySection
             automaticAnnouncementsSection
+            messagingSettingsSection
             notificationSettingsSection
             identitySection
             radioSettingsSection
@@ -302,6 +306,20 @@ struct SettingsView: View {
                 """
                 iPhone notification permission must also be enabled for iSideband in Settings.
                 """
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var messagingSettingsSection: some View {
+        Section("Messaging") {
+            Toggle(isOn: $pushToTalkEnabled) {
+                Label("Push-to-Talk Button", systemImage: "mic.fill")
+            }
+
+            Text(
+                "Shows a microphone button beside the message field. Tap it to record, tap again to stop, then confirm before the voice message is sent."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

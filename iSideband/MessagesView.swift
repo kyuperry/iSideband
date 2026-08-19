@@ -60,6 +60,10 @@ struct MessagesView: View {
     private var lxmfManager: LXMFManager
     @ObservedObject private var incomingStore =
         LXMFIncomingMessageStore.shared
+    @StateObject private var pushToTalkRecorder = VoiceNoteRecorder()
+
+    @AppStorage(PushToTalkPreferenceKey.enabled)
+    private var pushToTalkEnabled = false
 
     @State private var messageText = ""
     @State private var messages: [ChatMessage]
@@ -71,6 +75,9 @@ struct MessagesView: View {
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
+    @State private var pushToTalkWasRecording = false
+    @State private var pendingPushToTalkURL: URL?
+    @State private var showingPushToTalkSendPrompt = false
     @FocusState private var isComposerFocused: Bool
     @State private var isViewingNewestMessage = true
     @State private var restoreKeyboardAtNewestMessage = false
@@ -258,6 +265,25 @@ struct MessagesView: View {
                 sendVoiceNote(at: url)
             }
         }
+        .alert(
+            "Send Voice Message?",
+            isPresented: $showingPushToTalkSendPrompt
+        ) {
+            Button("Send Voice Message") {
+                if let url = pendingPushToTalkURL {
+                    sendVoiceNote(at: url)
+                }
+                pendingPushToTalkURL = nil
+            }
+            Button("Delete Recording", role: .destructive) {
+                discardPushToTalkRecording()
+            }
+            Button("Cancel", role: .cancel) {
+                discardPushToTalkRecording()
+            }
+        } message: {
+            Text("The recording will only be transmitted after you press Send Voice Message.")
+        }
         .onAppear {
             lxmfManager.start(
                 bluetooth: bluetooth
@@ -270,6 +296,9 @@ struct MessagesView: View {
             }
         }
         .onDisappear {
+            if pushToTalkRecorder.isRecording || pendingPushToTalkURL != nil {
+                discardPushToTalkRecording()
+            }
             if let contact {
                 incomingStore.markRead(
                     destinationHash:
@@ -319,6 +348,28 @@ struct MessagesView: View {
                 for: contact
             )
         }
+        .onChange(of: pushToTalkRecorder.isRecording) { _, isRecording in
+            if isRecording {
+                pushToTalkWasRecording = true
+            } else if pushToTalkWasRecording {
+                pushToTalkWasRecording = false
+                if let url = pushToTalkRecorder.outputURL {
+                    pendingPushToTalkURL = url
+                    showingPushToTalkSendPrompt = true
+                }
+            }
+        }
+        .alert(
+            "Recording Unavailable",
+            isPresented: Binding(
+                get: { pushToTalkRecorder.errorMessage != nil },
+                set: { if !$0 { pushToTalkRecorder.errorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(pushToTalkRecorder.errorMessage ?? "")
+        }
     }
 
     private var messageComposer: some View {
@@ -332,8 +383,29 @@ struct MessagesView: View {
             },
             onSendTapped: {
                 sendMessage()
-            }
+            },
+            showsPushToTalk: pushToTalkEnabled,
+            isPushToTalkRecording: pushToTalkRecorder.isRecording,
+            onPushToTalkTapped: togglePushToTalk
         )
+    }
+
+    private func togglePushToTalk() {
+        showingAttachmentMenu = false
+        isComposerFocused = false
+        if pushToTalkRecorder.isRecording {
+            _ = pushToTalkRecorder.stop()
+        } else {
+            pendingPushToTalkURL = nil
+            pushToTalkRecorder.start()
+        }
+    }
+
+    private func discardPushToTalkRecording() {
+        showingPushToTalkSendPrompt = false
+        pendingPushToTalkURL = nil
+        pushToTalkWasRecording = false
+        pushToTalkRecorder.cancel()
     }
 
     private var attachmentTray: some View {

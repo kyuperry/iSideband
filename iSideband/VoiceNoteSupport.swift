@@ -2,6 +2,10 @@ import AVFoundation
 import Combine
 import SwiftUI
 
+enum PushToTalkPreferenceKey {
+    static let enabled = "pushToTalkButtonEnabled"
+}
+
 @MainActor
 final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelegate {
     @Published private(set) var isRecording = false
