@@ -73,6 +73,17 @@ final class LXMFIncomingMessageStore: ObservableObject {
     }
 
     @discardableResult
+    func replaceMessages(
+        _ messages: [ChatMessage],
+        for destinationHash: String
+    ) -> Bool {
+        persist(
+            messages.sorted { $0.date < $1.date },
+            key: messageStorageKey(destinationHash)
+        )
+    }
+
+    @discardableResult
     func save(
         _ message: LXMFIncomingMessage
     ) -> Bool {

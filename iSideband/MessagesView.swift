@@ -922,7 +922,8 @@ struct MessagesView: View {
         let size = (try? FileManager.default.attributesOfItem(
             atPath: url.path
         )[.size] as? NSNumber)?.intValue
-        guard let peer = contact?.peer,
+        guard let size, size >= 64,
+              let peer = contact?.peer,
               let queued = lxmfManager.sendAttachment(
                 at: url,
                 name: url.lastPathComponent,
@@ -1020,38 +1021,57 @@ struct MessagesView: View {
     private static func loadMessages(
         for contact: LXMFContact?
     ) -> [ChatMessage] {
-        let key = storageKey(
-            for: contact
-        )
-
-        guard
-            let data = UserDefaults.standard.data(
-                forKey: key
-            ),
-            let savedMessages = try? JSONDecoder().decode(
-                [ChatMessage].self,
-                from: data
-            )
-        else {
-            return []
+        guard let contact else {
+            let key = storageKey(for: nil)
+            guard let data = UserDefaults.standard.data(forKey: key),
+                  let messages = try? JSONDecoder().decode(
+                    [ChatMessage].self,
+                    from: data
+                  ) else { return [] }
+            return messages
         }
 
-        return savedMessages
+        let key = storageKey(for: contact)
+        let databaseMessages = LXMFIncomingMessageStore.shared.messages(
+            for: contact.destinationHash
+        )
+        let legacyMessages = UserDefaults.standard.data(forKey: key)
+            .flatMap {
+                try? JSONDecoder().decode([ChatMessage].self, from: $0)
+            } ?? []
+        var merged: [String: ChatMessage] = [:]
+        for message in databaseMessages + legacyMessages {
+            let identity = message.lxmfHash ??
+                message.lxmfMessageID?.uuidString ??
+                message.id.uuidString
+            merged[identity] = message
+        }
+        let messages = merged.values.sorted { $0.date < $1.date }
+        if !legacyMessages.isEmpty,
+           LXMFIncomingMessageStore.shared.replaceMessages(
+            messages,
+            for: contact.destinationHash
+           ) {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        return messages
     }
 
     private func saveMessages() {
-        guard let data = try? JSONEncoder().encode(
-            messages
-        ) else {
+        guard let contact else {
+            guard let data = try? JSONEncoder().encode(messages) else {
+                return
+            }
+            UserDefaults.standard.set(
+                data,
+                forKey: Self.storageKey(for: nil)
+            )
             return
         }
-
-        UserDefaults.standard.set(
-            data,
-            forKey: Self.storageKey(
-                for: contact
-            )
-            )
+        _ = LXMFIncomingMessageStore.shared.replaceMessages(
+            messages,
+            for: contact.destinationHash
+        )
     }
 }
 

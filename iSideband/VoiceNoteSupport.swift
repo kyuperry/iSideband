@@ -9,8 +9,9 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     @Published var errorMessage: String?
 
     static let maximumDuration: TimeInterval = 15
-    private static let sampleRate = 12_000
-    private static let opusBitRate = 8_000
+    private static let sampleRate = 16_000
+    private static let opusBitRate = 16_000
+    private static let minimumRecordingBytes = 64
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
     private(set) var outputURL: URL?
@@ -51,7 +52,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             let settings: [String: Any] = [
                 AVFormatIDKey: Int(kAudioFormatOpus),
                 // Sideband-compatible Ogg/Opus, tuned for speech over LoRa.
-                // At 8 kbps, a full 15-second note is approximately 15 KB
+                // At 16 kbps, a full 15-second note is approximately 30 KB
                 // before the small Ogg container overhead.
                 AVSampleRateKey: Self.sampleRate,
                 AVNumberOfChannelsKey: 1,
@@ -60,7 +61,9 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
             ]
             let recorder = try AVAudioRecorder(url: url, settings: settings)
             recorder.delegate = self
-            recorder.prepareToRecord()
+            guard recorder.prepareToRecord() else {
+                throw RecorderError.couldNotStart
+            }
             guard recorder.record(forDuration: Self.maximumDuration) else {
                 throw RecorderError.couldNotStart
             }
@@ -85,6 +88,20 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
         timer = nil
         isRecording = false
         recorder = nil
+        if let outputURL {
+            let size = (try? FileManager.default.attributesOfItem(
+                atPath: outputURL.path
+            )[.size] as? NSNumber)?.intValue ?? 0
+            let isReadable = (try? AVAudioFile(
+                forReading: outputURL
+            )) != nil
+            if size < Self.minimumRecordingBytes || !isReadable {
+                try? FileManager.default.removeItem(at: outputURL)
+                self.outputURL = nil
+                errorMessage =
+                    "The voice recording was empty. Please record it again."
+            }
+        }
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
