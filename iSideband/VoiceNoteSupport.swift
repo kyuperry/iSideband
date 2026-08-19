@@ -150,6 +150,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
 struct VoiceNoteRecorderView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = VoiceNoteRecorder()
+    @State private var isHoldingPushToTalk = false
     let isPushToTalk: Bool
     let onSend: (URL) -> Void
 
@@ -171,27 +172,34 @@ struct VoiceNoteRecorderView: View {
                     .font(.system(.title, design: .monospaced).bold())
                 Text(
                     isPushToTalk
-                        ? "PTT messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers."
+                        ? "Push-to-Talk records while the red button is held, stops when released, and uses low-bandwidth Opus for reliable radio transfers."
                         : "Voice messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers."
                 )
                     .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button(recorder.isRecording ? "Stop Recording" : "Start Recording") {
-                    if recorder.isRecording {
-                        _ = recorder.stop()
-                    } else {
-                        recorder.start()
+
+                if isPushToTalk {
+                    pushToTalkRecordControl
+                } else {
+                    Button(recorder.isRecording ? "Stop Recording" : "Start Recording") {
+                        if recorder.isRecording {
+                            _ = recorder.stop()
+                        } else {
+                            recorder.start()
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
+
                 if !recorder.isRecording, let url = recorder.outputURL {
                     Button(
-                        isPushToTalk ? "Send PTT Message" : "Send Voice Message"
+                        isPushToTalk ? "Send Push-to-Talk" : "Send Voice Message"
                     ) { onSend(url); dismiss() }
                         .buttonStyle(.borderedProminent)
                 }
             }
             .padding(28)
-            .navigationTitle(isPushToTalk ? "PTT Message" : "Voice Message")
+            .navigationTitle(isPushToTalk ? "Push-to-Talk" : "Voice Message")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { recorder.cancel(); dismiss() }
@@ -202,7 +210,41 @@ struct VoiceNoteRecorderView: View {
                 set: { if !$0 { recorder.errorMessage = nil } }
             )) { Button("OK", role: .cancel) {} } message: { Text(recorder.errorMessage ?? "") }
         }
-        .interactiveDismissDisabled(recorder.isRecording)
+        .interactiveDismissDisabled(
+            recorder.isRecording || isHoldingPushToTalk
+        )
+    }
+
+    private var pushToTalkRecordControl: some View {
+        Label(
+            isHoldingPushToTalk ? "Recording… Release to Stop" : "Hold to Record",
+            systemImage: isHoldingPushToTalk ? "waveform" : "mic.fill"
+        )
+        .font(.headline.weight(.semibold))
+        .foregroundStyle(.white)
+        .padding(.horizontal, 20)
+        .frame(minHeight: 48)
+        .background(
+            Color.red,
+            in: Capsule()
+        )
+        .scaleEffect(isHoldingPushToTalk ? 0.96 : 1)
+        .contentShape(Capsule())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
+                    guard !isHoldingPushToTalk else { return }
+                    isHoldingPushToTalk = true
+                    recorder.start()
+                }
+                .onEnded { _ in
+                    guard isHoldingPushToTalk else { return }
+                    isHoldingPushToTalk = false
+                    _ = recorder.stop()
+                }
+        )
+        .accessibilityLabel("Hold to record Push-to-Talk")
+        .accessibilityHint("Recording stops when you release the button")
     }
 }
 
