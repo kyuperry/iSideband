@@ -55,6 +55,12 @@ struct SettingsView: View {
     @AppStorage(PushToTalkPreferenceKey.enabled)
     private var pushToTalkEnabled = false
 
+    @AppStorage(NightVisionPreferenceKey.enabled)
+    private var nightVisionModeEnabled = false
+
+    @AppStorage(NightVisionPreferenceKey.dimming)
+    private var nightVisionDimming = 0.78
+
     @State private var frequencyMHz = "915.000"
     @State private var bandwidthKHz = "125"
     @State private var transmitPowerDBm = "22"
@@ -87,6 +93,7 @@ struct SettingsView: View {
     var body: some View {
         Form {
             interfaceSettingsSection
+            displaySettingsSection
             nearbyDiscoverySection
             automaticAnnouncementsSection
             messagingSettingsSection
@@ -306,6 +313,42 @@ struct SettingsView: View {
                 """
                 iPhone notification permission must also be enabled for iSideband in Settings.
                 """
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private var displaySettingsSection: some View {
+        Section("Display") {
+            Toggle(isOn: $nightVisionModeEnabled) {
+                Label("Night Vision Compatible", systemImage: "moon.stars.fill")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Night Vision Dimming")
+                    Spacer()
+                    Text("\(Int(nightVisionDimming * 100))%")
+                        .foregroundStyle(.secondary)
+                }
+
+                Slider(
+                    value: $nightVisionDimming,
+                    in: 0.35...0.92,
+                    step: 0.01
+                ) {
+                    Text("Night Vision Dimming")
+                } minimumValueLabel: {
+                    Image(systemName: "sun.min")
+                } maximumValueLabel: {
+                    Image(systemName: "moon.fill")
+                }
+                .disabled(!nightVisionModeEnabled)
+            }
+
+            Text(
+                "For testing with night-vision equipment. The app uses a very dim red interface and temporarily lowers screen brightness. Triple-tap anywhere to exit immediately."
             )
             .font(.caption)
             .foregroundStyle(.secondary)

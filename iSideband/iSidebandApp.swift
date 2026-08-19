@@ -23,6 +23,9 @@ struct iSidebandApp: App {
             ContentView(
                 bluetooth: bluetooth
             )
+                .modifier(
+                    NightVisionModeModifier(scenePhase: scenePhase)
+                )
                 .environmentObject(lxmfManager)
                 .task {
                     PacketInterfaceManager.shared.configure(
