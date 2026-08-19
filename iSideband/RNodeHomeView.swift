@@ -8,7 +8,11 @@ struct RNodeHomeView: View {
     @AppStorage(NightVisionPreferenceKey.enabled)
     private var nightVisionModeEnabled = false
 
+    @AppStorage(NightVisionPreferenceKey.dimming)
+    private var nightVisionDimming = 0.78
+
     @State private var showSwitchConfirmation = false
+    @State private var showNightVisionSlider = false
     @State private var pendingConnectionID: UUID?
     @State private var liveActivityStatusMessage: String?
     @State private var showLiveActivityConfirmation = false
@@ -30,16 +34,40 @@ struct RNodeHomeView: View {
         .navigationTitle("RNode")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Toggle("NVG", isOn: $nightVisionModeEnabled)
-                    .toggleStyle(.switch)
-                    .controlSize(.mini)
-                    .font(.caption2.weight(.semibold))
-                    .tint(.red)
-                    .fixedSize()
-                    .accessibilityLabel("NVG Mode")
-                    .accessibilityHint(
-                        "Turns the night vision display on or off"
-                    )
+                HStack(spacing: 7) {
+                    Button {
+                        withAnimation(.easeOut(duration: 0.18)) {
+                            showNightVisionSlider.toggle()
+                        }
+                    } label: {
+                        Text("NVG")
+                            .font(.caption.weight(.semibold))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows the NVG dimming slider")
+
+                    Toggle("NVG Mode", isOn: $nightVisionModeEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .tint(.red)
+                        .accessibilityHint(
+                            "Turns the night vision display on or off"
+                        )
+                }
+                .fixedSize()
+                .padding(.trailing, 6)
+            }
+        }
+        .overlay(alignment: .topTrailing) {
+            if showNightVisionSlider {
+                nightVisionSlider
+                    .padding(.top, 4)
+                    .padding(.trailing, 12)
+                    .transition(.scale(scale: 0.92, anchor: .topTrailing)
+                        .combined(with: .opacity))
+                    .zIndex(1)
             }
         }
         .overlay(alignment: .bottom) {
@@ -113,6 +141,36 @@ struct RNodeHomeView: View {
                 """
             )
         }
+    }
+
+    private var nightVisionSlider: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("NVG Dimming")
+                    .font(.headline)
+                Spacer()
+                Text("\(Int(nightVisionDimming * 100))%")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Slider(
+                value: $nightVisionDimming,
+                in: 0.35...0.92,
+                step: 0.01
+            ) {
+                Text("NVG Dimming")
+            } minimumValueLabel: {
+                Image(systemName: "sun.min")
+            } maximumValueLabel: {
+                Image(systemName: "moon.fill")
+            }
+            .tint(.red)
+        }
+        .padding()
+        .frame(width: 280)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .shadow(color: .black.opacity(0.18), radius: 12, y: 5)
     }
 
     private var header: some View {
