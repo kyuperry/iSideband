@@ -31,13 +31,7 @@ struct MessageComposer: View {
                 }
                 .disabled(isPushToTalkRecording)
 
-                Button(action: onVoiceTapped) {
-                    Label("Voice", systemImage: "waveform")
-                }
-                .disabled(isPushToTalkRecording)
-
                 if showsPushToTalk {
-                    Divider()
                     Button(action: onPushToTalkTapped) {
                         Label(
                             "Push to Talk",
@@ -45,6 +39,10 @@ struct MessageComposer: View {
                         )
                     }
                     .disabled(isPushToTalkRecording)
+                } else {
+                    Button(action: onVoiceTapped) {
+                        Label("Voice", systemImage: "waveform")
+                    }
                 }
             } label: {
                 Image(systemName: "plus")
