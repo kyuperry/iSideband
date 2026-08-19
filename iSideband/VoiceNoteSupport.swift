@@ -18,20 +18,29 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     private static let minimumRecordingBytes = 64
     private var recorder: AVAudioRecorder?
     private var timer: Timer?
+    private var pendingStartID: UUID?
     private var hasFinalizedCurrentRecording = false
     private(set) var outputURL: URL?
 
     func start() {
+        errorMessage = nil
+        let startID = UUID()
+        pendingStartID = startID
         Task {
             guard await AVAudioApplication.requestRecordPermission() else {
+                guard pendingStartID == startID else { return }
+                pendingStartID = nil
                 errorMessage = "Microphone access is required. Enable it in Settings."
                 return
             }
+            guard pendingStartID == startID else { return }
+            pendingStartID = nil
             beginRecording()
         }
     }
 
     func stop() -> URL? {
+        pendingStartID = nil
         guard isRecording else { return outputURL }
         recorder?.stop()
         finishRecording()
@@ -39,6 +48,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
     }
 
     func cancel() {
+        pendingStartID = nil
         recorder?.stop()
         finishRecording()
         if let outputURL { try? FileManager.default.removeItem(at: outputURL) }

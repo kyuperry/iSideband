@@ -40,23 +40,16 @@ struct MessageComposer: View {
                     Divider()
                     Button(action: onPushToTalkTapped) {
                         Label(
-                            isPushToTalkRecording ? "Stop PTT" : "Push to Talk",
-                            systemImage: isPushToTalkRecording
-                                ? "stop.fill"
-                                : "mic.fill"
+                            "Push to Talk",
+                            systemImage: "mic.fill"
                         )
                     }
+                    .disabled(isPushToTalkRecording)
                 }
             } label: {
-                Image(
-                    systemName: isPushToTalkRecording
-                        ? "mic.fill"
-                        : "plus"
-                )
+                Image(systemName: "plus")
                     .font(.headline.weight(.bold))
-                    .foregroundStyle(
-                        isPushToTalkRecording ? Color.red : Color.primary
-                    )
+                    .foregroundStyle(Color.primary)
                     .frame(width: 42, height: 42)
                     .background(
                         Circle()

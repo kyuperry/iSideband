@@ -75,6 +75,8 @@ struct MessagesView: View {
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
     @State private var pushToTalkWasRecording = false
+    @State private var isPushToTalkArmed = false
+    @State private var isPushToTalkPressed = false
     @State private var pendingPushToTalkURL: URL?
     @FocusState private var isComposerFocused: Bool
     @State private var isViewingNewestMessage = true
@@ -219,8 +221,8 @@ struct MessagesView: View {
 
             Divider()
 
-            if pushToTalkRecorder.isRecording {
-                pushToTalkRecordingStatus
+            if isPushToTalkArmed || pushToTalkRecorder.isRecording {
+                pushToTalkHoldControl
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if pendingPushToTalkURL != nil {
                 pushToTalkReadyPrompt
@@ -334,6 +336,8 @@ struct MessagesView: View {
                 pushToTalkWasRecording = true
             } else if pushToTalkWasRecording {
                 pushToTalkWasRecording = false
+                isPushToTalkArmed = false
+                isPushToTalkPressed = false
                 if let url = pushToTalkRecorder.outputURL {
                     pendingPushToTalkURL = url
                 }
@@ -367,20 +371,37 @@ struct MessagesView: View {
             onVoiceTapped: {
                 showingVoiceRecorder = true
             },
-            onPushToTalkTapped: togglePushToTalk,
+            onPushToTalkTapped: armPushToTalk,
             onSendTapped: {
                 sendMessage()
             }
         )
     }
 
-    private var pushToTalkRecordingStatus: some View {
+    private var pushToTalkHoldControl: some View {
         HStack(spacing: 8) {
-            Circle()
-                .fill(.red)
-                .frame(width: 9, height: 9)
+            Image(systemName: "mic.fill")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .frame(width: 38, height: 38)
+                .background(Circle().fill(.red))
+                .scaleEffect(isPushToTalkPressed ? 0.92 : 1)
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            beginPushToTalkHold()
+                        }
+                        .onEnded { _ in
+                            endPushToTalkHold()
+                        }
+                )
+                .accessibilityLabel("Hold to record push to talk")
 
-            Text("Recording PTT")
+            Text(
+                pushToTalkRecorder.isRecording
+                    ? "Recording PTT"
+                    : "Hold the red button"
+            )
                 .font(.subheadline.weight(.semibold))
 
             Spacer()
@@ -393,7 +414,9 @@ struct MessagesView: View {
                 )
             )
             .font(.system(.subheadline, design: .monospaced).weight(.semibold))
-            .foregroundStyle(.red)
+            .foregroundStyle(
+                pushToTalkRecorder.isRecording ? Color.red : Color.secondary
+            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 8)
@@ -402,10 +425,7 @@ struct MessagesView: View {
             in: RoundedRectangle(cornerRadius: 14, style: .continuous)
         )
         .padding(.horizontal, 12)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "Recording push to talk, \(Int(pushToTalkRecorder.elapsed)) seconds"
-        )
+        .accessibilityElement(children: .contain)
     }
 
     private var pushToTalkReadyPrompt: some View {
@@ -449,19 +469,31 @@ struct MessagesView: View {
         .accessibilityElement(children: .contain)
     }
 
-    private func togglePushToTalk() {
+    private func armPushToTalk() {
         isComposerFocused = false
-        if pushToTalkRecorder.isRecording {
-            _ = pushToTalkRecorder.stop()
-        } else {
-            pendingPushToTalkURL = nil
-            pushToTalkRecorder.start()
-        }
+        pendingPushToTalkURL = nil
+        isPushToTalkArmed = true
+    }
+
+    private func beginPushToTalkHold() {
+        guard !isPushToTalkPressed else { return }
+        isPushToTalkPressed = true
+        pendingPushToTalkURL = nil
+        pushToTalkRecorder.start()
+    }
+
+    private func endPushToTalkHold() {
+        guard isPushToTalkPressed else { return }
+        isPushToTalkPressed = false
+        isPushToTalkArmed = false
+        _ = pushToTalkRecorder.stop()
     }
 
     private func discardPushToTalkRecording() {
         pendingPushToTalkURL = nil
         pushToTalkWasRecording = false
+        isPushToTalkArmed = false
+        isPushToTalkPressed = false
         pushToTalkRecorder.cancel()
     }
 
