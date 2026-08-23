@@ -15,6 +15,8 @@ struct ChatMessage: Identifiable, Codable, Hashable {
     let id: UUID
     let text: String
     let date: Date
+    let sentAt: Date?
+    let receivedAt: Date?
     let isOutgoing: Bool
     let status: String?
     let lxmfMessageID: UUID?
@@ -29,6 +31,8 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         id: UUID = UUID(),
         text: String,
         date: Date = Date(),
+        sentAt: Date? = nil,
+        receivedAt: Date? = nil,
         isOutgoing: Bool,
         status: String? = nil,
         lxmfMessageID: UUID? = nil,
@@ -41,6 +45,8 @@ struct ChatMessage: Identifiable, Codable, Hashable {
         self.id = id
         self.text = text
         self.date = date
+        self.sentAt = sentAt
+        self.receivedAt = receivedAt
         self.isOutgoing = isOutgoing
         self.status = status
         self.lxmfMessageID = lxmfMessageID
@@ -53,6 +59,7 @@ struct ChatMessage: Identifiable, Codable, Hashable {
 }
 
 struct MessagesView: View {
+    @Environment(\.nightVisionModeEnabled) private var isNightVisionEnabled
     @ObservedObject var bluetooth: BluetoothManager
     let contact: LXMFContact?
 
@@ -102,7 +109,7 @@ struct MessagesView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "message")
                         .font(.system(size: 44))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
 
                     Text("No Messages")
                         .font(.title2.bold())
@@ -111,7 +118,7 @@ struct MessagesView: View {
                         "Send an encrypted LXMF message to start this conversation."
                     )
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(secondaryTextColor)
                     .padding(.horizontal)
                 }
 
@@ -217,7 +224,7 @@ struct MessagesView: View {
 
             messageComposer
         }
-        .navigationTitle("Messages")
+        .navigationTitle(directChatTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(
@@ -330,10 +337,26 @@ struct MessagesView: View {
             onVoiceTapped: {
                 showingVoiceRecorder = true
             },
+            onStatusTapped: { statusText in
+                sendMessage(statusText)
+            },
             onSendTapped: {
                 sendMessage()
             }
         )
+    }
+
+    private var secondaryTextColor: Color {
+        isNightVisionEnabled ? NightVisionPalette.secondary : .secondary
+    }
+
+    private var directChatTitle: String {
+        guard let name = contact?.displayName.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        ), !name.isEmpty else {
+            return "Messages"
+        }
+        return name
     }
 
     private func sendAnnounce() {
@@ -375,8 +398,8 @@ struct MessagesView: View {
         ).isEmpty
     }
 
-    private func sendMessage() {
-        let trimmed = messageText.trimmingCharacters(
+    private func sendMessage(_ presetText: String? = nil) {
+        let trimmed = (presetText ?? messageText).trimmingCharacters(
             in: .whitespacesAndNewlines
         )
 
@@ -393,7 +416,9 @@ struct MessagesView: View {
                         "Failed — select an LXMF contact"
                 )
             )
-            messageText = ""
+            if presetText == nil {
+                messageText = ""
+            }
             return
         }
 
@@ -409,7 +434,9 @@ struct MessagesView: View {
                 )
             )
 
-            messageText = ""
+            if presetText == nil {
+                messageText = ""
+            }
             return
         }
 
@@ -423,7 +450,9 @@ struct MessagesView: View {
             )
         )
 
-        messageText = ""
+        if presetText == nil {
+            messageText = ""
+        }
     }
 
     private var nextConversationDate: Date {
@@ -462,9 +491,15 @@ struct MessagesView: View {
         _ message: ChatMessage,
         status: String?
     ) -> some View {
-        MessageBubble(
+        let outgoing = message.lxmfMessageID.flatMap { id in
+            lxmfManager.outgoingMessages.first { $0.id == id }
+        }
+        return MessageBubble(
             text: message.text,
             date: message.date,
+            sentAt: message.sentAt ?? outgoing?.sentAt,
+            deliveredAt: outgoing?.deliveredAt,
+            receivedAt: message.receivedAt,
             isOutgoing: message.isOutgoing,
             status: status,
             isPhoto: message.type == .photo,
@@ -484,7 +519,7 @@ struct MessagesView: View {
               outgoing.attachment != nil else {
             return false
         }
-        return outgoing.status == .queued || outgoing.status == .sending
+        return outgoing.status == .queued || outgoing.status.isActiveTransfer
     }
 
     private func canResend(
@@ -572,6 +607,20 @@ struct MessagesView: View {
                 now: date
             )
 
+        case .waitingForPath:
+            return "Finding route to peer"
+
+        case .establishingLink:
+            return "Establishing secure link"
+
+        case .transferring:
+            return transferStatus(
+                prefix: "Transferring",
+                attachment: queuedMessage.attachment,
+                startedAt: queuedMessage.transmissionStartedAt,
+                now: date
+            )
+
         case .sent:
             return "Sent"
 
@@ -579,6 +628,10 @@ struct MessagesView: View {
             return "Delivered"
 
         case .failed:
+            if let reason = queuedMessage.lastError,
+               !reason.isEmpty {
+                return "Failed — \(reason)"
+            }
             return "Failed"
         }
     }

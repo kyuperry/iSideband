@@ -455,6 +455,7 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 		if destinationHash, decodeErr := hex.DecodeString(destinationHex); decodeErr == nil &&
 			len(destinationHash) == lxmf.DestinationLength &&
 			!rns.TransportHasPath(destinationHash) {
+			notifyStatus(h, id, "waitingForPath")
 			rns.Logf(rns.LOG_NOTICE, "ATTACHMENT WAITING FOR PATH destination=%s", destinationHex)
 			rns.TransportRequestPath(destinationHash)
 			deadline := time.Now().Add(12 * time.Second)
@@ -464,16 +465,21 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 			if rns.TransportHasPath(destinationHash) {
 				rns.Logf(rns.LOG_NOTICE, "ATTACHMENT PATH ACQUIRED destination=%s", destinationHex)
 			} else {
-				rns.Logf(rns.LOG_NOTICE, "ATTACHMENT PATH STILL PENDING destination=%s; retaining LXMF job", destinationHex)
+				reason := "No route to peer after path discovery timeout"
+				rns.Logf(rns.LOG_WARNING, "ATTACHMENT PATH FAILED destination=%s reason=%s", destinationHex, reason)
+				notifyStatus(h, id, "failed|"+reason)
+				return
 			}
 		}
 
+		notifyStatus(h, id, "establishingLink")
 		msg, sendErr := h.node.SendHex(destinationHex, runcore.SendOptions{Method: lxmf.MethodDirect, Content: text, Fields: fields})
 		if sendErr != nil {
 			rns.Logf(rns.LOG_ERROR, "runcore_send_attachment failed: %v", sendErr)
-			notifyStatus(h, id, "failed")
+			notifyStatus(h, id, "failed|"+sendErr.Error())
 			return
 		}
+		notifyStatus(h, id, "transferring")
 		var terminalStatus sync.Once
 		msg.RegisterDeliveryCallback(func(*lxmf.LXMessage) {
 			terminalStatus.Do(func() {
@@ -492,7 +498,13 @@ func runcore_send_attachment(handle C.uint64_t, destination *C.char, content *C.
 			)
 
 			terminalStatus.Do(func() {
-				notifyStatus(h, id, "failed")
+				reason := fmt.Sprintf(
+					"LXMF transfer failed (state %d, progress %.0f%%, attempt %d)",
+					m.State,
+					m.Progress*100,
+					m.DeliveryAttempts,
+				)
+				notifyStatus(h, id, "failed|"+reason)
 			})
 		})
 	}()

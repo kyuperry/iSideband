@@ -12,6 +12,8 @@ struct ConversationsView: View {
         LXMFContactStore.shared
     @ObservedObject private var messageStore =
         LXMFIncomingMessageStore.shared
+    @ObservedObject private var groupStore =
+        GroupMessageStore.shared
     @State private var selectedTab: ConversationTab = .direct
     @State private var showCreateGroup = false
     @State private var showAddLXMFContact = false
@@ -25,6 +27,7 @@ struct ConversationsView: View {
 
     @State private var groupName = ""
     @State private var selectedGroupIcon = "person.3.fill"
+    @State private var selectedGroupMemberHashes: Set<String> = []
 
     @State private var groups: [GroupConversation] =
         Self.loadGroups()
@@ -43,6 +46,9 @@ struct ConversationsView: View {
         }
         .safeAreaInset(edge: .bottom) {
             conversationTabBar
+        }
+        .onChange(of: groupStore.revision) {
+            groups = Self.loadGroups()
         }
         .overlay(alignment: .bottomTrailing) {
             floatingAddButton
@@ -454,7 +460,37 @@ struct ConversationsView: View {
                 }
 
                 Section("Members") {
-                    Text("No RNodes available yet")
+                    if contactStore.contacts.isEmpty {
+                        Text("Add or discover contacts before creating a group.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(contactStore.contacts) { contact in
+                            Button {
+                                toggleGroupMember(contact)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(contact.displayName)
+                                            .foregroundStyle(.primary)
+                                        Text(contact.destinationHash.prefix(12))
+                                            .font(.caption.monospaced())
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if selectedGroupMemberHashes.contains(
+                                        contact.destinationHash
+                                    ) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    Text("Select up to 8 contacts. Each group message sends one encrypted copy per member.")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
@@ -476,7 +512,8 @@ struct ConversationsView: View {
                         createGroup()
                     }
                     .disabled(
-                        trimmedGroupName.isEmpty
+                        trimmedGroupName.isEmpty ||
+                        selectedGroupMemberHashes.isEmpty
                     )
                 }
             }
@@ -587,6 +624,7 @@ struct ConversationsView: View {
                     ForEach(groups) { group in
                         NavigationLink {
                             GroupChatView(
+                                bluetooth: bluetooth,
                                 group: group
                             )
                         } label: {
@@ -726,6 +764,7 @@ struct ConversationsView: View {
         showCreateGroup = false
         groupName = ""
         selectedGroupIcon = "person.3.fill"
+        selectedGroupMemberHashes = []
     }
 
     private func createGroup() {
@@ -735,7 +774,10 @@ struct ConversationsView: View {
 
         let newGroup = GroupConversation(
             name: trimmedGroupName,
-            systemImage: selectedGroupIcon
+            systemImage: selectedGroupIcon,
+            memberDestinationHashes: Array(
+                selectedGroupMemberHashes
+            ).sorted()
         )
 
         groups.append(newGroup)
@@ -745,6 +787,16 @@ struct ConversationsView: View {
         showCreateGroup = false
         groupName = ""
         selectedGroupIcon = "person.3.fill"
+        selectedGroupMemberHashes = []
+    }
+
+    private func toggleGroupMember(_ contact: LXMFContact) {
+        let hash = contact.destinationHash
+        if selectedGroupMemberHashes.contains(hash) {
+            selectedGroupMemberHashes.remove(hash)
+        } else if selectedGroupMemberHashes.count < 8 {
+            selectedGroupMemberHashes.insert(hash)
+        }
     }
 
     private func deleteDirectConversation(
@@ -932,7 +984,7 @@ struct ConversationsView: View {
         for group: GroupConversation
     ) -> String {
         let storageKey =
-            "savedGroupMessages_\(group.id.uuidString)"
+            "groupMessages-\(group.id.uuidString)"
 
         guard
             let data =
@@ -960,6 +1012,18 @@ struct ConversationsView: View {
         case .file:
             return
                 "📄 \(latestMessage.attachmentName ?? "File")"
+
+        case .voiceNote:
+            return "🎤 Voice message"
+
+        case .location:
+            return "📍 Location"
+
+        case .call:
+            return "Call"
+
+        case .system:
+            return latestMessage.text.isEmpty ? "System message" : latestMessage.text
 
         @unknown default:
             return "New message"
@@ -1015,15 +1079,18 @@ struct GroupConversation:
     let id: UUID
     let name: String
     let systemImage: String
+    let memberDestinationHashes: [String]?
 
     init(
         id: UUID = UUID(),
         name: String,
-        systemImage: String
+        systemImage: String,
+        memberDestinationHashes: [String]? = nil
     ) {
         self.id = id
         self.name = name
         self.systemImage = systemImage
+        self.memberDestinationHashes = memberDestinationHashes
     }
 }
 

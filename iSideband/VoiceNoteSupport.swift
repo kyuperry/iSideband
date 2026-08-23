@@ -148,6 +148,7 @@ final class VoiceNoteRecorder: NSObject, ObservableObject, AVAudioRecorderDelega
 }
 
 struct VoiceNoteRecorderView: View {
+    @Environment(\.nightVisionModeEnabled) private var isNightVisionEnabled
     @Environment(\.dismiss) private var dismiss
     @StateObject private var recorder = VoiceNoteRecorder()
     @State private var isHoldingPushToTalk = false
@@ -167,7 +168,11 @@ struct VoiceNoteRecorderView: View {
             VStack(spacing: 24) {
                 Image(systemName: recorder.isRecording ? "waveform.circle.fill" : "mic.circle.fill")
                     .font(.system(size: 76))
-                    .foregroundStyle(recorder.isRecording ? Color.red : Color.accentColor)
+                    .foregroundStyle(
+                        isNightVisionEnabled
+                            ? NightVisionPalette.primary
+                            : (recorder.isRecording ? Color.red : Color.accentColor)
+                    )
                 Text(String(format: "0:%02d", Int(recorder.elapsed)))
                     .font(.system(.title, design: .monospaced).bold())
                 Text(
@@ -175,7 +180,13 @@ struct VoiceNoteRecorderView: View {
                         ? "Push-to-Talk records while the red button is held, stops when released, and uses low-bandwidth Opus for reliable radio transfers."
                         : "Voice messages stop after 15 seconds and use low-bandwidth Opus for reliable radio transfers."
                 )
-                    .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                    .font(.footnote)
+                    .foregroundStyle(
+                        isNightVisionEnabled
+                            ? NightVisionPalette.secondary
+                            : .secondary
+                    )
+                    .multilineTextAlignment(.center)
 
                 if isPushToTalk {
                     pushToTalkRecordControl
@@ -188,6 +199,7 @@ struct VoiceNoteRecorderView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .nightVisionProminentButton()
                 }
 
                 if !recorder.isRecording, let url = recorder.outputURL {
@@ -195,6 +207,7 @@ struct VoiceNoteRecorderView: View {
                         isPushToTalk ? "Send Push-to-Talk" : "Send Voice Message"
                     ) { onSend(url); dismiss() }
                         .buttonStyle(.borderedProminent)
+                        .nightVisionProminentButton()
                 }
             }
             .padding(28)
@@ -221,11 +234,17 @@ struct VoiceNoteRecorderView: View {
             systemImage: isHoldingPushToTalk ? "waveform" : "mic.fill"
         )
         .font(.headline.weight(.semibold))
-        .foregroundStyle(.white)
+        .foregroundStyle(
+            isNightVisionEnabled
+                ? NightVisionPalette.primary
+                : .white
+        )
         .padding(.horizontal, 20)
         .frame(minHeight: 48)
         .background(
-            Color.red,
+            isNightVisionEnabled
+                ? NightVisionPalette.strongSurface
+                : Color.red,
             in: Capsule()
         )
         .scaleEffect(isHoldingPushToTalk ? 0.96 : 1)

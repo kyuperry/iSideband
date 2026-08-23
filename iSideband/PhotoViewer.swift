@@ -2,6 +2,7 @@ import SwiftUI
 import UIKit
 
 struct PhotoViewer: View {
+    @Environment(\.nightVisionModeEnabled) private var isNightVisionEnabled
     let image: UIImage
 
     @Environment(\.dismiss)
@@ -16,6 +17,13 @@ struct PhotoViewer: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
+                    .saturation(isNightVisionEnabled ? 0 : 1)
+                    .colorMultiply(
+                        isNightVisionEnabled
+                            ? NightVisionPalette.primary
+                            : .white
+                    )
+                    .brightness(isNightVisionEnabled ? -0.22 : 0)
                     .ignoresSafeArea()
             }
             .toolbar {
@@ -23,7 +31,11 @@ struct PhotoViewer: View {
                     Button("Done") {
                         dismiss()
                     }
-                    .foregroundStyle(.white)
+                    .foregroundStyle(
+                        isNightVisionEnabled
+                            ? NightVisionPalette.primary
+                            : .white
+                    )
                 }
             }
         }

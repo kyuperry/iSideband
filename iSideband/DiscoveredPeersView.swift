@@ -223,6 +223,7 @@ struct DiscoveredPeersView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .nightVisionProminentButton()
             }
         }
         .padding(.vertical, 8)

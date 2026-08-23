@@ -253,13 +253,13 @@ final class LXMFService: ObservableObject {
                 )
 
             if !accepted {
-                manager?.updateMessageStatus(
+                manager?.recordTransientFailure(
                     id: message.id,
-                    status: .failed
+                    reason: "Reticulum rejected the attachment handoff"
                 )
 
                 statusMessage =
-                    "Attachment failed to enter Reticulum delivery"
+                    "Attachment handoff failed; retry scheduled"
             }
 
             return

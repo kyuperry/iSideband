@@ -17,6 +17,7 @@ struct SidebandIdentityImporter: View {
                 )
             }
             .buttonStyle(.borderedProminent)
+            .nightVisionProminentButton()
 
             if !statusMessage.isEmpty {
                 Text(statusMessage)

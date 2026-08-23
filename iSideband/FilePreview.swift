@@ -2,6 +2,7 @@ import SwiftUI
 import QuickLook
 
 struct FilePreview: UIViewControllerRepresentable {
+    @Environment(\.nightVisionModeEnabled) private var isNightVisionEnabled
     let url: URL
 
     func makeUIViewController(
@@ -9,13 +10,22 @@ struct FilePreview: UIViewControllerRepresentable {
     ) -> QLPreviewController {
         let controller = QLPreviewController()
         controller.dataSource = context.coordinator
+        configure(controller)
         return controller
     }
 
     func updateUIViewController(
         _ uiViewController: QLPreviewController,
         context: Context
-    ) { }
+    ) {
+        configure(uiViewController)
+    }
+
+    private func configure(_ controller: QLPreviewController) {
+        controller.overrideUserInterfaceStyle = isNightVisionEnabled ? .dark : .unspecified
+        controller.view.tintColor = isNightVisionEnabled ? .systemRed : nil
+        controller.view.backgroundColor = isNightVisionEnabled ? .black : nil
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(url: url)

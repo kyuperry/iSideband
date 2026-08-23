@@ -110,6 +110,8 @@ final class LXMFIncomingMessageStore: ObservableObject {
                 id: existing.id,
                 text: message.content.isEmpty ? existing.text : message.content,
                 date: existing.date,
+                sentAt: existing.sentAt ?? message.timestamp,
+                receivedAt: existing.receivedAt ?? Date(),
                 isOutgoing: false,
                 status: "Received",
                 lxmfMessageID: existing.lxmfMessageID,
@@ -123,11 +125,14 @@ final class LXMFIncomingMessageStore: ObservableObject {
         }
 
         let savedAttachment = persistAttachment(from: message)
+        let receivedAt = Date()
         let displayDate = nextConversationDate(after: messages)
         messages.append(
             ChatMessage(
                 text: message.content,
                 date: displayDate,
+                sentAt: message.timestamp,
+                receivedAt: receivedAt,
                 isOutgoing: false,
                 status: "Received",
                 lxmfHash: messageHash,
@@ -236,6 +241,8 @@ final class LXMFIncomingMessageStore: ObservableObject {
             id: message.id,
             text: message.text,
             date: message.date,
+            sentAt: message.sentAt,
+            receivedAt: message.receivedAt,
             isOutgoing: message.isOutgoing,
             status: message.status,
             lxmfMessageID: message.lxmfMessageID,

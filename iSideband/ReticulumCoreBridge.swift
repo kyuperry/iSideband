@@ -177,6 +177,9 @@ nonisolated private func reticulumCoreLog(
 @MainActor
 final class ReticulumCoreBridge: ObservableObject {
     static let shared = ReticulumCoreBridge()
+    private static let maximumStoredRemoteNodes = 256
+    private static let remoteNodeRetention: TimeInterval =
+        30 * 24 * 60 * 60
 
     @Published private(set) var isRunning = false
     @Published private(set) var destinationHash = ""
@@ -542,9 +545,20 @@ final class ReticulumCoreBridge: ObservableObject {
         clientID: String,
         status: String
     ) {
-        privacySafeLog("STATUS CALLBACK ENTERED")
+        let components = status.split(
+            separator: "|",
+            maxSplits: 1,
+            omittingEmptySubsequences: false
+        )
+        let statusName = String(components[0])
+        let detail = components.count > 1
+            ? String(components[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            : nil
 
-        privacySafeLog("clientID='\(clientID)' status='\(status)'")
+        privacySafeLog(
+            "LXMF STATUS clientID='\(clientID)' status='\(statusName)'" +
+            (detail.map { " detail='\($0)'" } ?? "")
+        )
 
         guard let id = UUID(uuidString: clientID) else {
             privacySafeLog("LXMF STATUS FAILED: invalid client ID")
@@ -552,18 +566,21 @@ final class ReticulumCoreBridge: ObservableObject {
         }
 
         guard let value =
-                LXMFOutgoingStatus(rawValue: status)
+                LXMFOutgoingStatus(rawValue: statusName)
         else {
             privacySafeLog(
-                "LXMF STATUS FAILED: unknown status \(status)"
+                "LXMF STATUS FAILED: unknown status \(statusName)"
             )
             return
         }
 
         if value == .failed {
+            let failureReason = detail.flatMap {
+                $0.isEmpty ? nil : $0
+            } ?? "Reticulum delivery attempt failed"
             LXMFManager.shared.recordTransientFailure(
                 id: id,
-                reason: "Reticulum delivery attempt failed"
+                reason: failureReason
             )
         } else {
             LXMFManager.shared.updateMessageStatus(
@@ -666,8 +683,25 @@ final class ReticulumCoreBridge: ObservableObject {
             }
             if existingDate.map({ incomingDate >= $0 }) ?? true {
                 remoteNodeLocations[sourceHex] = location
+                pruneRemoteNodeLocations()
                 persistRemoteNodeLocations()
             }
+        }
+        if let envelope = GroupWireEnvelope.decode(content) {
+            let received = GroupMessageStore.shared.receive(
+                envelope: envelope,
+                sourceHash: sourceHex.lowercased(),
+                timestamp: Date(timeIntervalSince1970: timestamp),
+                attachmentPath: attachmentPath.isEmpty ? nil : attachmentPath,
+                attachmentName: attachmentName.isEmpty ? nil : attachmentName,
+                attachmentMIME: attachmentMIME.isEmpty ? nil : attachmentMIME,
+                attachmentType: attachmentType
+            )
+            if received {
+                status = "Group message received from \(sourceHex.prefix(8))"
+                requestAutomaticAnnounce(reason: "Group return route refreshed", minimumInterval: 15)
+            }
+            return
         }
         var identifierMaterial = Data()
         identifierMaterial.append(sourceHash)
@@ -726,6 +760,21 @@ final class ReticulumCoreBridge: ObservableObject {
         )
     }
 
+    private func pruneRemoteNodeLocations(now: Date = Date()) {
+        let cutoff = now.addingTimeInterval(
+            -Self.remoteNodeRetention
+        )
+        let retained = remoteNodeLocations.values
+            .filter { $0.receivedAt >= cutoff }
+            .sorted { $0.receivedAt > $1.receivedAt }
+            .prefix(Self.maximumStoredRemoteNodes)
+        remoteNodeLocations = Dictionary(
+            uniqueKeysWithValues: retained.map {
+                ($0.sourceHash, $0)
+            }
+        )
+    }
+
     private func loadRemoteNodeLocations() {
         guard let data = UserDefaults.standard.data(
                     forKey: remoteNodeLocationsStorageKey
@@ -742,6 +791,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 ($0.sourceHash, $0)
             }
         )
+        pruneRemoteNodeLocations()
     }
 
     func recordLog(

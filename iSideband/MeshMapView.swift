@@ -187,6 +187,7 @@ struct GeographicMeshMapView: View {
     @State private var cameraPosition: MapCameraPosition
     @State private var isShowingInformation = false
     @State private var hasCenteredOnFirstLocation = false
+    @State private var selectedRemoteNode: RemoteNodeLocation?
 
     init(startsInHawaii: Bool) {
         _cameraPosition = State(
@@ -248,6 +249,13 @@ struct GeographicMeshMapView: View {
                 mapStyleMenu
             }
         }
+        .sheet(item: $selectedRemoteNode) { node in
+            RemoteNodeTelemetryView(
+                node: node,
+                displayName: remoteNodeLabel(node)
+            )
+            .presentationDetents([.medium])
+        }
         .onAppear {
             locationManager.startUpdating()
         }
@@ -303,9 +311,11 @@ struct GeographicMeshMapView: View {
     }
 
     private var remoteNodeLocations: [RemoteNodeLocation] {
-        reticulumCore.remoteNodeLocations.values.sorted {
-            $0.sourceHash < $1.sourceHash
-        }
+        Array(
+            reticulumCore.remoteNodeLocations.values.sorted {
+                $0.receivedAt > $1.receivedAt
+            }.prefix(200)
+        )
     }
 
     private func remoteNodeLabel(
@@ -320,31 +330,36 @@ struct GeographicMeshMapView: View {
     private func remoteNodeMarker(
         _ node: RemoteNodeLocation
     ) -> some View {
-        VStack(spacing: 5) {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 48, height: 48)
-                    .shadow(
-                        color: Color.black.opacity(0.16),
-                        radius: 6,
-                        y: 3
-                    )
+        Button {
+            selectedRemoteNode = node
+        } label: {
+            VStack(spacing: 5) {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 48, height: 48)
+                        .shadow(
+                            color: Color.black.opacity(0.16),
+                            radius: 6,
+                            y: 3
+                        )
 
-                Circle()
-                    .stroke(Color.orange, lineWidth: 2.5)
-                    .frame(width: 48, height: 48)
+                    Circle()
+                        .stroke(Color.orange, lineWidth: 2.5)
+                        .frame(width: 48, height: 48)
 
-                Image(systemName: "antenna.radiowaves.left.and.right")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(Color.orange)
+                    Image(systemName: "antenna.radiowaves.left.and.right")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(Color.orange)
+                }
             }
-
         }
+        .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
             "\(remoteNodeLabel(node)) on Situation Map"
         )
+        .accessibilityHint("Tap to show announced telemetry")
     }
 
     private var currentLocationButton: some View {
@@ -443,6 +458,67 @@ struct GeographicMeshMapView: View {
                     )
                 )
             )
+        }
+    }
+}
+
+private struct RemoteNodeTelemetryView: View {
+    let node: RemoteNodeLocation
+    let displayName: String
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Node") {
+                    LabeledContent("Name", value: displayName)
+                    LabeledContent("Destination") {
+                        Text(node.sourceHash)
+                            .font(.caption.monospaced())
+                            .textSelection(.enabled)
+                    }
+                }
+
+                Section("Announced Location") {
+                    LabeledContent(
+                        "Coordinates",
+                        value: String(
+                            format: "%.6f, %.6f",
+                            node.latitude,
+                            node.longitude
+                        )
+                    )
+                    LabeledContent(
+                        "Accuracy",
+                        value: node.accuracy > 0
+                            ? String(format: "±%.0f m", node.accuracy)
+                            : "Unavailable"
+                    )
+                    if let telemetryDate = node.telemetryDate {
+                        LabeledContent(
+                            "Measured",
+                            value: telemetryDate.formatted(
+                                date: .abbreviated,
+                                time: .shortened
+                            )
+                        )
+                    }
+                    LabeledContent(
+                        "Received",
+                        value: node.receivedAt.formatted(
+                            date: .abbreviated,
+                            time: .shortened
+                        )
+                    )
+                    LabeledContent(
+                        "Age",
+                        value: node.receivedAt.formatted(
+                            .relative(presentation: .named)
+                        )
+                    )
+                }
+            }
+            .navigationTitle("Node Telemetry")
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }

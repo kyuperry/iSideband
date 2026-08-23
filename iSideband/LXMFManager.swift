@@ -179,7 +179,7 @@ final class LXMFManager: ObservableObject {
             peer: peer,
             status: .queued,
             attachment: LXMFOutgoingAttachment(
-                path: fileURL.lastPathComponent,
+                path: fileURL.path,
                 name: name,
                 mimeType: mimeType,
                 type: type
@@ -238,7 +238,7 @@ final class LXMFManager: ObservableObject {
         outgoingMessages.contains {
             $0.id == id &&
             $0.attachment != nil &&
-            $0.status == .sending
+            $0.status.isActiveTransfer
         }
     }
 
@@ -278,6 +278,9 @@ final class LXMFManager: ObservableObject {
         if attempts >= 5 {
             outgoingMessages[index].status = .failed
             outgoingMessages[index].nextRetryAt = nil
+            privacySafeLog(
+                "LXMF ATTACHMENT FAILED id=\(id) attempts=\(attempts) reason='\(reason)'"
+            )
         } else {
             let delay = min(
                 pow(2.0, Double(max(attempts - 1, 0))) * 5,
@@ -288,6 +291,9 @@ final class LXMFManager: ObservableObject {
                 .addingTimeInterval(
                     delay + Double.random(in: 0...2)
                 )
+            privacySafeLog(
+                "LXMF RETRY SCHEDULED id=\(id) attempt=\(attempts) delay=\(Int(delay))s reason='\(reason)'"
+            )
         }
         persistQueue()
         service.processQueue()
@@ -319,6 +325,8 @@ final class LXMFManager: ObservableObject {
 
         outgoingMessages[index].status = .queued
         outgoingMessages[index].transmissionStartedAt = nil
+        outgoingMessages[index].sentAt = nil
+        outgoingMessages[index].deliveredAt = nil
         outgoingMessages[index].attemptCount = 0
         outgoingMessages[index].nextRetryAt = nil
         outgoingMessages[index].lastError = nil
@@ -348,6 +356,14 @@ final class LXMFManager: ObservableObject {
         if status == .sent || status == .delivered {
             outgoingMessages[index].nextRetryAt = nil
             outgoingMessages[index].lastError = nil
+        }
+        if (status == .sent || status == .transferring || status == .delivered),
+           outgoingMessages[index].sentAt == nil {
+            outgoingMessages[index].sentAt = Date()
+        }
+        if status == .delivered,
+           outgoingMessages[index].deliveredAt == nil {
+            outgoingMessages[index].deliveredAt = Date()
         }
         scheduleQueuePersistence()
 
@@ -427,6 +443,8 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
     let createdAt: Date
     var status: LXMFOutgoingStatus
     var transmissionStartedAt: Date?
+    var sentAt: Date?
+    var deliveredAt: Date?
     let attachment: LXMFOutgoingAttachment?
     var attemptCount: Int?
     var nextRetryAt: Date?
@@ -439,6 +457,8 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         createdAt: Date = Date(),
         status: LXMFOutgoingStatus,
         transmissionStartedAt: Date? = nil,
+        sentAt: Date? = nil,
+        deliveredAt: Date? = nil,
         attachment: LXMFOutgoingAttachment? = nil,
         attemptCount: Int? = 0,
         nextRetryAt: Date? = nil,
@@ -450,6 +470,8 @@ struct LXMFOutgoingMessage: Identifiable, Codable, Hashable {
         self.createdAt = createdAt
         self.status = status
         self.transmissionStartedAt = transmissionStartedAt
+        self.sentAt = sentAt
+        self.deliveredAt = deliveredAt
         self.attachment = attachment
         self.attemptCount = attemptCount
         self.nextRetryAt = nextRetryAt
@@ -462,7 +484,19 @@ enum LXMFOutgoingStatus: String, Codable, Hashable {
     case waitingForInterface
     case retryScheduled
     case sending
+    case waitingForPath
+    case establishingLink
+    case transferring
     case sent
     case delivered
     case failed
+
+    var isActiveTransfer: Bool {
+        switch self {
+        case .sending, .waitingForPath, .establishingLink, .transferring:
+            return true
+        default:
+            return false
+        }
+    }
 }

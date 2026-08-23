@@ -12,11 +12,12 @@ private final class NightVisionBrightnessController {
 
     private var brightnessBeforeNightVision: CGFloat?
 
-    func enable() {
+    func enable(dimming: Double) {
         if brightnessBeforeNightVision == nil {
             brightnessBeforeNightVision = UIScreen.main.brightness
         }
-        UIScreen.main.brightness = 0.04
+        let clampedDimming = min(max(dimming, 0.35), 0.92)
+        UIScreen.main.brightness = 0.02 + (1 - clampedDimming) * 0.18
     }
 
     func restore() {
@@ -44,15 +45,7 @@ struct NightVisionModeModifier: ViewModifier {
                     ? Color(red: 1, green: 0.055, blue: 0.025)
                     : Color.white
             )
-            .overlay {
-                if isEnabled {
-                    Color.black
-                        .opacity(min(max(dimming, 0.35), 0.92))
-                        .ignoresSafeArea()
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
+            .environment(\.nightVisionModeEnabled, isEnabled)
             .simultaneousGesture(
                 TapGesture(count: 3).onEnded {
                     guard isEnabled else { return }
@@ -65,6 +58,9 @@ struct NightVisionModeModifier: ViewModifier {
             .onChange(of: isEnabled) { _, _ in
                 updateBrightness()
             }
+            .onChange(of: dimming) { _, _ in
+                updateBrightness()
+            }
             .onChange(of: scenePhase) { _, _ in
                 updateBrightness()
             }
@@ -72,9 +68,53 @@ struct NightVisionModeModifier: ViewModifier {
 
     private func updateBrightness() {
         if isEnabled, scenePhase == .active {
-            NightVisionBrightnessController.shared.enable()
+            NightVisionBrightnessController.shared.enable(dimming: dimming)
         } else {
             NightVisionBrightnessController.shared.restore()
         }
+    }
+}
+
+private struct NightVisionModeEnvironmentKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var nightVisionModeEnabled: Bool {
+        get { self[NightVisionModeEnvironmentKey.self] }
+        set { self[NightVisionModeEnvironmentKey.self] = newValue }
+    }
+}
+
+enum NightVisionPalette {
+    static let primary = Color(red: 1.0, green: 0.42, blue: 0.24)
+    static let secondary = Color(red: 1.0, green: 0.36, blue: 0.20)
+    static let surface = Color(red: 0.09, green: 0.012, blue: 0.006)
+    static let strongSurface = Color(red: 0.18, green: 0.018, blue: 0.008)
+    static let field = Color(red: 0.04, green: 0.006, blue: 0.003)
+    static let disabled = Color(red: 0.12, green: 0.018, blue: 0.008)
+}
+
+private struct NightVisionProminentButtonModifier: ViewModifier {
+    @Environment(\.nightVisionModeEnabled) private var isNightVisionEnabled
+
+    func body(content: Content) -> some View {
+        content
+            .foregroundStyle(
+                isNightVisionEnabled
+                    ? NightVisionPalette.primary
+                    : Color.white
+            )
+            .tint(
+                isNightVisionEnabled
+                    ? NightVisionPalette.strongSurface
+                    : Color.accentColor
+            )
+    }
+}
+
+extension View {
+    func nightVisionProminentButton() -> some View {
+        modifier(NightVisionProminentButtonModifier())
     }
 }

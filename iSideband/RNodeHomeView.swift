@@ -324,6 +324,7 @@ struct RNodeHomeView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .nightVisionProminentButton()
             }
         }
         .padding(.vertical, 6)
@@ -349,6 +350,7 @@ struct RNodeHomeView: View {
             .frame(width: 220)
         }
         .buttonStyle(.borderedProminent)
+        .nightVisionProminentButton()
         .disabled(
             bluetooth.bluetoothState
                 != .poweredOn
