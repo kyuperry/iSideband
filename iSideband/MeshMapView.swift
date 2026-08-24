@@ -510,7 +510,7 @@ private struct RemoteNodeTelemetryView: View {
                         )
                     )
                     LabeledContent(
-                        "Age",
+                        "Last Update",
                         value: node.receivedAt.formatted(
                             .relative(presentation: .named)
                         )

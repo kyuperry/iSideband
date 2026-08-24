@@ -211,7 +211,9 @@ struct RNodeDetailView: View {
 
             Section("Hardware") {
                 Label(
-                    "RNode Firmware: Custom",
+                    bluetooth.firmwareVersion == "Unknown"
+                        ? "Firmware: Not reported"
+                        : "Firmware: \(bluetooth.firmwareVersion)",
                     systemImage: "cpu"
                 )
 
