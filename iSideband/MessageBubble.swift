@@ -68,16 +68,15 @@ struct MessageBubble: View {
             ) {
                 messageContent
 
-                if status != nil || (isMetadataVisible && timestampText != nil) {
+                if status != nil || displayedTimestampText != nil {
                     HStack(spacing: 5) {
-                        if isMetadataVisible,
-                           let timestampText {
-                            Text(timestampText)
+                        if let displayedTimestampText {
+                            Text(displayedTimestampText)
                         }
 
                         if let status,
                            !isReplacedByExpandedTimestamp(status) {
-                            if isMetadataVisible && timestampText != nil {
+                            if displayedTimestampText != nil {
                                 Text("•")
                             }
                             Text(status)
@@ -98,12 +97,6 @@ struct MessageBubble: View {
             guard !hasAttachment else { return }
             toggleMetadata()
         }
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.5)
-                .onEnded { _ in
-                    toggleMetadata()
-                }
-        )
         .fullScreenCover(
             isPresented: Binding(
                 get: {
@@ -149,13 +142,10 @@ struct MessageBubble: View {
            let image = UIImage(
                contentsOfFile: attachmentPath
            ) {
-            Button {
-                selectedImage = image
-            } label: {
-                VStack(
-                    alignment: .trailing,
-                    spacing: 4
-                ) {
+            VStack(
+                alignment: .trailing,
+                spacing: 4
+            ) {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFit()
@@ -188,45 +178,64 @@ struct MessageBubble: View {
                         .font(.caption2)
                         .foregroundStyle(timestampColor)
                     }
-                }
             }
-            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                selectedImage = image
+            }
+            .simultaneousGesture(metadataLongPressGesture)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint(
+                "Tap to open the photo. Press and hold to show delivery details."
+            )
         } else if isVoiceNote {
-            Button {
-                guard let attachmentPath else { return }
-                guard isPlayableVoiceNote else {
-                    return
-                }
-                voicePlayer.toggle(url: URL(fileURLWithPath: attachmentPath))
-            } label: {
+            HStack(spacing: 10) {
+                Image(systemName: voiceIconName)
+                    .font(.title)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        toggleVoicePlayback()
+                    }
+                    .simultaneousGesture(metadataLongPressGesture)
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel(
+                        voicePlayer.isPlaying ? "Pause voice message" : "Play voice message"
+                    )
+
                 HStack(spacing: 10) {
-                    Image(systemName: voiceIconName)
-                        .font(.title)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Voice Message").font(.subheadline.bold())
+                        Text("Voice Message")
+                            .font(.subheadline.bold())
                         if isCodec2VoiceNote {
                             Text("Codec2 audio — use High-quality Voice in Sideband")
                                 .font(.caption2)
                         } else if let error = voicePlayer.errorMessage {
-                            Text(error)
-                                .font(.caption2)
+                            Text(error).font(.caption2)
                         }
                     }
                     Image(systemName: "waveform")
                 }
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(bubbleColor)
-                .foregroundStyle(messageForegroundColor)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    toggleMetadata()
+                }
+                .simultaneousGesture(metadataLongPressGesture)
             }
-            .buttonStyle(.plain)
+            .padding(.horizontal, 14).padding(.vertical, 10)
+            .background(bubbleColor)
+            .foregroundStyle(messageForegroundColor)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         } else if isFile {
-            Button {
-                openFile()
-            } label: {
-                fileBubble
-            }
-            .buttonStyle(.plain)
+            fileBubble
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openFile()
+                }
+                .simultaneousGesture(metadataLongPressGesture)
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(
+                    "Tap to open the file. Press and hold to show delivery details."
+                )
         } else {
             textBubble
         }
@@ -333,6 +342,20 @@ struct MessageBubble: View {
         }
     }
 
+    private var metadataLongPressGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.5)
+            .onEnded { _ in
+                if !isMetadataVisible {
+                    toggleMetadata()
+                }
+            }
+    }
+
+    private func toggleVoicePlayback() {
+        guard let attachmentPath, isPlayableVoiceNote else { return }
+        voicePlayer.toggle(url: URL(fileURLWithPath: attachmentPath))
+    }
+
     private var timestampText: String? {
         if isOutgoing {
             if let deliveredAt {
@@ -353,12 +376,33 @@ struct MessageBubble: View {
         return "Received \(shortTime(date))"
     }
 
+    private var automaticPhotoTimestampText: String? {
+        guard isPhoto else { return nil }
+        if isOutgoing {
+            if let deliveredAt {
+                return "Delivered \(shortTime(deliveredAt))"
+            }
+            if status == "Delivered" {
+                return "Delivered time unavailable"
+            }
+            return nil
+        }
+        return "Received \(shortTime(receivedAt ?? date))"
+    }
+
+    private var displayedTimestampText: String? {
+        if isMetadataVisible {
+            return timestampText
+        }
+        return automaticPhotoTimestampText
+    }
+
     private func shortTime(_ value: Date) -> String {
         value.formatted(date: .omitted, time: .shortened)
     }
 
     private func isReplacedByExpandedTimestamp(_ status: String) -> Bool {
-        guard isMetadataVisible, timestampText != nil else {
+        guard displayedTimestampText != nil else {
             return false
         }
         return status == "Sent" || status == "Delivered" || status == "Received"
