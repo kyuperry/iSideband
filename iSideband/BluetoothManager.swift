@@ -1634,6 +1634,7 @@ extension BluetoothManager: CBPeripheralDelegate {
                                     ReticulumDiscoveredPeerStore.shared.discover(
                                         destinationHash: announce.destinationHashHex,
                                         displayName: announce.displayName,
+                                        announcedHops: reticulumPacket.hops,
                                         seenAt: announce.receivedAt
                                     )
 

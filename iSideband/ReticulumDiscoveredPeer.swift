@@ -4,6 +4,7 @@ struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
     let id: UUID
     let destinationHash: String
     let displayName: String?
+    let announcedHops: UInt8?
     let firstSeenAt: Date
     let lastSeenAt: Date
 
@@ -11,6 +12,7 @@ struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
         id: UUID = UUID(),
         destinationHash: String,
         displayName: String?,
+        announcedHops: UInt8? = nil,
         firstSeenAt: Date = Date(),
         lastSeenAt: Date = Date()
     ) {
@@ -26,6 +28,8 @@ struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
             )
+
+        self.announcedHops = announcedHops
 
         self.firstSeenAt = firstSeenAt
         self.lastSeenAt = lastSeenAt

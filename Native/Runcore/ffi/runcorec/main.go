@@ -339,6 +339,16 @@ func runcore_set_announce_location(handle C.uint64_t, latitude C.double, longitu
 	return 0
 }
 
+//export runcore_set_telemetry_time_enabled
+func runcore_set_telemetry_time_enabled(handle C.uint64_t, enabled C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil {
+		return 1
+	}
+	h.node.SetTelemetryTimeEnabled(enabled != 0)
+	return 0
+}
+
 //export runcore_send_text
 func runcore_send_text(handle C.uint64_t, destination *C.char, content *C.char, direct C.int32_t, clientID *C.char) C.int32_t {
 	h := getHandle(handle)

@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
+	"time"
 
 	"github.com/svanichkin/go-lxmf/lxmf"
 	umsgpack "github.com/svanichkin/go-reticulum/rns/vendor"
@@ -58,5 +59,56 @@ func TestDecodeLocationTelemetryRejectsInvalidCoordinate(t *testing.T) {
 		int64(lxmf.FieldTelemetry): packed,
 	}); ok {
 		t.Fatal("expected invalid coordinate to be rejected")
+	}
+}
+
+func TestLocationTelemetryFieldsHonorsSensorToggles(t *testing.T) {
+	n := &Node{telemetryTimeEnabled: true}
+	telemetryPayload := func(fields map[any]any) []byte {
+		for key, value := range fields {
+			if numericKey(key) == int64(lxmf.FieldTelemetry) {
+				packed, _ := value.([]byte)
+				return packed
+			}
+		}
+		return nil
+	}
+
+	fields := n.LocationTelemetryFields()
+	packed := telemetryPayload(fields)
+	if len(packed) == 0 {
+		t.Fatal("expected timestamp telemetry")
+	}
+	var sensors map[any]any
+	if err := umsgpack.Unpackb(packed, &sensors); err != nil {
+		t.Fatalf("unpack timestamp telemetry: %v", err)
+	}
+	if _, ok := sensors[int64(0x01)]; !ok {
+		t.Fatal("expected timestamp sensor")
+	}
+	if _, ok := sensors[int64(0x02)]; ok {
+		t.Fatal("did not expect location sensor")
+	}
+
+	n.SetTelemetryTimeEnabled(false)
+	if fields := n.LocationTelemetryFields(); fields != nil {
+		t.Fatal("expected no telemetry with both sensors disabled")
+	}
+
+	n.SetAnnounceLocation(20.8, -156.3, 5, time.Now().Unix(), true)
+	fields = n.LocationTelemetryFields()
+	packed = telemetryPayload(fields)
+	if len(packed) == 0 {
+		t.Fatal("expected location telemetry")
+	}
+	sensors = nil
+	if err := umsgpack.Unpackb(packed, &sensors); err != nil {
+		t.Fatalf("unpack location telemetry: %v", err)
+	}
+	if _, ok := sensors[int64(0x01)]; ok {
+		t.Fatal("did not expect timestamp sensor")
+	}
+	if _, ok := sensors[int64(0x02)]; !ok {
+		t.Fatal("expected location sensor")
 	}
 }

@@ -1,6 +1,11 @@
 import SwiftUI
 import CoreLocation
 
+enum RNodePreferenceKey {
+    static let displayName =
+        "isideband.rnode.displayName"
+}
+
 struct SettingsView: View {
     @ObservedObject var bluetooth: BluetoothManager
 
@@ -16,8 +21,8 @@ struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var gpsEnabled = false
-    @AppStorage("shareLocationOnMesh")
-    private var shareLocationOnMesh = false
+    @State private var shareTimestampTelemetry = true
+    @State private var shareLocationOnMesh = false
 
     @AppStorage(
         NotificationPreferenceKey.rnodeConnection
@@ -66,6 +71,7 @@ struct SettingsView: View {
     @State private var transmitPowerDBm = "22"
     @State private var spreadingFactor = "7"
     @State private var codingRate = "5"
+    @State private var rnodeDisplayName = "KPU5-1"
 
     @State private var showRestartConfirmation = false
     @State private var showRadioOffConfirmation = false
@@ -96,6 +102,7 @@ struct SettingsView: View {
             displaySettingsSection
             nearbyDiscoverySection
             automaticAnnouncementsSection
+            telemetrySettingsSection
             messagingSettingsSection
             notificationSettingsSection
             identitySection
@@ -434,17 +441,6 @@ struct SettingsView: View {
         some View {
         Section("Automatic Announcements") {
             Toggle(
-                "Share Location on Situation Map",
-                isOn: $shareLocationOnMesh
-            )
-
-            Text(
-                "Includes your latest iPhone GPS position in outgoing messages so Sideband recipients can display this node on their Situation Map."
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
-
-            Toggle(
                 "Auto-Announce Identity",
                 isOn: $automaticAnnounceEnabled
             )
@@ -485,14 +481,66 @@ struct SettingsView: View {
             ReticulumCoreBridge.shared
                 .automaticAnnounceSettingsDidChange()
         }
-        .onChange(of: shareLocationOnMesh) { _, enabled in
-            if enabled {
-                locationTelemetry.setEnabled(true)
-                locationTelemetry.refresh()
-            }
-            ReticulumCoreBridge.shared.setAnnounceLocation(
-                enabled ? locationTelemetry.location : nil
+    }
+
+    private var telemetrySettingsSection: some View {
+        Section("Shared Telemetry") {
+            Toggle(
+                "Timestamp",
+                isOn: $shareTimestampTelemetry
             )
+
+            Toggle(
+                "GPS",
+                isOn: $gpsEnabled
+            )
+            .onChange(of: gpsEnabled) { _, enabled in
+                if !enabled {
+                    shareLocationOnMesh = false
+                }
+            }
+
+            Toggle(
+                "Share Location on Situation Map",
+                isOn: $shareLocationOnMesh
+            )
+            .disabled(!gpsEnabled)
+
+            if gpsEnabled {
+                if let location = locationTelemetry.location {
+                    Label(
+                        String(
+                            format: "%.5f, %.5f (±%.0f m)",
+                            location.coordinate.latitude,
+                            location.coordinate.longitude,
+                            location.horizontalAccuracy
+                        ),
+                        systemImage: "location.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                } else if let error = locationTelemetry.errorMessage {
+                    Label(
+                        error,
+                        systemImage: "exclamationmark.triangle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                } else {
+                    Label(
+                        "Waiting for an iPhone location fix",
+                        systemImage: "location.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(
+                "GPS controls location collection. Share Location on Situation Map controls whether your position is included with outgoing LXMF messages. Changes take effect when you press Save."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 
@@ -521,69 +569,6 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Toggle(
-                isOn: $gpsEnabled
-            ) {
-                Label(
-                    "GPS",
-                    systemImage: "location.fill"
-                )
-            }
-            .onChange(
-                of: gpsEnabled
-            ) { _, enabled in
-                guard hasLoadedSettings else {
-                    return
-                }
-
-                locationTelemetry.setEnabled(
-                    enabled
-                )
-            }
-
-            if gpsEnabled {
-                if let location =
-                    locationTelemetry.location {
-                    Label(
-                        String(
-                            format:
-                                "%.5f, %.5f (±%.0f m)",
-                            location.coordinate.latitude,
-                            location.coordinate.longitude,
-                            location.horizontalAccuracy
-                        ),
-                        systemImage:
-                            "location.circle"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else if let error =
-                    locationTelemetry.errorMessage {
-                    Label(
-                        error,
-                        systemImage:
-                            "exclamationmark.triangle"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                } else {
-                    Label(
-                        "Waiting for an iPhone location fix",
-                        systemImage:
-                            "location.circle"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                }
-            }
-
-            Text(
-                """
-                GPS supplies optional location telemetry and can operate alongside either packet interface.
-                """
-            )
-            .font(.caption)
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -633,6 +618,23 @@ struct SettingsView: View {
     private var radioSettingsSection:
         some View {
         Section("LoRa Radio Settings") {
+            HStack(spacing: 10) {
+                Text("RNode Name")
+
+                Spacer()
+
+                TextField(
+                    "KPU5-1",
+                    text: $rnodeDisplayName
+                )
+                .textInputAutocapitalization(.characters)
+                .autocorrectionDisabled()
+                .multilineTextAlignment(.trailing)
+                .textFieldStyle(.roundedBorder)
+                .frame(maxWidth: 180)
+                .disabled(isApplyingRadioSettings)
+            }
+
             settingsField(
                 title: "Frequency",
                 value: $frequencyMHz,
@@ -791,6 +793,18 @@ struct SettingsView: View {
                 )
         }
 
+        shareTimestampTelemetry = defaults.object(
+            forKey: TelemetryPreferenceKey.shareTimestamp
+        ) == nil || defaults.bool(
+            forKey: TelemetryPreferenceKey.shareTimestamp
+        )
+        shareLocationOnMesh = defaults.bool(
+            forKey: TelemetryPreferenceKey.shareLocation
+        )
+        if shareLocationOnMesh {
+            gpsEnabled = true
+        }
+
         frequencyMHz =
             defaults.string(
                 forKey:
@@ -821,6 +835,11 @@ struct SettingsView: View {
                     "radioCodingRate"
             ) ?? "5"
 
+        rnodeDisplayName =
+            defaults.string(
+                forKey: RNodePreferenceKey.displayName
+            ) ?? "KPU5-1"
+
         hasLoadedSettings = true
 
         locationTelemetry.setEnabled(
@@ -833,6 +852,20 @@ struct SettingsView: View {
             return
         }
 
+        let cleanedRNodeName = rnodeDisplayName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleanedRNodeName.isEmpty else {
+            statusMessage = "RNode name cannot be empty."
+            return
+        }
+
+        guard cleanedRNodeName.count <= 32 else {
+            statusMessage =
+                "RNode name must be 32 characters or fewer."
+            return
+        }
+
         guard let validatedSettings =
             validatedRadioSettings()
         else {
@@ -842,13 +875,40 @@ struct SettingsView: View {
         let defaults =
             UserDefaults.standard
 
+        rnodeDisplayName = cleanedRNodeName
+        defaults.set(
+            cleanedRNodeName,
+            forKey: RNodePreferenceKey.displayName
+        )
+
         defaults.set(
             gpsEnabled,
             forKey: "gpsInterfaceEnabled"
         )
 
+        defaults.set(
+            shareTimestampTelemetry,
+            forKey: TelemetryPreferenceKey.shareTimestamp
+        )
+        defaults.set(
+            shareLocationOnMesh,
+            forKey: TelemetryPreferenceKey.shareLocation
+        )
+
         locationTelemetry.setEnabled(
-            gpsEnabled
+            gpsEnabled || shareLocationOnMesh
+        )
+
+        if shareLocationOnMesh {
+            locationTelemetry.refresh()
+        }
+        ReticulumCoreBridge.shared.setTelemetryTimeEnabled(
+            shareTimestampTelemetry
+        )
+        ReticulumCoreBridge.shared.setAnnounceLocation(
+            shareLocationOnMesh
+                ? locationTelemetry.location
+                : nil
         )
 
         frequencyMHz =
@@ -987,6 +1047,7 @@ struct SettingsView: View {
                     """
                     Settings saved and sent to the connected RNode.
 
+                    RNode Name: \(rnodeDisplayName)
                     Frequency: \(frequencyMHz) MHz
                     Bandwidth: \(bandwidthKHz) kHz
                     TX Power: \(transmitPowerDBm) dBm

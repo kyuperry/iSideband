@@ -1,5 +1,6 @@
 import SwiftUI
 import CoreBluetooth
+import WebKit
 
 struct MainMenuView: View {
     @ObservedObject var bluetooth: BluetoothManager
@@ -74,6 +75,8 @@ struct InterfacesView: View {
 
     @AppStorage("raspberryPiHost") private var piHost = ""
     @AppStorage("raspberryPiPort") private var piPort = "4242"
+    @AppStorage("raspberryPiCameraStreamURL")
+    private var piCameraStreamURL = ""
 
     var body: some View {
         Form {
@@ -147,6 +150,42 @@ struct InterfacesView: View {
                     )
                 }
             }
+
+            Section("Raspberry Pi Camera") {
+                TextField(
+                    "http://pi-address:8080/stream.mjpg",
+                    text: $piCameraStreamURL
+                )
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .keyboardType(.URL)
+
+                if let cameraURL {
+                    NavigationLink {
+                        PiCameraStreamView(
+                            streamURL: cameraURL
+                        )
+                    } label: {
+                        Label(
+                            "View Live Camera",
+                            systemImage: "video.fill"
+                        )
+                    }
+                } else {
+                    Label(
+                        "Enter a valid HTTP or HTTPS camera stream URL.",
+                        systemImage: "video.slash"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+
+                Text(
+                    "Camera video uses the Raspberry Pi's Wi-Fi HaLow IP connection. Reticulum and LoRa remain available for messages, commands and telemetry. HTTP MJPEG and browser-compatible HLS streams are supported."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle("Interfaces")
         .navigationBarTitleDisplayMode(.inline)
@@ -161,6 +200,19 @@ struct InterfacesView: View {
         )
     }
 
+    private var cameraURL: URL? {
+        let value = piCameraStreamURL.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+        guard let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https",
+              url.host != nil else {
+            return nil
+        }
+        return url
+    }
+
     private var raspberryPiInterfaceBinding: Binding<Bool> {
         Binding(
             get: { packetInterfaces.activeInterface == .raspberryPi },
@@ -168,5 +220,42 @@ struct InterfacesView: View {
                 packetInterfaces.select(enabled ? .raspberryPi : .none)
             }
         )
+    }
+}
+
+private struct PiCameraStreamView: View {
+    let streamURL: URL
+
+    var body: some View {
+        PiCameraWebView(url: streamURL)
+            .ignoresSafeArea(edges: .bottom)
+            .navigationTitle("Raspberry Pi Camera")
+            .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+private struct PiCameraWebView: UIViewRepresentable {
+    let url: URL
+
+    func makeUIView(context: Context) -> WKWebView {
+        let configuration = WKWebViewConfiguration()
+        configuration.allowsInlineMediaPlayback = true
+        configuration.mediaTypesRequiringUserActionForPlayback = []
+
+        let webView = WKWebView(
+            frame: .zero,
+            configuration: configuration
+        )
+        webView.allowsBackForwardNavigationGestures = false
+        webView.scrollView.bounces = false
+        return webView
+    }
+
+    func updateUIView(
+        _ webView: WKWebView,
+        context: Context
+    ) {
+        guard webView.url != url else { return }
+        webView.load(URLRequest(url: url))
     }
 }

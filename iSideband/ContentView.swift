@@ -69,7 +69,7 @@ struct ContentView: View {
                 forKey: "gpsInterfaceEnabled"
             )
             let meshLocationEnabled = UserDefaults.standard.bool(
-                forKey: "shareLocationOnMesh"
+                forKey: TelemetryPreferenceKey.shareLocation
             )
             LocationTelemetryManager.shared.setEnabled(
                 gpsEnabled || meshLocationEnabled

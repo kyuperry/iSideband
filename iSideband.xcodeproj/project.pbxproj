@@ -405,6 +405,7 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "iSideband uses Bluetooth to communicate with nearby RNode radios.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "iSideband uses your local network to connect to Raspberry Pi Reticulum gateways and Wi-Fi HaLow mesh interfaces.";
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "iSideband uses your iPhone location for local GPS telemetry and optional location sharing.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "iSideband uses the microphone when you record an encrypted voice message.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -446,6 +447,7 @@
 				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "iSideband uses Bluetooth to discover and connect to nearby RNode radios.";
 				INFOPLIST_KEY_NSBluetoothPeripheralUsageDescription = "iSideband uses Bluetooth to communicate with nearby RNode radios.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "iSideband uses your local network to connect to Raspberry Pi Reticulum gateways and Wi-Fi HaLow mesh interfaces.";
+				INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES;
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "iSideband uses your iPhone location for local GPS telemetry and optional location sharing.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "iSideband uses the microphone when you record an encrypted voice message.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

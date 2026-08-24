@@ -82,6 +82,7 @@ struct MessagesView: View {
     @FocusState private var isComposerFocused: Bool
     @State private var isViewingNewestMessage = true
     @State private var restoreKeyboardAtNewestMessage = false
+    @State private var hasScrollableMessageContent = false
 
     @State private var selectedPhoto: PhotosPickerItem?
     @State private var photoErrorMessage: String?
@@ -187,11 +188,8 @@ struct MessagesView: View {
                     }
                     .scrollDismissesKeyboard(.immediately)
                     .onScrollGeometryChange(for: Bool.self) { geometry in
-                        let distanceFromBottom =
-                            geometry.contentSize.height
-                            - geometry.containerSize.height
-                            - geometry.contentOffset.y
-                        return distanceFromBottom <= 24
+                        geometry.visibleRect.maxY >=
+                            geometry.contentSize.height - 24
                     } action: { _, isAtBottom in
                         guard isAtBottom != isViewingNewestMessage else {
                             return
@@ -209,12 +207,48 @@ struct MessagesView: View {
                             isComposerFocused = false
                         }
                     }
+                    .onScrollGeometryChange(for: Bool.self) { geometry in
+                        geometry.contentSize.height >
+                            geometry.containerSize.height + 1
+                    } action: { _, isScrollable in
+                        hasScrollableMessageContent = isScrollable
+                    }
                     .onChange(of: messages.count) {
                         withAnimation {
                             proxy.scrollTo(
                                 "BOTTOM",
                                 anchor: .bottom
                             )
+                        }
+                    }
+                    .overlay(alignment: .bottomLeading) {
+                        if hasScrollableMessageContent &&
+                            !isViewingNewestMessage {
+                            Button {
+                                withAnimation {
+                                    proxy.scrollTo(
+                                        "BOTTOM",
+                                        anchor: .bottom
+                                    )
+                                }
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(
+                                        .system(
+                                            size: 17,
+                                            weight: .bold
+                                        )
+                                    )
+                                    .foregroundStyle(Color.blue)
+                                    .frame(width: 34, height: 34)
+                                    .contentShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(
+                                "Jump to latest message"
+                            )
+                            .padding(.leading, 8)
+                            .padding(.bottom, 8)
                         }
                     }
                 }

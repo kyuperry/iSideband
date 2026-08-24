@@ -23,15 +23,18 @@ func (n *Node) LocationTelemetryFields() map[any]any {
 		return nil
 	}
 	n.locationMu.RLock()
+	timeEnabled := n.telemetryTimeEnabled
 	location := n.location
 	if location != nil {
 		copy := *location
 		location = &copy
 	}
 	n.locationMu.RUnlock()
-	if location == nil || time.Now().Unix()-location.Timestamp > 300 {
+	if location == nil && !timeEnabled {
 		return nil
 	}
+	locationIsFresh := location != nil &&
+		time.Now().Unix()-location.Timestamp <= 300
 
 	int32Bytes := func(value int32) []byte {
 		data := make([]byte, 4)
@@ -49,17 +52,24 @@ func (n *Node) LocationTelemetryFields() map[any]any {
 		return data
 	}
 
-	accuracy := math.Max(0, math.Min(location.Accuracy, 655.35))
-	packed, err := umsgpack.Packb(map[any]any{
-		int64(0x01): location.Timestamp,
-		int64(0x02): []any{
+	sensors := map[any]any{}
+	if timeEnabled {
+		sensors[int64(0x01)] = time.Now().Unix()
+	}
+	if locationIsFresh {
+		accuracy := math.Max(0, math.Min(location.Accuracy, 655.35))
+		sensors[int64(0x02)] = []any{
 			int32Bytes(int32(math.Round(location.Latitude * 1e6))),
 			int32Bytes(int32(math.Round(location.Longitude * 1e6))),
 			int32Bytes(0), uint32Bytes(0), int32Bytes(0),
 			uint16Bytes(uint16(math.Round(accuracy * 100))),
 			location.Timestamp,
-		},
-	})
+		}
+	}
+	if len(sensors) == 0 {
+		return nil
+	}
+	packed, err := umsgpack.Packb(sensors)
 	if err != nil {
 		return nil
 	}

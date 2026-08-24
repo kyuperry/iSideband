@@ -12,6 +12,13 @@ enum AutomaticAnnouncePreferenceKey {
         "isideband.reticulum.autoAnnounce.lastAnnouncedAt"
 }
 
+enum TelemetryPreferenceKey {
+    static let shareTimestamp =
+        "isideband.telemetry.shareTimestamp"
+    static let shareLocation =
+        "shareLocationOnMesh"
+}
+
 struct RemoteNodeLocation: Identifiable, Hashable, Codable {
     let sourceHash: String
     let latitude: Double
@@ -178,8 +185,8 @@ nonisolated private func reticulumCoreLog(
 final class ReticulumCoreBridge: ObservableObject {
     static let shared = ReticulumCoreBridge()
     private static let maximumStoredRemoteNodes = 256
-    private static let remoteNodeRetention: TimeInterval =
-        30 * 24 * 60 * 60
+    static let remoteNodeStaleInterval: TimeInterval =
+        24 * 60 * 60
 
     @Published private(set) var isRunning = false
     @Published private(set) var destinationHash = ""
@@ -202,6 +209,8 @@ final class ReticulumCoreBridge: ObservableObject {
     private init() {
         UserDefaults.standard.register(
             defaults: [
+                TelemetryPreferenceKey.shareTimestamp: true,
+                TelemetryPreferenceKey.shareLocation: false,
                 AutomaticAnnouncePreferenceKey.enabled:
                     false,
                 AutomaticAnnouncePreferenceKey
@@ -317,6 +326,7 @@ final class ReticulumCoreBridge: ObservableObject {
             }
             isRunning = true
             status = "Reticulum Link core ready"
+            applySavedTelemetryPreferences()
             synchronizeActivePacketInterface()
             startRouteMaintenance()
         } catch {
@@ -424,6 +434,32 @@ final class ReticulumCoreBridge: ObservableObject {
             location.horizontalAccuracy,
             Int64(location.timestamp.timeIntervalSince1970),
             1
+        )
+    }
+
+    func setTelemetryTimeEnabled(_ enabled: Bool) {
+        guard handle != 0 else { return }
+        _ = runcore_set_telemetry_time_enabled(
+            handle,
+            enabled ? 1 : 0
+        )
+    }
+
+    private func applySavedTelemetryPreferences() {
+        let defaults = UserDefaults.standard
+        setTelemetryTimeEnabled(
+            defaults.bool(
+                forKey: TelemetryPreferenceKey.shareTimestamp
+            )
+        )
+
+        let shareLocation = defaults.bool(
+            forKey: TelemetryPreferenceKey.shareLocation
+        )
+        setAnnounceLocation(
+            shareLocation
+                ? LocationTelemetryManager.shared.location
+                : nil
         )
     }
 
@@ -762,7 +798,7 @@ final class ReticulumCoreBridge: ObservableObject {
 
     private func pruneRemoteNodeLocations(now: Date = Date()) {
         let cutoff = now.addingTimeInterval(
-            -Self.remoteNodeRetention
+            -Self.remoteNodeStaleInterval
         )
         let retained = remoteNodeLocations.values
             .filter { $0.receivedAt >= cutoff }

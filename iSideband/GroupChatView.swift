@@ -25,6 +25,8 @@ struct GroupChatView: View {
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
+    @State private var hasScrollableMessageContent = false
+    @State private var isViewingNewestMessage = true
 
     init(bluetooth: BluetoothManager, group: GroupConversation) {
         self.bluetooth = bluetooth
@@ -105,6 +107,43 @@ struct GroupChatView: View {
                 .onChange(of: messages) {
                     saveMessages()
                     scrollToLatestMessage(using: proxy)
+                }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.contentSize.height >
+                        geometry.containerSize.height + 1
+                } action: { _, isScrollable in
+                    hasScrollableMessageContent = isScrollable
+                }
+                .onScrollGeometryChange(for: Bool.self) { geometry in
+                    geometry.visibleRect.maxY >=
+                        geometry.contentSize.height - 24
+                } action: { _, isAtBottom in
+                    isViewingNewestMessage = isAtBottom
+                }
+                .overlay(alignment: .bottomLeading) {
+                    if hasScrollableMessageContent &&
+                        !isViewingNewestMessage {
+                        Button {
+                            scrollToLatestMessage(using: proxy)
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(
+                                    .system(
+                                        size: 17,
+                                        weight: .bold
+                                    )
+                                )
+                                .foregroundStyle(Color.blue)
+                                .frame(width: 34, height: 34)
+                                .contentShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(
+                            "Jump to latest message"
+                        )
+                        .padding(.leading, 8)
+                        .padding(.bottom, 8)
+                    }
                 }
 
                 Divider()

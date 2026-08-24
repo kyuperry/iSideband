@@ -124,15 +124,16 @@ type Node struct {
 	outboundMu       sync.Mutex
 	outboundMsgFiles map[string]string // msgIDHex -> absolute path in messagesDir
 
-	displayName      string
-	locationMu       sync.RWMutex
-	location         *AnnounceLocation
-	avatarPNG        []byte
-	avatarHash       []byte
-	avatarMTime      int64
-	avatarMime       string
-	announceStop     chan struct{}
-	announceStopOnce sync.Once
+	displayName          string
+	locationMu           sync.RWMutex
+	location             *AnnounceLocation
+	telemetryTimeEnabled bool
+	avatarPNG            []byte
+	avatarHash           []byte
+	avatarMTime          int64
+	avatarMime           string
+	announceStop         chan struct{}
+	announceStopOnce     sync.Once
 
 	networkResetMu       sync.Mutex
 	ifaceStateMu         sync.Mutex
@@ -165,6 +166,15 @@ func (n *Node) SetAnnounceLocation(latitude, longitude, accuracy float64, timest
 		Latitude: latitude, Longitude: longitude,
 		Accuracy: accuracy, Timestamp: timestamp,
 	}
+}
+
+func (n *Node) SetTelemetryTimeEnabled(enabled bool) {
+	if n == nil {
+		return
+	}
+	n.locationMu.Lock()
+	n.telemetryTimeEnabled = enabled
+	n.locationMu.Unlock()
 }
 
 func (n *Node) ProfileName() string {
@@ -242,15 +252,16 @@ func Start(opts Options) (*Node, error) {
 	}
 
 	n := &Node{
-		opts:             opts,
-		reticulum:        ret,
-		identity:         id,
-		storageDir:       storageDir,
-		displayName:      opts.DisplayName,
-		announces:        make(map[string]AnnounceEntry),
-		ifaceOfflineAt:   make(map[string]time.Time),
-		messagesDir:      opts.MessagesDir,
-		outboundMsgFiles: make(map[string]string),
+		opts:                 opts,
+		reticulum:            ret,
+		identity:             id,
+		storageDir:           storageDir,
+		displayName:          opts.DisplayName,
+		telemetryTimeEnabled: true,
+		announces:            make(map[string]AnnounceEntry),
+		ifaceOfflineAt:       make(map[string]time.Time),
+		messagesDir:          opts.MessagesDir,
+		outboundMsgFiles:     make(map[string]string),
 	}
 
 	if n.opts.ContactsDir == "" {

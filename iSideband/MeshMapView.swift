@@ -179,15 +179,27 @@ struct GeographicMeshMapView: View {
     private var selectedMapStyle:
         GeographicMapStyle = .standard
 
+    @AppStorage(RNodePreferenceKey.displayName)
+    private var connectedRNodeLabel = "KPU5-1"
+
     @StateObject private var locationManager =
         MeshMapLocationManager()
     @ObservedObject private var reticulumCore =
         ReticulumCoreBridge.shared
+    @ObservedObject private var contactStore =
+        LXMFContactStore.shared
 
     @State private var cameraPosition: MapCameraPosition
     @State private var isShowingInformation = false
     @State private var hasCenteredOnFirstLocation = false
     @State private var selectedRemoteNode: RemoteNodeLocation?
+    @State private var mapFreshnessDate = Date()
+
+    private let mapFreshnessTimer = Timer.publish(
+        every: 60,
+        on: .main,
+        in: .common
+    ).autoconnect()
 
     init(startsInHawaii: Bool) {
         _cameraPosition = State(
@@ -203,7 +215,7 @@ struct GeographicMeshMapView: View {
                 if let coordinate =
                     locationManager.coordinate {
                     Annotation(
-                        "Connected RNode",
+                        "",
                         coordinate: coordinate,
                         anchor: .bottom
                     ) {
@@ -267,6 +279,9 @@ struct GeographicMeshMapView: View {
         ) { _, _ in
             centerOnFirstLocationIfNeeded()
         }
+        .onReceive(mapFreshnessTimer) { date in
+            mapFreshnessDate = date
+        }
     }
 
     private var geographicRNodeMarker: some View {
@@ -303,16 +318,23 @@ struct GeographicMeshMapView: View {
                 .foregroundStyle(Color.accentColor)
             }
 
+            Text(connectedRNodeLabel)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "Connected RNode at current GPS location"
+            "\(connectedRNodeLabel) at current GPS location"
         )
     }
 
     private var remoteNodeLocations: [RemoteNodeLocation] {
         Array(
-            reticulumCore.remoteNodeLocations.values.sorted {
+            reticulumCore.remoteNodeLocations.values.filter {
+                mapFreshnessDate.timeIntervalSince($0.receivedAt) <
+                    ReticulumCoreBridge.remoteNodeStaleInterval
+            }.sorted {
                 $0.receivedAt > $1.receivedAt
             }.prefix(200)
         )
@@ -321,7 +343,7 @@ struct GeographicMeshMapView: View {
     private func remoteNodeLabel(
         _ node: RemoteNodeLocation
     ) -> String {
-        LXMFContactStore.shared.contact(
+        contactStore.contact(
             for: node.sourceHash
         )?.displayName ??
             "Sideband \(node.sourceHash.prefix(8))"
@@ -614,20 +636,27 @@ final class MeshMapLocationManager:
 }
 
 struct TopologyMeshMapView: View {
+    @AppStorage(RNodePreferenceKey.displayName)
+    private var connectedRNodeLabel = "KPU5-1"
+
     @ObservedObject private var discoveredStore =
         ReticulumDiscoveredPeerStore.shared
-
+    @ObservedObject private var reticulumCore =
+        ReticulumCoreBridge.shared
+    @ObservedObject private var contactStore =
+        LXMFContactStore.shared
     @State private var isShowingInformation = false
     @State private var selectedPeer:
         ReticulumDiscoveredPeer?
+    @State private var topologyZoom: CGFloat = 1
+    @GestureState private var pinchZoom: CGFloat = 1
 
     private let dimAfter: TimeInterval = 5 * 60
-    private let hideAfter: TimeInterval = 30 * 60
+    private let hideAfter =
+        ReticulumCoreBridge.remoteNodeStaleInterval
 
     var body: some View {
-        TimelineView(
-            .animation(minimumInterval: 1.0 / 30.0)
-        ) { timeline in
+        TimelineView(.periodic(from: .now, by: 60)) { timeline in
             let now = timeline.date
             let peers = visiblePeers(at: now)
 
@@ -649,7 +678,7 @@ struct TopologyMeshMapView: View {
                         mapInformationButton(
                             title: "Live Topology",
                             message:
-                                "Recently heard Reticulum nodes appear around your connected RNode. Older nodes gradually dim and disappear.",
+                                "Nodes are arranged in stable rings by the number of mesh hops from your connected RNode.",
                             isPresented: $isShowingInformation
                         )
                         Spacer()
@@ -659,13 +688,6 @@ struct TopologyMeshMapView: View {
                 .padding(.top, 12)
                 .padding(.leading, 16)
             }
-            .animation(
-                .spring(
-                    response: 0.55,
-                    dampingFraction: 0.78
-                ),
-                value: peers.map(\.id)
-            )
             .sheet(item: $selectedPeer) { peer in
                 peerDetailsSheet(
                     peer: peer,
@@ -692,7 +714,7 @@ struct TopologyMeshMapView: View {
             let positions = nodePositions(
                 center: center,
                 size: size,
-                count: peers.count
+                peers: peers
             )
 
             ZStack {
@@ -706,7 +728,7 @@ struct TopologyMeshMapView: View {
                         let age = max(
                             0,
                             now.timeIntervalSince(
-                                peer.lastSeenAt
+                                lastRelevantUpdate(for: peer)
                             )
                         )
 
@@ -714,13 +736,12 @@ struct TopologyMeshMapView: View {
                             from: center,
                             to: position,
                             age: age,
-                            now: now,
                             in: &context
                         )
                     }
                 }
 
-                connectedRNodeView(now: now)
+                connectedRNodeView
                     .position(center)
                     .zIndex(2)
 
@@ -734,10 +755,6 @@ struct TopologyMeshMapView: View {
                             now: now
                         )
                         .position(positions[index])
-                        .transition(
-                            .scale(scale: 0.45)
-                                .combined(with: .opacity)
-                        )
                         .onTapGesture {
                             selectedPeer = peer
                         }
@@ -745,60 +762,19 @@ struct TopologyMeshMapView: View {
                     }
                 }
             }
+            .scaleEffect(currentTopologyZoom, anchor: .center)
+            .contentShape(Rectangle())
+            .highPriorityGesture(topologyResetGesture)
+            .simultaneousGesture(topologyMagnificationGesture)
         }
         .padding(.horizontal, 18)
         .padding(.top, 30)
         .padding(.bottom, 115)
     }
 
-    private func connectedRNodeView(
-        now: Date
-    ) -> some View {
-        let cycleDuration = 2.6
-        let cycle =
-            now.timeIntervalSinceReferenceDate
-                .truncatingRemainder(
-                    dividingBy: cycleDuration
-                )
-            / cycleDuration
-
-        return VStack(spacing: 7) {
+    private var connectedRNodeView: some View {
+        VStack(spacing: 7) {
             ZStack {
-                ForEach(0..<3, id: \.self) { index in
-                    let delayedProgress =
-                        (
-                            cycle
-                            - Double(index) * 0.18
-                            + 1
-                        )
-                        .truncatingRemainder(
-                            dividingBy: 1
-                        )
-
-                    Circle()
-                        .stroke(
-                            Color.accentColor.opacity(
-                                max(
-                                    0,
-                                    0.24
-                                    * (
-                                        1
-                                        - delayedProgress
-                                    )
-                                )
-                            ),
-                            lineWidth: 2
-                        )
-                        .frame(
-                            width: 96,
-                            height: 96
-                        )
-                        .scaleEffect(
-                            1
-                            + delayedProgress * 0.48
-                        )
-                }
-
                 Circle()
                     .fill(
                         Color(
@@ -806,8 +782,8 @@ struct TopologyMeshMapView: View {
                         )
                     )
                     .frame(
-                        width: 96,
-                        height: 96
+                        width: 72,
+                        height: 72
                     )
                     .shadow(
                         color:
@@ -821,8 +797,8 @@ struct TopologyMeshMapView: View {
                         lineWidth: 3
                     )
                     .frame(
-                        width: 96,
-                        height: 96
+                        width: 72,
+                        height: 72
                     )
 
                 Image(
@@ -831,14 +807,14 @@ struct TopologyMeshMapView: View {
                 )
                 .font(
                     .system(
-                        size: 38,
+                        size: 28,
                         weight: .semibold
                     )
                 )
                 .foregroundStyle(Color.accentColor)
             }
 
-            Text("Connected RNode")
+            Text(connectedRNodeLabel)
                 .font(
                     .caption.weight(.bold)
                 )
@@ -848,10 +824,10 @@ struct TopologyMeshMapView: View {
                 .font(.caption2)
                 .foregroundStyle(Color.accentColor)
         }
-        .frame(width: 140)
+        .frame(width: 110)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "Connected RNode, you"
+            "\(connectedRNodeLabel), you"
         )
     }
 
@@ -861,22 +837,13 @@ struct TopologyMeshMapView: View {
     ) -> some View {
         let age = max(
             0,
-            now.timeIntervalSince(peer.lastSeenAt)
+            now.timeIntervalSince(
+                lastRelevantUpdate(for: peer)
+            )
         )
 
         let isFresh = age < 10
         let opacity = nodeOpacity(for: age)
-
-        let pulse =
-            isFresh
-            ? 1.0 + (
-                0.08
-                * sin(
-                    now.timeIntervalSinceReferenceDate
-                    * 4
-                )
-            )
-            : 1.0
 
         return VStack(spacing: 5) {
             ZStack {
@@ -890,7 +857,6 @@ struct TopologyMeshMapView: View {
                             width: 72,
                             height: 72
                         )
-                        .scaleEffect(pulse)
                 }
 
                 Circle()
@@ -933,7 +899,7 @@ struct TopologyMeshMapView: View {
                 )
             }
 
-            Text(peer.resolvedDisplayName)
+            Text(displayName(for: peer))
                 .font(
                     .caption.weight(.semibold)
                 )
@@ -941,10 +907,8 @@ struct TopologyMeshMapView: View {
                 .minimumScaleFactor(0.7)
 
             Text(
-                lastHeardText(
-                    peer,
-                    now: now
-                )
+                "\(hopLabel(for: peer)) • " +
+                lastHeardText(peer, now: now)
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
@@ -952,22 +916,10 @@ struct TopologyMeshMapView: View {
         }
         .frame(width: 115)
         .opacity(opacity)
-        .scaleEffect(
-            isFresh
-                ? pulse
-                : 1
-        )
-        .animation(
-            .spring(
-                response: 0.38,
-                dampingFraction: 0.72
-            ),
-            value: peer.lastSeenAt
-        )
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(
-            "\(peer.resolvedDisplayName), \(lastHeardText(peer, now: now))"
+            "\(displayName(for: peer)), \(lastHeardText(peer, now: now))"
         )
     }
 
@@ -975,7 +927,7 @@ struct TopologyMeshMapView: View {
         VStack(spacing: 18) {
             Spacer()
 
-            connectedRNodeView(now: Date())
+            connectedRNodeView
 
             VStack(spacing: 6) {
                 Text("No Recently Heard Nodes")
@@ -1004,7 +956,7 @@ struct TopologyMeshMapView: View {
                 Section("Node") {
                     LabeledContent(
                         "Name",
-                        value: peer.resolvedDisplayName
+                        value: displayName(for: peer)
                     )
 
                     VStack(
@@ -1069,7 +1021,7 @@ struct TopologyMeshMapView: View {
                     .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle(peer.resolvedDisplayName)
+            .navigationTitle(displayName(for: peer))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(
@@ -1086,52 +1038,83 @@ struct TopologyMeshMapView: View {
     private func nodePositions(
         center: CGPoint,
         size: CGSize,
-        count: Int
+        peers: [ReticulumDiscoveredPeer]
     ) -> [CGPoint] {
-        guard count > 0 else {
+        guard !peers.isEmpty else {
             return []
         }
 
-        let displayedCount = min(count, 12)
-
-        let horizontalRadius = min(
-            max(115, size.width * 0.34),
-            165
-        )
-
-        let verticalRadius = min(
-            max(125, size.height * 0.28),
-            210
-        )
-
-        return (0..<displayedCount).map { index in
-            let angle =
-                (
-                    Double(index)
-                    / Double(displayedCount)
-                )
-                * Double.pi
-                * 2
-                - Double.pi / 2
-
-            return CGPoint(
-                x:
-                    center.x
-                    + CGFloat(cos(angle))
-                    * horizontalRadius,
-                y:
-                    center.y
-                    + CGFloat(sin(angle))
-                    * verticalRadius
-            )
+        let groupedPeers = Dictionary(grouping: peers) {
+            hopDistance(for: $0)
         }
+        let maximumHop = max(groupedPeers.keys.max() ?? 1, 1)
+        let horizontalRadius = min(size.width * 0.38, 155)
+        let verticalRadius = min(size.height * 0.36, 225)
+
+        var positionsByID: [UUID: CGPoint] = [:]
+        for hop in groupedPeers.keys.sorted() {
+            let peersAtHop = (groupedPeers[hop] ?? []).sorted {
+                $0.destinationHash < $1.destinationHash
+            }
+            let ringScale = CGFloat(hop) / CGFloat(maximumHop)
+
+            for (index, peer) in peersAtHop.enumerated() {
+                let angle =
+                    (Double(index) / Double(peersAtHop.count))
+                    * Double.pi * 2 - Double.pi / 2
+                positionsByID[peer.id] = CGPoint(
+                    x: center.x + CGFloat(cos(angle)) *
+                        horizontalRadius * ringScale,
+                    y: center.y + CGFloat(sin(angle)) *
+                        verticalRadius * ringScale
+                )
+            }
+        }
+
+        return peers.map { positionsByID[$0.id] ?? center }
+    }
+
+    private var topologyMagnificationGesture: some Gesture {
+        MagnifyGesture()
+            .updating($pinchZoom) { value, state, _ in
+                state = value.magnification
+            }
+            .onEnded { value in
+                topologyZoom = min(
+                    max(topologyZoom * value.magnification, 0.25),
+                    3
+                )
+            }
+    }
+
+    private var topologyResetGesture: some Gesture {
+        TapGesture(count: 2)
+            .onEnded {
+                topologyZoom = 1
+            }
+    }
+
+    private var currentTopologyZoom: CGFloat {
+        min(max(topologyZoom * pinchZoom, 0.25), 3)
+    }
+
+    private func hopDistance(
+        for peer: ReticulumDiscoveredPeer
+    ) -> Int {
+        Int(peer.announcedHops ?? 0) + 1
+    }
+
+    private func hopLabel(
+        for peer: ReticulumDiscoveredPeer
+    ) -> String {
+        let hops = hopDistance(for: peer)
+        return "\(hops) \(hops == 1 ? "hop" : "hops")"
     }
 
     private func drawConnection(
         from start: CGPoint,
         to end: CGPoint,
         age: TimeInterval,
-        now: Date,
         in context: inout GraphicsContext
     ) {
         let freshness = connectionFreshness(
@@ -1162,13 +1145,6 @@ struct TopologyMeshMapView: View {
         path.move(to: start)
         path.addLine(to: end)
 
-        let dashPhase = CGFloat(
-            now.timeIntervalSinceReferenceDate
-                .truncatingRemainder(
-                    dividingBy: 14
-                )
-        )
-
         context.stroke(
             path,
             with: .color(
@@ -1182,8 +1158,7 @@ struct TopologyMeshMapView: View {
                         ? 2.6
                         : 2,
                 lineCap: .round,
-                dash: [7, 6],
-                dashPhase: -dashPhase
+                dash: [7, 6]
             )
         )
     }
@@ -1227,14 +1202,13 @@ struct TopologyMeshMapView: View {
         discoveredStore.peers
             .filter { peer in
                 now.timeIntervalSince(
-                    peer.lastSeenAt
+                    lastRelevantUpdate(for: peer)
                 ) < hideAfter
             }
             .sorted {
-                $0.lastSeenAt > $1.lastSeenAt
+                lastRelevantUpdate(for: $0) >
+                    lastRelevantUpdate(for: $1)
             }
-            .prefix(12)
-            .map { $0 }
     }
 
     private func nodeOpacity(
@@ -1262,7 +1236,7 @@ struct TopologyMeshMapView: View {
         now: Date
     ) -> String {
         let age = now.timeIntervalSince(
-            peer.lastSeenAt
+            lastRelevantUpdate(for: peer)
         )
 
         if age < 10 {
@@ -1284,27 +1258,58 @@ struct TopologyMeshMapView: View {
             0,
             Int(
                 now.timeIntervalSince(
-                    peer.lastSeenAt
+                    lastRelevantUpdate(for: peer)
                 )
             )
         )
 
         if seconds < 5 {
-            return "Heard now"
+            return "Now"
         }
 
         if seconds < 60 {
-            return "Heard \(seconds)s ago"
+            return "<1 min"
         }
 
         let minutes = seconds / 60
 
         if minutes < 60 {
-            return "Heard \(minutes)m ago"
+            return "\(minutes) \(minutes == 1 ? "min" : "mins")"
         }
 
         let hours = minutes / 60
-        return "Heard \(hours)h ago"
+        return "\(hours) \(hours == 1 ? "hr" : "hrs")"
+    }
+
+    private func lastRelevantUpdate(
+        for peer: ReticulumDiscoveredPeer
+    ) -> Date {
+        let locationUpdate = remoteLocation(
+            for: peer
+        )?.receivedAt
+
+        return max(
+            peer.lastSeenAt,
+            locationUpdate ?? .distantPast
+        )
+    }
+
+    private func remoteLocation(
+        for peer: ReticulumDiscoveredPeer
+    ) -> RemoteNodeLocation? {
+        reticulumCore.remoteNodeLocations.first {
+            $0.key.caseInsensitiveCompare(
+                peer.destinationHash
+            ) == .orderedSame
+        }?.value
+    }
+
+    private func displayName(
+        for peer: ReticulumDiscoveredPeer
+    ) -> String {
+        contactStore.contact(
+            for: peer.destinationHash
+        )?.displayName ?? peer.resolvedDisplayName
     }
 }
 
