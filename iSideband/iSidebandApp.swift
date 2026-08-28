@@ -40,9 +40,17 @@ struct iSidebandApp: App {
                     )
                     RNodeLiveActivityManager.shared.configure(bluetooth: bluetooth)
                     RNodeLiveActivityManager.shared.setAppIsActive(scenePhase == .active)
+                    bluetooth.setAppIsActive(scenePhase == .active)
+                    ReticulumCoreBridge.shared.setAppIsActive(
+                        scenePhase == .active
+                    )
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     RNodeLiveActivityManager.shared.setAppIsActive(newPhase == .active)
+                    bluetooth.setAppIsActive(newPhase == .active)
+                    ReticulumCoreBridge.shared.setAppIsActive(
+                        newPhase == .active
+                    )
                 }
         }
     }

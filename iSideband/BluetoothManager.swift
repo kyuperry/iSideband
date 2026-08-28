@@ -89,6 +89,10 @@ final class BluetoothManager:
     private var batteryCapabilityTask: Task<Void, Never>?
     private var pendingRNodeWriteChunks: [Data] = []
     private var pendingRNodeWriteHead = 0
+    private let maximumPendingRNodeWriteChunks = 4_096
+    private let maximumRNodeWritesPerDrain = 32
+    private let maximumReceivedDataBytes = 64 * 1_024
+    private var appIsActive = true
     private let batteryNotificationMilestones = [50, 25]
     private var sentBatteryMilestones = Set<Int>()
     private var lastBatteryNotificationPercent: Int?
@@ -290,6 +294,22 @@ final class BluetoothManager:
             return
         }
 
+        let requiredChunks = Int(
+            ceil(Double(escaped.count) / Double(maximumLength))
+        )
+        let queuedChunks = pendingRNodeWriteChunks.count -
+            pendingRNodeWriteHead
+        guard queuedChunks + requiredChunks <=
+                maximumPendingRNodeWriteChunks else {
+            connectionMessage =
+                "RNode is busy — outgoing traffic is being retried"
+            privacySafeLog(
+                "RNode BLE backpressure rejected a write; queued chunks:",
+                queuedChunks
+            )
+            return
+        }
+
         var offset = 0
 
         while offset < escaped.count {
@@ -307,6 +327,50 @@ final class BluetoothManager:
         drainRNodeWriteQueue()
     }
 
+    func setAppIsActive(_ isActive: Bool) {
+        appIsActive = isActive
+        if !isActive {
+            reconnectTask?.cancel()
+            reconnectTask = nil
+            rssiTimer?.invalidate()
+            rssiTimer = nil
+            batteryTelemetryTimer?.invalidate()
+            batteryTelemetryTimer = nil
+            batteryCapabilityTask?.cancel()
+            batteryCapabilityTask = nil
+            return
+        }
+
+        guard let connectedPeripheral,
+              connectedPeripheral.state == .connected else {
+            if let reconnectPeripheral,
+               !manualDisconnectRequested {
+                scheduleReconnect(to: reconnectPeripheral)
+            }
+            return
+        }
+        connectedPeripheral.readRSSI()
+        startRSSIPolling(for: connectedPeripheral)
+        startBatteryTelemetryPolling()
+        drainRNodeWriteQueue()
+    }
+
+    private func startRSSIPolling(for peripheral: CBPeripheral) {
+        rssiTimer?.invalidate()
+        guard appIsActive else {
+            rssiTimer = nil
+            return
+        }
+        rssiTimer = Timer.scheduledTimer(
+            withTimeInterval: 2.0,
+            repeats: true
+        ) { _ in
+            guard peripheral.state == .connected else { return }
+            peripheral.readRSSI()
+        }
+        rssiTimer?.tolerance = 0.25
+    }
+
     private func drainRNodeWriteQueue() {
         guard pendingRNodeWriteHead < pendingRNodeWriteChunks.count,
               let connectedPeripheral,
@@ -316,7 +380,9 @@ final class BluetoothManager:
             return
         }
 
-        while connectedPeripheral.canSendWriteWithoutResponse,
+        var writesRemaining = maximumRNodeWritesPerDrain
+        while writesRemaining > 0,
+              connectedPeripheral.canSendWriteWithoutResponse,
               pendingRNodeWriteHead < pendingRNodeWriteChunks.count {
             let chunk = pendingRNodeWriteChunks[pendingRNodeWriteHead]
             pendingRNodeWriteHead += 1
@@ -326,6 +392,7 @@ final class BluetoothManager:
                 type: .withoutResponse
             )
             bluetoothBytesWritten += chunk.count
+            writesRemaining -= 1
         }
 
         if pendingRNodeWriteHead == pendingRNodeWriteChunks.count {
@@ -335,6 +402,15 @@ final class BluetoothManager:
                   pendingRNodeWriteHead * 2 > pendingRNodeWriteChunks.count {
             pendingRNodeWriteChunks.removeFirst(pendingRNodeWriteHead)
             pendingRNodeWriteHead = 0
+        }
+
+        if writesRemaining == 0,
+           connectedPeripheral.canSendWriteWithoutResponse,
+           pendingRNodeWriteHead < pendingRNodeWriteChunks.count {
+            Task { @MainActor [weak self] in
+                await Task.yield()
+                self?.drainRNodeWriteQueue()
+            }
         }
     }
 
@@ -547,6 +623,7 @@ final class BluetoothManager:
         to peripheral: CBPeripheral
     ) {
         guard PacketInterfaceManager.shared.isActive(.bluetoothRNode),
+              appIsActive,
               !manualDisconnectRequested,
               centralManager.state == .poweredOn,
               reconnectAttempt <
@@ -891,6 +968,7 @@ final class BluetoothManager:
         batteryCapabilityTask?.cancel()
         batteryTelemetryAvailable = nil
         requestBatteryTelemetry()
+        guard appIsActive else { return }
         batteryTelemetryTimer = Timer.scheduledTimer(
             withTimeInterval: 30,
             repeats: true
@@ -899,6 +977,7 @@ final class BluetoothManager:
                 self?.requestBatteryTelemetry()
             }
         }
+        batteryTelemetryTimer?.tolerance = 3
         batteryCapabilityTask = Task { [weak self] in
             try? await Task.sleep(for: .seconds(45))
             guard !Task.isCancelled,
@@ -1277,17 +1356,7 @@ final class BluetoothManager:
             peripheral.discoverServices(nil)
             peripheral.readRSSI()
 
-            rssiTimer?.invalidate()
-            rssiTimer = Timer.scheduledTimer(
-                withTimeInterval: 2.0,
-                repeats: true
-            ) { _ in
-                guard peripheral.state ==
-                        .connected else {
-                    return
-                }
-                peripheral.readRSSI()
-            }
+            startRSSIPolling(for: peripheral)
         }
     }
 
@@ -1522,6 +1591,11 @@ extension BluetoothManager: CBPeripheralDelegate {
                 rnodeNotifyCharacteristic?.uuid {
                 bluetoothBytesReceived += data.count
                 receivedData.append(data)
+                if receivedData.count > maximumReceivedDataBytes * 2 {
+                    receivedData = Data(
+                        receivedData.suffix(maximumReceivedDataBytes)
+                    )
+                }
 
                 let frames = frameAssembler.append(data)
 

@@ -43,9 +43,12 @@ final class MessageDatabase: @unchecked Sendable {
                 closeDatabase()
                 return
             }
-            sqlite3_busy_timeout(database, 5_000)
+            // UI-facing stores currently perform short synchronous reads and
+            // writes. Never let lock contention stall the main actor for
+            // several seconds; WAL makes a short retry window sufficient.
+            sqlite3_busy_timeout(database, 250)
             guard execute("PRAGMA journal_mode=WAL;"),
-                  execute("PRAGMA synchronous=FULL;"),
+                  execute("PRAGMA synchronous=NORMAL;"),
                   execute("PRAGMA foreign_keys=ON;"),
                   execute(
                     """

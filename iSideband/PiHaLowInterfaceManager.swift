@@ -118,7 +118,8 @@ final class PiHaLowInterfaceManager: ObservableObject {
     @Published private(set) var state:
         ConnectionState = .disconnected
 
-    private var stateTimer: Timer?
+    private var connectionTask: Task<Void, Never>?
+    private var stateMonitorTask: Task<Void, Never>?
 
     private init() {}
 
@@ -141,44 +142,53 @@ final class PiHaLowInterfaceManager: ObservableObject {
             return
         }
 
-        guard ReticulumCoreBridge.shared.connectRaspberryPi(
-            host: cleanedHost,
-            port: portNumber
-        ) else {
-            state = .failed("Reticulum TCP interface could not start")
-            return
-        }
-
         state = .connecting
-        startStateMonitoring()
+        connectionTask = Task { [weak self] in
+            let connected = await ReticulumCoreBridge.shared
+                .connectRaspberryPiAsync(
+                    host: cleanedHost,
+                    port: portNumber
+                )
+            guard !Task.isCancelled, let self else { return }
+            guard connected else {
+                state = .failed(
+                    "Reticulum TCP interface could not start"
+                )
+                return
+            }
+            startStateMonitoring()
+        }
     }
 
     func disconnect() {
-        stateTimer?.invalidate()
-        stateTimer = nil
-        ReticulumCoreBridge.shared.disconnectRaspberryPi()
+        connectionTask?.cancel()
+        connectionTask = nil
+        stateMonitorTask?.cancel()
+        stateMonitorTask = nil
         state = .disconnected
+        Task {
+            await ReticulumCoreBridge.shared.disconnectRaspberryPiAsync()
+        }
     }
 
     private func startStateMonitoring() {
-        stateTimer?.invalidate()
-        stateTimer = Timer.scheduledTimer(
-            withTimeInterval: 0.75,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
-                switch ReticulumCoreBridge.shared
-                    .raspberryPiConnectionState {
+        stateMonitorTask?.cancel()
+        stateMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let coreState = await ReticulumCoreBridge.shared
+                    .raspberryPiConnectionStateAsync()
+                guard !Task.isCancelled, let self else { return }
+                switch coreState {
                 case 2:
-                    self.state = .connected
+                    state = .connected
                 case 1:
-                    self.state = .connecting
+                    state = .connecting
                 default:
-                    self.state = .disconnected
+                    state = .disconnected
+                    return
                 }
+                try? await Task.sleep(for: .milliseconds(750))
             }
         }
-        stateTimer?.tolerance = 0.15
     }
 }

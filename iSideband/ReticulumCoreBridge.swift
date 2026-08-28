@@ -200,8 +200,13 @@ final class ReticulumCoreBridge: ObservableObject {
         label: "com.kyleperry.iSideband.reticulum.inbound",
         qos: .userInitiated
     )
+    private let outboundCoreQueue = DispatchQueue(
+        label: "com.kyleperry.iSideband.reticulum.outbound",
+        qos: .userInitiated
+    )
     private weak var bluetooth: BluetoothManager?
     private var routeRefreshTimer: Timer?
+    private var appIsActive = true
     private var lastAutomaticAnnounce: Date?
     private let remoteNodeLocationsStorageKey =
         "isideband.reticulum.remoteNodeLocations"
@@ -339,12 +344,17 @@ final class ReticulumCoreBridge: ObservableObject {
         guard handle != 0 else { return }
         let useBluetooth = PacketInterfaceManager.shared
             .isActive(.bluetoothRNode)
-        _ = runcore_set_raw_interface_enabled(
-            handle,
-            useBluetooth ? 1 : 0
-        )
-        if !PacketInterfaceManager.shared.isActive(.raspberryPi) {
-            _ = runcore_disconnect_tcp_interface(handle)
+        let useRaspberryPi = PacketInterfaceManager.shared
+            .isActive(.raspberryPi)
+        let activeHandle = handle
+        outboundCoreQueue.async {
+            _ = runcore_set_raw_interface_enabled(
+                activeHandle,
+                useBluetooth ? 1 : 0
+            )
+            if !useRaspberryPi {
+                _ = runcore_disconnect_tcp_interface(activeHandle)
+            }
         }
     }
 
@@ -359,14 +369,60 @@ final class ReticulumCoreBridge: ObservableObject {
         return result == 0
     }
 
+    func connectRaspberryPiAsync(
+        host: String,
+        port: UInt16
+    ) async -> Bool {
+        guard handle != 0,
+              PacketInterfaceManager.shared.isActive(.raspberryPi) else {
+            return false
+        }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                let result = host.withCString {
+                    runcore_connect_tcp_interface(
+                        activeHandle,
+                        $0,
+                        Int32(port)
+                    ) == 0
+                }
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
     func disconnectRaspberryPi() {
         guard handle != 0 else { return }
         _ = runcore_disconnect_tcp_interface(handle)
     }
 
+    func disconnectRaspberryPiAsync() async {
+        guard handle != 0 else { return }
+        let activeHandle = handle
+        await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                _ = runcore_disconnect_tcp_interface(activeHandle)
+                continuation.resume()
+            }
+        }
+    }
+
     var raspberryPiConnectionState: Int32 {
         guard handle != 0 else { return 0 }
         return runcore_tcp_interface_state(handle)
+    }
+
+    func raspberryPiConnectionStateAsync() async -> Int32 {
+        guard handle != 0 else { return 0 }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                continuation.resume(
+                    returning: runcore_tcp_interface_state(activeHandle)
+                )
+            }
+        }
     }
 
     func feed(_ packet: Data) {
@@ -470,6 +526,16 @@ final class ReticulumCoreBridge: ObservableObject {
         )
     }
 
+    func setAppIsActive(_ isActive: Bool) {
+        appIsActive = isActive
+        if isActive {
+            startRouteMaintenance()
+        } else {
+            routeRefreshTimer?.invalidate()
+            routeRefreshTimer = nil
+        }
+    }
+
     func send(
         text: String,
         destinationHash: String,
@@ -492,6 +558,34 @@ final class ReticulumCoreBridge: ObservableObject {
                         clientIDString
                     ) == 0
                 }
+            }
+        }
+    }
+
+    func sendAsync(
+        text: String,
+        destinationHash: String,
+        clientID: UUID,
+        direct: Bool = true
+    ) async -> Bool {
+        guard handle != 0 else { return false }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                let result = destinationHash.withCString { destination in
+                    text.withCString { content in
+                        clientID.uuidString.withCString { identifier in
+                            runcore_send_text(
+                                activeHandle,
+                                destination,
+                                content,
+                                direct ? 1 : 0,
+                                identifier
+                            ) == 0
+                        }
+                    }
+                }
+                continuation.resume(returning: result)
             }
         }
     }
@@ -575,6 +669,49 @@ final class ReticulumCoreBridge: ObservableObject {
         )
 
         return result == 0
+    }
+
+    func sendAttachmentAsync(
+        at fileURL: URL,
+        name: String,
+        mimeType: String,
+        caption: String,
+        destinationHash: String,
+        clientID: UUID
+    ) async -> Bool {
+        guard handle != 0,
+              FileManager.default.fileExists(atPath: fileURL.path) else {
+            return false
+        }
+        let activeHandle = handle
+        let path = fileURL.path
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                let result = destinationHash.withCString { destination in
+                    caption.withCString { content in
+                        path.withCString { filePath in
+                            name.withCString { filename in
+                                mimeType.withCString { mime in
+                                    clientID.uuidString.withCString {
+                                        identifier in
+                                        runcore_send_attachment(
+                                            activeHandle,
+                                            destination,
+                                            content,
+                                            filePath,
+                                            filename,
+                                            mime,
+                                            identifier
+                                        ) == 0
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                continuation.resume(returning: result)
+            }
+        }
     }
 
     func receiveStatus(
@@ -858,6 +995,10 @@ final class ReticulumCoreBridge: ObservableObject {
 
     private func startRouteMaintenance() {
         routeRefreshTimer?.invalidate()
+        guard appIsActive else {
+            routeRefreshTimer = nil
+            return
+        }
         routeRefreshTimer = Timer.scheduledTimer(
             withTimeInterval: 30,
             repeats: true
@@ -866,6 +1007,7 @@ final class ReticulumCoreBridge: ObservableObject {
                 self?.checkScheduledAutomaticAnnounce()
             }
         }
+        routeRefreshTimer?.tolerance = 3
         checkScheduledAutomaticAnnounce()
     }
 

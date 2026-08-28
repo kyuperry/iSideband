@@ -10,6 +10,8 @@
 		A10000010000000000000001 /* ThirdParty/Runcore/Runcore.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */; };
 		B20000010000000000000001 /* iSidebandLiveActivity.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B20000020000000000000002 /* iSidebandLiveActivity.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		B20000030000000000000003 /* iSideband/RNodeLiveActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000040000000000000004 /* iSideband/RNodeLiveActivityAttributes.swift */; };
+		C30000010000000000000001 /* iSideband/FilePreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000020000000000000002 /* iSideband/FilePreview.swift */; };
+		C30000030000000000000003 /* iSideband/NightVisionMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = C30000040000000000000004 /* iSideband/NightVisionMode.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -42,13 +44,17 @@
 		A10000020000000000000002 /* ThirdParty/Runcore/Runcore.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = ThirdParty/Runcore/Runcore.xcframework; sourceTree = SOURCE_ROOT; };
 		B20000020000000000000002 /* iSidebandLiveActivity.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = iSidebandLiveActivity.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000040000000000000004 /* iSideband/RNodeLiveActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iSideband/RNodeLiveActivityAttributes.swift; sourceTree = SOURCE_ROOT; };
+		C30000020000000000000002 /* iSideband/FilePreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iSideband/FilePreview.swift; sourceTree = SOURCE_ROOT; };
+		C30000040000000000000004 /* iSideband/NightVisionMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = iSideband/NightVisionMode.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		0BE838AE3012F9B200F57795 /* Exceptions for "iSideband" folder in "iSideband" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				FilePreview.swift,
 				Info.plist,
+				NightVisionMode.swift,
 			);
 			target = 0B11BCE5300DC37B00FC94FB /* iSideband */;
 		};
@@ -124,6 +130,8 @@
 			isa = PBXGroup;
 			children = (
 				B20000040000000000000004 /* iSideband/RNodeLiveActivityAttributes.swift */,
+				C30000020000000000000002 /* iSideband/FilePreview.swift */,
+				C30000040000000000000004 /* iSideband/NightVisionMode.swift */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -245,6 +253,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C30000010000000000000001 /* iSideband/FilePreview.swift in Sources */,
+				C30000030000000000000003 /* iSideband/NightVisionMode.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

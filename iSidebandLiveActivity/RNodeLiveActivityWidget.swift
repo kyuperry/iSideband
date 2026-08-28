@@ -76,17 +76,7 @@ struct RNodeLiveActivityWidget: Widget {
     }
 
     private func byteCountString(_ bytes: Int) -> String {
-        normalizedByteCountString(ByteCountFormatter.string(
-            fromByteCount: Int64(bytes),
-            countStyle: .file
-        ))
-    }
-
-    private func normalizedByteCountString(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: " bytes", with: " B")
-            .replacingOccurrences(of: " byte", with: " B")
-            .replacingOccurrences(of: " kB", with: " KB")
+        liveActivityByteCountString(bytes)
     }
 
     private func rssiString(_ rssi: Int?) -> String {
@@ -223,17 +213,7 @@ private struct RNodeLockScreenLiveActivityView: View {
     }
 
     private func byteCountString(_ bytes: Int) -> String {
-        normalizedByteCountString(ByteCountFormatter.string(
-            fromByteCount: Int64(bytes),
-            countStyle: .file
-        ))
-    }
-
-    private func normalizedByteCountString(_ value: String) -> String {
-        value
-            .replacingOccurrences(of: " bytes", with: " B")
-            .replacingOccurrences(of: " byte", with: " B")
-            .replacingOccurrences(of: " kB", with: " KB")
+        liveActivityByteCountString(bytes)
     }
 
     private func rssiString(_ rssi: Int?) -> String {
@@ -248,6 +228,16 @@ private struct RNodeLockScreenLiveActivityView: View {
         default: .white.opacity(0.72)
         }
     }
+}
+
+private func liveActivityByteCountString(_ bytes: Int) -> String {
+    let nonnegativeBytes = max(0, bytes)
+    guard nonnegativeBytes >= 1_000 else {
+        return "\(nonnegativeBytes) B"
+    }
+
+    let kilobytes = Double(nonnegativeBytes) / 1_000
+    return String(format: "%.1f KB", kilobytes)
 }
 
 private struct LiveActivityRSSIBars: View {

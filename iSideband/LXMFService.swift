@@ -241,8 +241,8 @@ final class LXMFService: ObservableObject {
                 """
             )
 
-            let accepted =
-                ReticulumCoreBridge.shared.sendAttachment(
+            let accepted = await
+                ReticulumCoreBridge.shared.sendAttachmentAsync(
                     at: attachmentURL,
                     name: attachment.name,
                     mimeType: attachment.mimeType,
@@ -265,7 +265,7 @@ final class LXMFService: ObservableObject {
             return
         }
 
-        if ReticulumCoreBridge.shared.send(
+        if await ReticulumCoreBridge.shared.sendAsync(
             text: message.text,
             destinationHash:
                 message.peer.destinationHash,

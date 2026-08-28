@@ -76,6 +76,7 @@ struct MessagesView: View {
     @State private var showingPhotoPicker = false
     @State private var showingFilePicker = false
     @State private var showingVoiceRecorder = false
+    @State private var recorderUsesPushToTalk = false
     @State private var showingAnnounceConfirmation = false
     @State private var announceButtonText = "Announce"
     @State private var isSendingAnnounce = false
@@ -290,7 +291,7 @@ struct MessagesView: View {
             Text("Announcement sent.")
         }
         .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceNoteRecorderView(isPushToTalk: pushToTalkEnabled) { url in
+            VoiceNoteRecorderView(isPushToTalk: recorderUsesPushToTalk) { url in
                 sendVoiceNote(at: url)
             }
         }
@@ -368,7 +369,8 @@ struct MessagesView: View {
             onFileTapped: {
                 showingFilePicker = true
             },
-            onVoiceTapped: {
+            onPushToTalkTapped: {
+                recorderUsesPushToTalk = true
                 showingVoiceRecorder = true
             },
             onStatusTapped: { statusText in
@@ -649,7 +651,7 @@ struct MessagesView: View {
 
         case .transferring:
             return transferStatus(
-                prefix: "Transferring",
+                prefix: "Sending",
                 attachment: queuedMessage.attachment,
                 startedAt: queuedMessage.transmissionStartedAt,
                 now: date

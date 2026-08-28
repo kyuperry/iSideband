@@ -894,7 +894,7 @@ struct GroupChatView: View {
         if attempts.contains(where: { $0.status == .establishingLink }) {
             return "Establishing link"
         }
-        if attempts.contains(where: { $0.status == .transferring }) { return "Transferring" }
+        if attempts.contains(where: { $0.status == .transferring }) { return "Sending" }
         if attempts.contains(where: { $0.status.isActiveTransfer }) { return "Sending" }
         if sent == attempts.count { return "Sent" }
         if sent > 0 { return "Sent \(sent)/\(attempts.count)" }

@@ -17,6 +17,7 @@ struct RNodeHomeView: View {
     @State private var liveActivityStatusMessage: String?
     @State private var showLiveActivityConfirmation = false
     @State private var requestedLiveActivityIsRunning = false
+    @State private var announceStatusMessage: String?
 
     var body: some View {
         VStack(spacing: 16) {
@@ -61,18 +62,40 @@ struct RNodeHomeView: View {
             }
         }
         .overlay(alignment: .topTrailing) {
-            if showNightVisionSlider {
-                nightVisionSlider
-                    .padding(.top, 4)
-                    .padding(.trailing, 12)
-                    .transition(.scale(scale: 0.92, anchor: .topTrailing)
-                        .combined(with: .opacity))
-                    .zIndex(1)
+            VStack(alignment: .trailing, spacing: 8) {
+                if bluetooth.connectedDeviceID != nil {
+                    Button {
+                        LXMFManager.shared.announceIdentity()
+                        showAnnounceConfirmation()
+                    } label: {
+                        Label(
+                            "Announce",
+                            systemImage: "antenna.radiowaves.left.and.right"
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .nightVisionProminentButton()
+                    .accessibilityHint(
+                        "Announces your LXMF identity over the connected RNode"
+                    )
+                }
+
+                if showNightVisionSlider {
+                    nightVisionSlider
+                        .transition(
+                            .scale(scale: 0.92, anchor: .topTrailing)
+                                .combined(with: .opacity)
+                        )
+                }
             }
+            .padding(.top, 4)
+            .padding(.trailing, 12)
+            .zIndex(1)
         }
         .overlay(alignment: .bottom) {
-            if let liveActivityStatusMessage {
-                Text(liveActivityStatusMessage)
+            if let statusMessage =
+                announceStatusMessage ?? liveActivityStatusMessage {
+                Text(statusMessage)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 16)
@@ -140,6 +163,21 @@ struct RNodeHomeView: View {
                 Another RNode is already connected. This will disconnect it and connect to the selected RNode.
                 """
             )
+        }
+    }
+
+    private func showAnnounceConfirmation() {
+        withAnimation {
+            announceStatusMessage = "Identity announcement requested"
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                withAnimation {
+                    announceStatusMessage = nil
+                }
+            }
         }
     }
 

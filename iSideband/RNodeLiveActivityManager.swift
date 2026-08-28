@@ -18,6 +18,10 @@ final class RNodeLiveActivityManager {
     private var appIsActive = false
     private var connectionStartedAt: Date?
     private var userAllowsActivity = true
+    private var startedActivityForCurrentConnection = false
+    private var baselineDeviceID: UUID?
+    private var reticulumBytesInBaseline: Int?
+    private var reticulumBytesOutBaseline: Int?
 
     private init() {}
 
@@ -60,6 +64,10 @@ final class RNodeLiveActivityManager {
         }
 
         userAllowsActivity = true
+        startedActivityForCurrentConnection = false
+        reticulumBytesInBaseline = bluetooth?.reticulumBytesReceived
+        reticulumBytesOutBaseline = bluetooth?.reticulumBytesTransmitted
+        baselineDeviceID = bluetooth?.connectedDeviceID
         scheduleRefresh(immediately: true)
         return .started
     }
@@ -87,6 +95,10 @@ final class RNodeLiveActivityManager {
             let finalStart = connectionStartedAt ?? Date()
             connectionStartedAt = nil
             userAllowsActivity = true
+            startedActivityForCurrentConnection = false
+            baselineDeviceID = nil
+            reticulumBytesInBaseline = nil
+            reticulumBytesOutBaseline = nil
             await endActivities(uptimeStartedAt: finalStart)
             return
         }
@@ -97,9 +109,31 @@ final class RNodeLiveActivityManager {
 
         if connectionStartedAt == nil { connectionStartedAt = Date() }
         let rssi = bluetooth.lastRSSI
+        let currentBytesIn = bluetooth.reticulumBytesReceived
+        let currentBytesOut = bluetooth.reticulumBytesTransmitted
+        if baselineDeviceID != bluetooth.connectedDeviceID {
+            baselineDeviceID = bluetooth.connectedDeviceID
+            reticulumBytesInBaseline = currentBytesIn
+            reticulumBytesOutBaseline = currentBytesOut
+        }
+        let sessionBytesIn = bytesSinceBaseline(
+            current: currentBytesIn,
+            baseline: reticulumBytesInBaseline
+        )
+        let sessionBytesOut = bytesSinceBaseline(
+            current: currentBytesOut,
+            baseline: reticulumBytesOutBaseline
+        )
+        if reticulumBytesInBaseline == nil {
+            reticulumBytesInBaseline = currentBytesIn
+        }
+        if reticulumBytesOutBaseline == nil {
+            reticulumBytesOutBaseline = currentBytesOut
+        }
+
         let state = RNodeLiveActivityAttributes.ContentState(
-            reticulumBytesIn: bluetooth.reticulumBytesReceived,
-            reticulumBytesOut: bluetooth.reticulumBytesTransmitted,
+            reticulumBytesIn: sessionBytesIn,
+            reticulumBytesOut: sessionBytesOut,
             uptimeStartedAt: uptimeStartDate(for: bluetooth),
             isReticulumAvailable: bluetooth.radioReady,
             bluetoothRSSI: rssi,
@@ -113,7 +147,9 @@ final class RNodeLiveActivityManager {
 
         if let activity = Activity<RNodeLiveActivityAttributes>.activities.first {
             await activity.update(content)
-        } else if appIsActive && ActivityAuthorizationInfo().areActivitiesEnabled {
+        } else if appIsActive &&
+                    !startedActivityForCurrentConnection &&
+                    ActivityAuthorizationInfo().areActivitiesEnabled {
             do {
                 _ = try Activity.request(
                     attributes: RNodeLiveActivityAttributes(
@@ -122,10 +158,16 @@ final class RNodeLiveActivityManager {
                     content: content,
                     pushType: nil
                 )
+                startedActivityForCurrentConnection = true
             } catch {
                 privacySafeLog("RNode Live Activity could not start:", error.localizedDescription)
             }
         }
+    }
+
+    private func bytesSinceBaseline(current: Int, baseline: Int?) -> Int {
+        guard let baseline, current >= baseline else { return 0 }
+        return current - baseline
     }
 
     private func uptimeStartDate(for bluetooth: BluetoothManager) -> Date {
@@ -139,7 +181,7 @@ final class RNodeLiveActivityManager {
         let finalContent = ActivityContent(
             state: RNodeLiveActivityAttributes.ContentState(
                 reticulumBytesIn: bluetooth?.reticulumBytesReceived ?? 0,
-                reticulumBytesOut: bluetooth?.reticulumBytesTransmitted ?? 0,
+                reticulumBytesOut: 0,
                 uptimeStartedAt: uptimeStartedAt,
                 isReticulumAvailable: false,
                 bluetoothRSSI: bluetooth?.lastRSSI,

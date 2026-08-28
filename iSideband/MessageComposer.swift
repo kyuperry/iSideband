@@ -28,7 +28,7 @@ struct MessageComposer: View {
     let showsPushToTalk: Bool
     let onPhotoTapped: () -> Void
     let onFileTapped: () -> Void
-    let onVoiceTapped: () -> Void
+    let onPushToTalkTapped: () -> Void
     let onStatusTapped: (String) -> Void
     let onSendTapped: () -> Void
 
@@ -66,6 +66,30 @@ struct MessageComposer: View {
                 attachmentPicker
                     .presentationCompactAdaptation(.popover)
             }
+
+            Button {
+                onPushToTalkTapped()
+            } label: {
+                Image(systemName: "mic.fill")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(
+                        isNightVisionEnabled
+                            ? NightVisionPalette.primary
+                            : Color.primary
+                    )
+                    .frame(width: 42, height: 42)
+                    .background(
+                        Circle()
+                            .fill(
+                                isNightVisionEnabled
+                                    ? NightVisionPalette.surface
+                                    : Color.secondary.opacity(0.15)
+                            )
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Push to Talk")
+            .accessibilityHint("Opens the push-to-talk recorder")
 
             TextField(
                 "Message",
@@ -134,12 +158,6 @@ struct MessageComposer: View {
             }
             attachmentButton("File", systemImage: "doc.fill") {
                 onFileTapped()
-            }
-            attachmentButton(
-                showsPushToTalk ? "Push to Talk" : "Voice",
-                systemImage: showsPushToTalk ? "mic.fill" : "waveform"
-            ) {
-                onVoiceTapped()
             }
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) {
@@ -247,7 +265,7 @@ private struct MessageComposerPreview: View {
             showsPushToTalk: true,
             onPhotoTapped: { },
             onFileTapped: { },
-            onVoiceTapped: { },
+            onPushToTalkTapped: { },
             onStatusTapped: { _ in },
             onSendTapped: { }
         )
