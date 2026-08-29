@@ -3,6 +3,7 @@ import SwiftUI
 enum MainAppPage: String, CaseIterable {
     case rnode = "RNode"
     case menu = "Menu"
+    case voiceCall = "Call"
     case messages = "Messages"
     case map = "Map"
 
@@ -13,6 +14,9 @@ enum MainAppPage: String, CaseIterable {
 
         case .menu:
             return "square.grid.2x2.fill"
+
+        case .voiceCall:
+            return "phone.fill"
 
         case .messages:
             return "message.fill"
@@ -47,6 +51,9 @@ struct ContentView: View {
 
                 case .menu:
                     MainMenuView(bluetooth: bluetooth)
+
+                case .voiceCall:
+                    VoiceCallView(bluetooth: bluetooth)
 
                 case .messages:
                     ConversationsView(bluetooth: bluetooth)
@@ -140,11 +147,13 @@ struct ContentView: View {
                 } label: {
                     VStack(spacing: 4) {
                         Image(systemName: page.icon)
-                            .font(.system(size: 17))
+                            .font(.system(size: 16))
 
                         Text(page.rawValue)
-                            .font(.caption2)
+                            .font(.system(size: 10))
                             .fontWeight(.semibold)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
                     }
                     .foregroundStyle(
                         selectedPage == page
@@ -152,8 +161,8 @@ struct ContentView: View {
                             : Color.primary
                     )
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 7)
                     .background {
                         if selectedPage == page {
                             Capsule()

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>iSideband uses the microphone for voice calls and voice messages.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>iSideband uses the camera to scan LXMF paper-message QR codes.</string>
 	<key>NSSupportsLiveActivities</key>
