@@ -3,6 +3,7 @@ import Foundation
 struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
     let id: UUID
     let destinationHash: String
+    let identityHash: String?
     let displayName: String?
     let announcedHops: UInt8?
     let firstSeenAt: Date
@@ -11,6 +12,7 @@ struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
     init(
         id: UUID = UUID(),
         destinationHash: String,
+        identityHash: String? = nil,
         displayName: String?,
         announcedHops: UInt8? = nil,
         firstSeenAt: Date = Date(),
@@ -22,6 +24,10 @@ struct ReticulumDiscoveredPeer: Identifiable, Codable, Hashable {
             .trimmingCharacters(
                 in: .whitespacesAndNewlines
             )
+            .lowercased()
+
+        self.identityHash = identityHash?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
 
         self.displayName = displayName?

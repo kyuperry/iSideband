@@ -1691,6 +1691,16 @@ extension BluetoothManager: CBPeripheralDelegate {
                                     }
 
                                     guard decision != .duplicate else {
+                                        // A repeated announce can carry the identity
+                                        // needed by LXST even when the packet tracker
+                                        // suppresses the notification.
+                                        ReticulumDiscoveredPeerStore.shared.discover(
+                                            destinationHash: announce.destinationHashHex,
+                                            identityHash: announce.identityHashHex,
+                                            displayName: announce.displayName,
+                                            announcedHops: reticulumPacket.hops,
+                                            seenAt: announce.receivedAt
+                                        )
                                         privacySafeLog(
                                             "Ignored duplicate Reticulum announce"
                                         )
@@ -1707,6 +1717,7 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                                     ReticulumDiscoveredPeerStore.shared.discover(
                                         destinationHash: announce.destinationHashHex,
+                                        identityHash: announce.identityHashHex,
                                         displayName: announce.displayName,
                                         announcedHops: reticulumPacket.hops,
                                         seenAt: announce.receivedAt

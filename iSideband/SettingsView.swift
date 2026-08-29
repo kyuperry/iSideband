@@ -550,21 +550,26 @@ struct SettingsView: View {
             Toggle(isOn: bluetoothInterfaceBinding) {
                 Label("Bluetooth RNode", systemImage: "bluetooth")
             }
-            .disabled(packetInterfaces.activeInterface == .raspberryPi)
+
+            Toggle(isOn: wifiLANInterfaceBinding) {
+                Label("Wi-Fi / Local Network", systemImage: "network")
+            }
 
             Toggle(isOn: raspberryPiInterfaceBinding) {
-                Label("Raspberry Pi", systemImage: "network")
+                Label(
+                    "Raspberry Pi / Wi-Fi HaLow",
+                    systemImage: "desktopcomputer"
+                )
             }
-            .disabled(packetInterfaces.activeInterface == .bluetoothRNode)
 
             if packetInterfaces.activeInterface != .none {
                 Text(
-                    "Turn off \(packetInterfaces.activeInterface.title) before enabling the other packet interface."
+                    "All three interfaces can operate together for path diversity."
                 )
                 .font(.caption)
                 .foregroundStyle(.secondary)
             } else {
-                Text("Both packet interfaces are off.")
+                Text("All packet interfaces are off.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -574,18 +579,27 @@ struct SettingsView: View {
 
     private var bluetoothInterfaceBinding: Binding<Bool> {
         Binding(
-            get: { packetInterfaces.activeInterface == .bluetoothRNode },
+            get: { packetInterfaces.isActive(.bluetoothRNode) },
             set: { enabled in
-                packetInterfaces.select(enabled ? .bluetoothRNode : .none)
+                packetInterfaces.setEnabled(.bluetoothRNode, enabled)
+            }
+        )
+    }
+
+    private var wifiLANInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.isActive(.wifiLocalNetwork) },
+            set: { enabled in
+                packetInterfaces.setEnabled(.wifiLocalNetwork, enabled)
             }
         )
     }
 
     private var raspberryPiInterfaceBinding: Binding<Bool> {
         Binding(
-            get: { packetInterfaces.activeInterface == .raspberryPi },
+            get: { packetInterfaces.isActive(.raspberryPi) },
             set: { enabled in
-                packetInterfaces.select(enabled ? .raspberryPi : .none)
+                packetInterfaces.setEnabled(.raspberryPi, enabled)
             }
         )
     }

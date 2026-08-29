@@ -14,6 +14,8 @@ typedef void (*runcore_log_cb)(void* user_data, int32_t level, const char* line)
 typedef void (*runcore_raw_tx_cb)(void* user_data, const uint8_t* data, int32_t len);
 typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type, int32_t has_location, double latitude, double longitude, double accuracy, int64_t location_timestamp);
 typedef void (*runcore_status_cb)(void* user_data, const char* client_id, const char* status);
+typedef void (*runcore_lxst_state_cb)(void* user_data, int32_t status, const char* remote_identity_hash);
+typedef void (*runcore_lxst_frame_cb)(void* user_data, int32_t codec, const uint8_t* data, int32_t len);
 
 // Set a global log callback (applies process-wide). Pass NULL to disable.
 void runcore_set_log_cb(runcore_log_cb cb, void* user_data);
@@ -38,6 +40,10 @@ int32_t runcore_connect_tcp_interface(runcore_handle_t handle, const char* host,
 int32_t runcore_disconnect_tcp_interface(runcore_handle_t handle);
 // 0 = disconnected, 1 = connecting/reconnecting, 2 = connected.
 int32_t runcore_tcp_interface_state(runcore_handle_t handle);
+int32_t runcore_connect_raspberry_pi_interface(runcore_handle_t handle, const char* host, int32_t port);
+int32_t runcore_disconnect_raspberry_pi_interface(runcore_handle_t handle);
+// 0 = disconnected, 1 = connecting/reconnecting, 2 = connected.
+int32_t runcore_raspberry_pi_interface_state(runcore_handle_t handle);
 int32_t runcore_announce(runcore_handle_t handle);
 int32_t runcore_set_announce_location(runcore_handle_t handle, double latitude, double longitude, double accuracy, int64_t timestamp, int32_t enabled);
 int32_t runcore_set_telemetry_time_enabled(runcore_handle_t handle, int32_t enabled);
@@ -45,6 +51,16 @@ int32_t runcore_send_text(runcore_handle_t handle, const char* destination, cons
 int32_t runcore_send_attachment(runcore_handle_t handle, const char* destination, const char* content, const char* file_path, const char* file_name, const char* mime_type, const char* client_id);
 int32_t runcore_set_inbound_cb(runcore_handle_t handle, runcore_inbound_cb cb, void* user_data);
 int32_t runcore_set_status_cb(runcore_handle_t handle, runcore_status_cb cb, void* user_data);
+
+// LXST telephony transport. Status values match LXST.Primitives.Telephony:
+// 0 busy, 1 rejected, 2 calling, 3 available, 4 ringing,
+// 5 connecting, 6 established. Codec values: 0 raw, 1 Opus, 2 Codec2.
+int32_t runcore_lxst_set_callbacks(runcore_handle_t handle, runcore_lxst_state_cb state_cb, runcore_lxst_frame_cb frame_cb, void* user_data);
+int32_t runcore_lxst_call(runcore_handle_t handle, const char* destination_hash, int32_t profile);
+int32_t runcore_lxst_answer(runcore_handle_t handle);
+int32_t runcore_lxst_hangup(runcore_handle_t handle, int32_t reject);
+int32_t runcore_lxst_send_frame(runcore_handle_t handle, int32_t codec, const uint8_t* data, int32_t len);
+int32_t runcore_lxst_announce(runcore_handle_t handle);
 // Ingest an lxm:// paper-message URI. Returns 0 when delivered locally,
 // 1 for a duplicate, 2 when addressed elsewhere, and -1 on invalid input.
 int32_t runcore_ingest_lxm_uri(runcore_handle_t handle, const char* uri);

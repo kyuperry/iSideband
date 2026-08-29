@@ -70,11 +70,15 @@ struct InterfacesView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject private var packetInterfaces =
         PacketInterfaceManager.shared
-    @ObservedObject private var piInterface =
+    @ObservedObject private var wifiLANInterface =
+        WiFiLANInterfaceManager.shared
+    @ObservedObject private var piHaLowInterface =
         PiHaLowInterfaceManager.shared
 
-    @AppStorage("raspberryPiHost") private var piHost = ""
-    @AppStorage("raspberryPiPort") private var piPort = "4242"
+    @AppStorage("wifiLANHost") private var wifiLANHost = ""
+    @AppStorage("wifiLANPort") private var wifiLANPort = "4242"
+    @AppStorage("raspberryPiHost") private var raspberryPiHost = ""
+    @AppStorage("raspberryPiPort") private var raspberryPiPort = "4242"
     @AppStorage("raspberryPiCameraStreamURL")
     private var piCameraStreamURL = ""
 
@@ -82,22 +86,21 @@ struct InterfacesView: View {
         Form {
             Section("Active Interface") {
                 Toggle("Bluetooth RNode", isOn: bluetoothInterfaceBinding)
-                    .disabled(
-                        packetInterfaces.activeInterface == .raspberryPi
-                    )
 
-                Toggle("Raspberry Pi", isOn: raspberryPiInterfaceBinding)
-                    .disabled(
-                        packetInterfaces.activeInterface == .bluetoothRNode
-                    )
+                Toggle("Wi-Fi / Local Network", isOn: wifiLANInterfaceBinding)
+
+                Toggle(
+                    "Raspberry Pi / Wi-Fi HaLow",
+                    isOn: raspberryPiInterfaceBinding
+                )
 
                 if packetInterfaces.activeInterface == .none {
-                    Text("Both packet interfaces are off.")
+                    Text("All packet interfaces are off.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else {
                     Text(
-                        "Turn off \(packetInterfaces.activeInterface.title) before enabling the other interface."
+                        "Bluetooth RNode, Wi-Fi/LAN and Raspberry Pi/Wi-Fi HaLow can operate together for path diversity."
                     )
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -119,36 +122,80 @@ struct InterfacesView: View {
                         : "Unavailable"
                 )
 
-                if packetInterfaces.activeInterface != .bluetoothRNode {
-                    Text("Disabled while Raspberry Pi is selected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
 
-            Section("Raspberry Pi Interface") {
-                TextField("Host or IP address", text: $piHost)
+            Section("Wi-Fi / Local Network Interface") {
+                TextField("Reticulum TCP host or IP address", text: $wifiLANHost)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
 
-                TextField("TCP port", text: $piPort)
+                TextField("TCP port", text: $wifiLANPort)
                     .keyboardType(.numberPad)
 
-                LabeledContent("Connection", value: piInterface.state.label)
+                LabeledContent("Connection", value: wifiLANInterface.state.label)
 
-                if piInterface.state == .connected || piInterface.state == .connecting {
+                if wifiLANInterface.state == .connected || wifiLANInterface.state == .connecting {
                     Button("Disconnect", role: .destructive) {
-                        piInterface.disconnect()
+                        wifiLANInterface.disconnect()
                     }
                 } else {
-                    Button("Connect to Raspberry Pi") {
-                        piInterface.connect(host: piHost, port: piPort)
+                    Button("Connect to Wi-Fi / Local Network") {
+                        wifiLANInterface.connect(
+                            host: wifiLANHost,
+                            port: wifiLANPort
+                        )
                     }
                     .disabled(
-                        packetInterfaces.activeInterface != .raspberryPi ||
-                        piHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        !packetInterfaces.isActive(.wifiLocalNetwork) ||
+                        wifiLANHost.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
                 }
+
+                Text(
+                    "Connects to any Reticulum TCP server on the local network. It is independent of Raspberry Pi camera features and can run alongside Bluetooth RNode."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("Raspberry Pi / Wi-Fi HaLow Interface") {
+                TextField("Raspberry Pi host or IP address", text: $raspberryPiHost)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+
+                TextField("Reticulum TCP port", text: $raspberryPiPort)
+                    .keyboardType(.numberPad)
+
+                LabeledContent(
+                    "Connection",
+                    value: piHaLowInterface.state.label
+                )
+
+                if piHaLowInterface.state == .connected
+                    || piHaLowInterface.state == .connecting {
+                    Button("Disconnect Raspberry Pi", role: .destructive) {
+                        piHaLowInterface.disconnect()
+                    }
+                } else {
+                    Button("Connect Raspberry Pi") {
+                        piHaLowInterface.connect(
+                            host: raspberryPiHost,
+                            port: raspberryPiPort
+                        )
+                    }
+                    .disabled(
+                        !packetInterfaces.isActive(.raspberryPi)
+                            || raspberryPiHost.trimmingCharacters(
+                                in: .whitespacesAndNewlines
+                            ).isEmpty
+                    )
+                }
+
+                Text(
+                    "A dedicated Reticulum TCP path to the Raspberry Pi over Ethernet, Wi-Fi or Wi-Fi HaLow. It remains independent of the generic Wi-Fi/LAN interface."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
             Section("Raspberry Pi Camera") {
@@ -193,9 +240,9 @@ struct InterfacesView: View {
 
     private var bluetoothInterfaceBinding: Binding<Bool> {
         Binding(
-            get: { packetInterfaces.activeInterface == .bluetoothRNode },
+            get: { packetInterfaces.isActive(.bluetoothRNode) },
             set: { enabled in
-                packetInterfaces.select(enabled ? .bluetoothRNode : .none)
+                packetInterfaces.setEnabled(.bluetoothRNode, enabled)
             }
         )
     }
@@ -213,11 +260,20 @@ struct InterfacesView: View {
         return url
     }
 
+    private var wifiLANInterfaceBinding: Binding<Bool> {
+        Binding(
+            get: { packetInterfaces.isActive(.wifiLocalNetwork) },
+            set: { enabled in
+                packetInterfaces.setEnabled(.wifiLocalNetwork, enabled)
+            }
+        )
+    }
+
     private var raspberryPiInterfaceBinding: Binding<Bool> {
         Binding(
-            get: { packetInterfaces.activeInterface == .raspberryPi },
+            get: { packetInterfaces.isActive(.raspberryPi) },
             set: { enabled in
-                packetInterfaces.select(enabled ? .raspberryPi : .none)
+                packetInterfaces.setEnabled(.raspberryPi, enabled)
             }
         )
     }

@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 struct ReticulumAnnounce: Identifiable, Codable, Hashable {
     let id: UUID
@@ -45,6 +46,12 @@ struct ReticulumAnnounce: Identifiable, Codable, Hashable {
 
     var destinationHashHex: String {
         destinationHash
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
+    var identityHashHex: String {
+        Data(SHA256.hash(data: publicKey).prefix(16))
             .map { String(format: "%02x", $0) }
             .joined()
     }

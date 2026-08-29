@@ -7,6 +7,8 @@ typedef void (*runcore_log_cb)(void* user_data, int32_t level, const char* line)
 typedef void (*runcore_raw_tx_cb)(void* user_data, const uint8_t* data, int32_t len);
 typedef void (*runcore_inbound_cb)(void* user_data, const char* source, const char* title, const char* content, double timestamp, const char* message_id, const char* attachment_path, const char* attachment_name, const char* attachment_mime, int32_t attachment_type, int32_t has_location, double latitude, double longitude, double accuracy, int64_t location_timestamp);
 typedef void (*runcore_status_cb)(void* user_data, const char* client_id, const char* status);
+typedef void (*runcore_lxst_state_cb)(void* user_data, int32_t status, const char* remote_identity_hash);
+typedef void (*runcore_lxst_frame_cb)(void* user_data, int32_t codec, const uint8_t* data, int32_t len);
 
 static inline void runcore_log_cb_call(runcore_log_cb cb, void* user_data, int32_t level, const char* line) {
   cb(user_data, level, line);
@@ -19,6 +21,12 @@ static inline void runcore_inbound_cb_call(runcore_inbound_cb cb, void* user_dat
 }
 static inline void runcore_status_cb_call(runcore_status_cb cb, void* user_data, const char* client_id, const char* status) {
   cb(user_data, client_id, status);
+}
+static inline void runcore_lxst_state_cb_call(runcore_lxst_state_cb cb, void* user_data, int32_t status, const char* remote_identity_hash) {
+  cb(user_data, status, remote_identity_hash);
+}
+static inline void runcore_lxst_frame_cb_call(runcore_lxst_frame_cb cb, void* user_data, int32_t codec, const uint8_t* data, int32_t len) {
+  cb(user_data, codec, data, len);
 }
 */
 import "C"
@@ -45,12 +53,17 @@ type nodeHandle struct {
 	node         *runcore.Node
 	rawInterface *rns.Interface
 	tcpInterface *rns.Interface
+	piInterface  *rns.Interface
 	rawTxCB      C.runcore_raw_tx_cb
 	rawTxUser    unsafe.Pointer
 	inboundCB    C.runcore_inbound_cb
 	inboundUser  unsafe.Pointer
 	statusCB     C.runcore_status_cb
 	statusUser   unsafe.Pointer
+	telephone    *runcore.Telephone
+	lxstStateCB  C.runcore_lxst_state_cb
+	lxstFrameCB  C.runcore_lxst_frame_cb
+	lxstUser     unsafe.Pointer
 }
 
 var (
@@ -154,6 +167,25 @@ func runcore_start(contactsDir *C.char, sendDir *C.char, messagesDir *C.char, lo
 	}
 
 	h := &nodeHandle{node: n}
+	if telephone, telephoneErr := runcore.NewTelephone(n); telephoneErr != nil {
+		rns.Logf(rns.LOG_WARNING, "runcore: LXST telephone unavailable: %v", telephoneErr)
+	} else {
+		h.telephone = telephone
+		telephone.StateCallback = func(status int, remoteIdentityHash string) {
+			if h.lxstStateCB == nil {
+				return
+			}
+			remote := C.CString(remoteIdentityHash)
+			defer C.free(unsafe.Pointer(remote))
+			C.runcore_lxst_state_cb_call(h.lxstStateCB, h.lxstUser, C.int32_t(status), remote)
+		}
+		telephone.FrameCallback = func(codec int, frame []byte) {
+			if h.lxstFrameCB == nil || len(frame) == 0 {
+				return
+			}
+			C.runcore_lxst_frame_cb_call(h.lxstFrameCB, h.lxstUser, C.int32_t(codec), (*C.uint8_t)(unsafe.Pointer(&frame[0])), C.int32_t(len(frame)))
+		}
+	}
 
 	nodesMu.Lock()
 	id := nextID
@@ -206,7 +238,84 @@ func runcore_stop(handle C.uint64_t) C.int32_t {
 	if h.tcpInterface != nil {
 		h.tcpInterface.Detach()
 	}
+	if h.piInterface != nil {
+		h.piInterface.Detach()
+	}
+	if h.telephone != nil {
+		h.telephone.Close()
+	}
 	_ = h.node.Close()
+	return 0
+}
+
+//export runcore_lxst_set_callbacks
+func runcore_lxst_set_callbacks(handle C.uint64_t, stateCB C.runcore_lxst_state_cb, frameCB C.runcore_lxst_frame_cb, userData unsafe.Pointer) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil {
+		return 1
+	}
+	h.lxstStateCB = stateCB
+	h.lxstFrameCB = frameCB
+	h.lxstUser = userData
+	return 0
+}
+
+//export runcore_lxst_call
+func runcore_lxst_call(handle C.uint64_t, destinationHash *C.char, profile C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil || destinationHash == nil {
+		return 1
+	}
+	if err := h.telephone.Call(strings.TrimSpace(C.GoString(destinationHash)), int(profile)); err != nil {
+		rns.Logf(rns.LOG_ERROR, "runcore: LXST call failed: %v", err)
+		return 2
+	}
+	return 0
+}
+
+//export runcore_lxst_answer
+func runcore_lxst_answer(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil {
+		return 1
+	}
+	if err := h.telephone.Answer(); err != nil {
+		rns.Logf(rns.LOG_ERROR, "runcore: LXST answer failed: %v", err)
+		return 2
+	}
+	return 0
+}
+
+//export runcore_lxst_hangup
+func runcore_lxst_hangup(handle C.uint64_t, reject C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil {
+		return 1
+	}
+	h.telephone.Hangup(reject != 0)
+	return 0
+}
+
+//export runcore_lxst_send_frame
+func runcore_lxst_send_frame(handle C.uint64_t, codec C.int32_t, data *C.uint8_t, length C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil || data == nil || length <= 0 {
+		return 1
+	}
+	frame := C.GoBytes(unsafe.Pointer(data), C.int(length))
+	if err := h.telephone.SendFrame(int(codec), frame); err != nil {
+		return 2
+	}
+	return 0
+}
+
+//export runcore_lxst_announce
+func runcore_lxst_announce(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.telephone == nil {
+		return 1
+	}
+	h.telephone.Announce()
 	return 0
 }
 
@@ -248,8 +357,8 @@ func runcore_connect_tcp_interface(handle C.uint64_t, host *C.char, port C.int32
 	}
 	rns.Owner.AddInterface(ifc, rns.InterfaceModeFull, nil, nil, nil, nil, nil, nil, nil, nil)
 	h.tcpInterface = ifc
-	if h.rawInterface != nil {
-		h.rawInterface.Online = false
+	if h.telephone != nil {
+		h.telephone.Announce()
 	}
 	return 0
 }
@@ -274,6 +383,65 @@ func runcore_tcp_interface_state(handle C.uint64_t) C.int32_t {
 		return 0
 	}
 	if h.tcpInterface.Online && !h.tcpInterface.Detached {
+		return 2
+	}
+	return 1
+}
+
+//export runcore_connect_raspberry_pi_interface
+func runcore_connect_raspberry_pi_interface(handle C.uint64_t, host *C.char, port C.int32_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.node == nil || rns.Owner == nil || host == nil || port <= 0 || port > 65535 {
+		return 1
+	}
+	targetHost := strings.TrimSpace(C.GoString(host))
+	if targetHost == "" {
+		return 1
+	}
+	if h.piInterface != nil {
+		h.piInterface.Detach()
+		h.piInterface = nil
+	}
+	ifc, err := ifaces.NewTCPClientInterfaceFromConfig(ifaces.TCPClientConfig{
+		Name:           "iSideband Raspberry Pi Wi-Fi HaLow",
+		TargetHost:     targetHost,
+		TargetPort:     int(port),
+		KISSFraming:    false,
+		ReconnectWait:  2 * time.Second,
+		ConnectTimeout: 5 * time.Second,
+	})
+	if err != nil {
+		rns.Logf(rns.LOG_ERROR, "runcore: create Raspberry Pi interface: %v", err)
+		return 1
+	}
+	rns.Owner.AddInterface(ifc, rns.InterfaceModeFull, nil, nil, nil, nil, nil, nil, nil, nil)
+	h.piInterface = ifc
+	if h.telephone != nil {
+		h.telephone.Announce()
+	}
+	return 0
+}
+
+//export runcore_disconnect_raspberry_pi_interface
+func runcore_disconnect_raspberry_pi_interface(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil {
+		return 1
+	}
+	if h.piInterface != nil {
+		h.piInterface.Detach()
+		h.piInterface = nil
+	}
+	return 0
+}
+
+//export runcore_raspberry_pi_interface_state
+func runcore_raspberry_pi_interface_state(handle C.uint64_t) C.int32_t {
+	h := getHandle(handle)
+	if h == nil || h.piInterface == nil {
+		return 0
+	}
+	if h.piInterface.Online && !h.piInterface.Detached {
 		return 2
 	}
 	return 1
@@ -306,6 +474,9 @@ func runcore_attach_raw_interface(handle C.uint64_t, cb C.runcore_raw_tx_cb, use
 	})
 	rns.Owner.AddInterface(ifc, rns.InterfaceModeFull, nil, nil, nil, nil, nil, nil, nil, nil)
 	h.rawInterface = ifc
+	if h.telephone != nil {
+		h.telephone.Announce()
+	}
 	return 0
 }
 
@@ -326,6 +497,9 @@ func runcore_announce(handle C.uint64_t) C.int32_t {
 		return 1
 	}
 	h.node.AnnounceDelivery()
+	if h.telephone != nil {
+		h.telephone.Announce()
+	}
 	return 0
 }
 

@@ -21,22 +21,41 @@ final class VoiceCallManager: ObservableObject {
     @Published private(set) var state: State = .idle
     @Published private(set) var statusMessage = "Ready"
 
-    private let prefix = "[iSideband Voice Call v1]"
-    private var handledMessages = Set<String>()
+    private let bridge = ReticulumCoreBridge.shared
+    private var cancellables = Set<AnyCancellable>()
 
-    private init() {}
+    private init() {
+        bridge.$lxstCallStatus
+            .combineLatest(bridge.$lxstRemoteIdentityHash)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] callStatus, remoteHash in
+                self?.receive(callStatus, remoteHash: remoteHash)
+            }
+            .store(in: &cancellables)
+    }
 
     func call(_ peer: LXMFPeer) {
         switch state {
         case .incoming(let incomingPeer)
             where incomingPeer.destinationHash == peer.destinationHash:
-            send("ACCEPT", to: incomingPeer)
-            state = .active(incomingPeer)
-            statusMessage = "Connected to \(incomingPeer.displayName)"
+            guard bridge.answerLXSTCall() else {
+                statusMessage = "The incoming LXST call could not be answered."
+                return
+            }
+            statusMessage = "Connecting to \(incomingPeer.displayName)…"
         case .idle:
-            guard send("REQUEST", to: peer) else { return }
             state = .calling(peer)
             statusMessage = "Calling \(peer.displayName)…"
+            Task {
+                let started = await bridge.placeLXSTCall(
+                    destinationHash: peer.destinationHash
+                )
+                if !started, case .calling = state {
+                    state = .idle
+                    statusMessage =
+                        "The LXST call could not find or connect to that Sideband identity."
+                }
+            }
         default:
             statusMessage = "End the current call before starting another."
         }
@@ -47,9 +66,9 @@ final class VoiceCallManager: ObservableObject {
             statusMessage = "There is no incoming call to reject."
             return
         }
-        _ = send("REJECT", to: peer)
+        bridge.hangupLXSTCall(reject: true)
         state = .idle
-        statusMessage = "Call rejected"
+        statusMessage = "Call from \(peer.displayName) rejected"
     }
 
     func end() {
@@ -61,9 +80,9 @@ final class VoiceCallManager: ObservableObject {
             statusMessage = "Use Reject to decline the incoming call."
             return
         }
-        _ = send("END", to: peer)
+        bridge.hangupLXSTCall()
         state = .idle
-        statusMessage = "Call ended"
+        statusMessage = "Call with \(peer.displayName) ended"
     }
 
     func sendVoiceSegment(at url: URL) {
@@ -85,63 +104,44 @@ final class VoiceCallManager: ObservableObject {
         statusMessage = "Voice segment queued"
     }
 
-    func processIncoming(peers: [LXMFPeer]) {
-        for peer in peers {
-            for message in LXMFIncomingMessageStore.shared.messages(
-                for: peer.destinationHash
-            ) where !message.isOutgoing && message.text.hasPrefix(prefix) {
-                let identifier = message.lxmfHash ?? message.id.uuidString
-                guard handledMessages.insert(identifier).inserted else { continue }
-                let command = message.text
-                    .dropFirst(prefix.count)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                handle(command, from: peer)
-            }
-        }
-    }
-
     private var isIncoming: Bool {
         if case .incoming = state { return true }
         return false
     }
 
-    private func handle(_ command: String, from peer: LXMFPeer) {
-        switch command {
-        case "REQUEST":
-            guard case .idle = state else {
-                _ = send("REJECT", to: peer)
-                return
-            }
-            state = .incoming(peer)
-            statusMessage = "Incoming call from \(peer.displayName)"
-        case "ACCEPT":
-            guard case .calling(let calledPeer) = state,
-                  calledPeer.destinationHash == peer.destinationHash else { return }
-            state = .active(peer)
-            statusMessage = "Connected to \(peer.displayName)"
-        case "REJECT":
-            guard state.peer?.destinationHash == peer.destinationHash else { return }
+    private func receive(_ callStatus: LXSTCallStatus, remoteHash: String) {
+        switch callStatus {
+        case .busy:
             state = .idle
-            statusMessage = "\(peer.displayName) rejected the call"
-        case "END":
-            guard state.peer?.destinationHash == peer.destinationHash else { return }
+            statusMessage = "The remote Sideband device is busy."
+        case .rejected:
             state = .idle
-            statusMessage = "Call ended by \(peer.displayName)"
-        default:
+            statusMessage = "The remote Sideband device rejected the call."
+        case .calling, .available, .connecting:
             break
+        case .ringing:
+            if case .calling(let peer) = state {
+                statusMessage = "Ringing \(peer.displayName)…"
+            } else {
+                let peer = peerForIncomingIdentity(remoteHash)
+                state = .incoming(peer)
+                statusMessage = "Incoming LXST call from \(peer.displayName)"
+            }
+        case .established:
+            let peer = state.peer ?? peerForIncomingIdentity(remoteHash)
+            state = .active(peer)
+            statusMessage = "Connected to \(peer.displayName) over LXST"
         }
     }
 
-    @discardableResult
-    private func send(_ command: String, to peer: LXMFPeer) -> Bool {
-        guard LXMFManager.shared.send(
-            text: "\(prefix) \(command)",
-            to: peer
-        ) != nil else {
-            statusMessage = "The call signal could not be queued. Check the selected interface."
-            return false
-        }
-        return true
+    private func peerForIncomingIdentity(_ identityHash: String) -> LXMFPeer {
+        let cleaned = identityHash.lowercased()
+        let name = LXMFContactStore.shared.contact(for: cleaned)?.displayName
+            ?? ReticulumDiscoveredPeerStore.shared.peers.first(where: {
+                $0.identityHash == cleaned
+            })?.displayName
+            ?? (cleaned.isEmpty ? "Unknown Sideband Caller" : "Sideband Caller")
+        return LXMFPeer(displayName: name, destinationHash: cleaned)
     }
 }
 
@@ -150,12 +150,14 @@ struct VoiceCallView: View {
     @ObservedObject var bluetooth: BluetoothManager
     @ObservedObject private var peerStore = ReticulumDiscoveredPeerStore.shared
     @ObservedObject private var contactStore = LXMFContactStore.shared
-    @ObservedObject private var incomingStore = LXMFIncomingMessageStore.shared
     @StateObject private var callManager = VoiceCallManager.shared
+    private let bridge = ReticulumCoreBridge.shared
 
     @State private var identityHash = ""
     @State private var showingVoiceRecorder = false
     @State private var validationMessage: String?
+    @State private var speakerphoneEnabled = false
+    @State private var microphoneMuted = false
 
     private var peers: [LXMFPeer] {
         var seen = Set<String>()
@@ -164,7 +166,7 @@ struct VoiceCallView: View {
             let contactName = contactStore.contact(for: discovered.destinationHash)?.displayName
             return LXMFPeer(
                 displayName: contactName ?? discovered.displayName ?? "Unknown Node",
-                destinationHash: discovered.destinationHash
+                destinationHash: discovered.identityHash ?? discovered.destinationHash
             )
         }
     }
@@ -181,7 +183,7 @@ struct VoiceCallView: View {
 
             HStack(spacing: 0) {
                 TextField(
-                    "Identity Hash or select Discovered Peer",
+                    "Sideband Identity Hash or select Discovered Peer",
                     text: $identityHash
                 )
                 .textInputAutocapitalization(.never)
@@ -241,44 +243,53 @@ struct VoiceCallView: View {
 
             Spacer()
 
-            HStack(spacing: 14) {
-                Button("End") {
-                    callManager.end()
+            switch callManager.state {
+            case .idle:
+                HStack(spacing: 14) {
+                    Button("Reject") { callManager.reject() }
+                        .buttonStyle(.borderedProminent).tint(.blue)
+                        .frame(minWidth: 110, minHeight: 54)
+                    Button("Call") { startOrAcceptCall() }
+                        .buttonStyle(.borderedProminent).tint(.green)
+                        .frame(minWidth: 110, minHeight: 54).font(.headline)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
                 .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
-
-                Button("Reject") {
-                    callManager.reject()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.blue)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
-
-                Button("Call") {
-                    startOrAcceptCall()
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.green)
-                .frame(maxWidth: .infinity)
-                .frame(minHeight: 48)
+            case .calling:
+                Button("Answer") { startOrAcceptCall() }
+                    .buttonStyle(.borderedProminent).tint(.green)
+                    .frame(maxWidth: .infinity).frame(minHeight: 54).font(.headline)
+            case .incoming:
+                HStack(spacing: 14) {
+                    Button("Reject") { callManager.reject() }
+                        .buttonStyle(.borderedProminent).tint(.blue)
+                    Button("Answer") { startOrAcceptCall() }
+                        .buttonStyle(.borderedProminent).tint(.green).font(.headline)
+                }.frame(maxWidth: .infinity)
+            case .active:
+                HStack(spacing: 12) {
+                    Button("End") { callManager.end() }
+                        .buttonStyle(.borderedProminent).tint(.red)
+                    Button {
+                        speakerphoneEnabled.toggle(); bridge.setLXSTSpeakerphone(speakerphoneEnabled)
+                    } label: { Label(speakerphoneEnabled ? "Speaker" : "Phone", systemImage: speakerphoneEnabled ? "speaker.wave.3.fill" : "phone.fill") }
+                        .buttonStyle(.borderedProminent).tint(speakerphoneEnabled ? .green : .gray)
+                    Button {
+                        microphoneMuted.toggle(); bridge.setLXSTMicrophoneMuted(microphoneMuted)
+                    } label: { Label(microphoneMuted ? "Unmute" : "Mute", systemImage: microphoneMuted ? "mic.slash.fill" : "mic.fill") }
+                        .buttonStyle(.borderedProminent).tint(microphoneMuted ? .orange : .gray)
+                }.frame(maxWidth: .infinity)
             }
-            .frame(maxWidth: .infinity)
         }
         .padding()
         .onAppear {
             adoptCurrentPeer()
-            callManager.processIncoming(peers: peers)
-        }
-        .onChange(of: incomingStore.revision) { _, _ in
-            callManager.processIncoming(peers: peers)
-            adoptCurrentPeer()
         }
         .onChange(of: callManager.state) { _, _ in
             adoptCurrentPeer()
+            if case .idle = callManager.state {
+                speakerphoneEnabled = false
+                microphoneMuted = false
+            }
         }
         .sheet(isPresented: $showingVoiceRecorder) {
             VoiceNoteRecorderView(isPushToTalk: true) { url in
@@ -311,7 +322,9 @@ struct VoiceCallView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
         let name = contactStore.contact(for: cleaned)?.displayName
-            ?? peerStore.peers.first(where: { $0.destinationHash == cleaned })?.displayName
+            ?? peerStore.peers.first(where: {
+                $0.destinationHash == cleaned || $0.identityHash == cleaned
+            })?.displayName
             ?? "Unknown Node"
         let peer = LXMFPeer(displayName: name, destinationHash: cleaned)
         guard peer.isDestinationValid else {

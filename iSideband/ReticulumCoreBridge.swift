@@ -1,6 +1,7 @@
 import CryptoKit
 import Combine
 import Foundation
+import AVFoundation
 import CoreLocation
 
 enum AutomaticAnnouncePreferenceKey {
@@ -17,6 +18,16 @@ enum TelemetryPreferenceKey {
         "isideband.telemetry.shareTimestamp"
     static let shareLocation =
         "shareLocationOnMesh"
+}
+
+enum LXSTCallStatus: Int32, Equatable {
+    case busy = 0
+    case rejected = 1
+    case calling = 2
+    case available = 3
+    case ringing = 4
+    case connecting = 5
+    case established = 6
 }
 
 struct RemoteNodeLocation: Identifiable, Hashable, Codable {
@@ -161,6 +172,34 @@ nonisolated private func reticulumMessageStatus(
     Task { @MainActor in bridge.receiveStatus(clientID: id, status: value) }
 }
 
+nonisolated private func reticulumLXSTState(
+    _ userData: UnsafeMutableRawPointer?,
+    _ status: Int32,
+    _ remoteIdentityHash: UnsafePointer<CChar>?
+) {
+    guard let userData,
+          let callStatus = LXSTCallStatus(rawValue: status) else { return }
+    let bridge = Unmanaged<ReticulumCoreBridge>
+        .fromOpaque(userData).takeUnretainedValue()
+    let remoteHash = remoteIdentityHash.map(String.init(cString:)) ?? ""
+    Task { @MainActor in
+        bridge.receiveLXSTState(callStatus, remoteIdentityHash: remoteHash)
+    }
+}
+
+nonisolated private func reticulumLXSTFrame(
+    _ userData: UnsafeMutableRawPointer?,
+    _ codec: Int32,
+    _ bytes: UnsafePointer<UInt8>?,
+    _ length: Int32
+) {
+    guard let userData, let bytes, length > 0 else { return }
+    let bridge = Unmanaged<ReticulumCoreBridge>
+        .fromOpaque(userData).takeUnretainedValue()
+    let frame = Data(bytes: bytes, count: Int(length))
+    Task { @MainActor in bridge.receiveLXSTFrame(codec: codec, data: frame) }
+}
+
 nonisolated private func reticulumCoreLog(
     _ userData: UnsafeMutableRawPointer?,
     _ level: Int32,
@@ -192,6 +231,8 @@ final class ReticulumCoreBridge: ObservableObject {
     @Published private(set) var destinationHash = ""
     @Published private(set) var status =
         "Reticulum core not started"
+    @Published private(set) var lxstCallStatus: LXSTCallStatus = .available
+    @Published private(set) var lxstRemoteIdentityHash = ""
     @Published private(set) var remoteNodeLocations:
         [String: RemoteNodeLocation] = [:]
 
@@ -208,6 +249,11 @@ final class ReticulumCoreBridge: ObservableObject {
     private var routeRefreshTimer: Timer?
     private var appIsActive = true
     private var lastAutomaticAnnounce: Date?
+    var lxstFrameHandler: ((Int32, Data) -> Void)?
+    private lazy var lxstAudioEngine = LXSTAudioEngine {
+        [weak self] frame in
+        self?.sendLXSTOpusFrame(frame)
+    }
     private let remoteNodeLocationsStorageKey =
         "isideband.reticulum.remoteNodeLocations"
 
@@ -317,6 +363,12 @@ final class ReticulumCoreBridge: ObservableObject {
                 handle,
                 reticulumMessageStatus,
                 context
+            ) == 0,
+            runcore_lxst_set_callbacks(
+                handle,
+                reticulumLXSTState,
+                reticulumLXSTFrame,
+                context
             ) == 0 else {
                 status =
                     "Reticulum RNode bridge failed to start"
@@ -344,6 +396,8 @@ final class ReticulumCoreBridge: ObservableObject {
         guard handle != 0 else { return }
         let useBluetooth = PacketInterfaceManager.shared
             .isActive(.bluetoothRNode)
+        let useWiFiLAN = PacketInterfaceManager.shared
+            .isActive(.wifiLocalNetwork)
         let useRaspberryPi = PacketInterfaceManager.shared
             .isActive(.raspberryPi)
         let activeHandle = handle
@@ -352,15 +406,105 @@ final class ReticulumCoreBridge: ObservableObject {
                 activeHandle,
                 useBluetooth ? 1 : 0
             )
-            if !useRaspberryPi {
+            if !useWiFiLAN {
                 _ = runcore_disconnect_tcp_interface(activeHandle)
+            }
+            if !useRaspberryPi {
+                _ = runcore_disconnect_raspberry_pi_interface(activeHandle)
             }
         }
     }
 
-    func connectRaspberryPi(host: String, port: UInt16) -> Bool {
+    func placeLXSTCall(
+        destinationHash: String,
+        profile: Int32 = 0x40
+    ) async -> Bool {
+        guard handle != 0 else { return false }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                let succeeded = destinationHash.withCString {
+                    runcore_lxst_call(activeHandle, $0, profile) == 0
+                }
+                continuation.resume(returning: succeeded)
+            }
+        }
+    }
+
+    func answerLXSTCall() -> Bool {
+        handle != 0 && runcore_lxst_answer(handle) == 0
+    }
+
+    func hangupLXSTCall(reject: Bool = false) {
+        guard handle != 0 else { return }
+        _ = runcore_lxst_hangup(handle, reject ? 1 : 0)
+    }
+
+    func setLXSTSpeakerphone(_ enabled: Bool) {
+        let session = AVAudioSession.sharedInstance()
+        do {
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
+            try session.setActive(true)
+            try session.overrideOutputAudioPort(enabled ? .speaker : .none)
+        } catch {
+            privacySafeLog("LXST audio route change failed", error.localizedDescription)
+        }
+    }
+
+    func setLXSTMicrophoneMuted(_ muted: Bool) {
+        lxstAudioEngine.setMuted(muted)
+    }
+
+    private nonisolated func sendLXSTOpusFrame(_ frame: Data) {
+        Task { @MainActor [weak self] in
+            guard let self, self.handle != 0 else { return }
+            let activeHandle = self.handle
+            self.outboundCoreQueue.async {
+                frame.withUnsafeBytes { bytes in
+                    guard let baseAddress = bytes.bindMemory(
+                        to: UInt8.self
+                    ).baseAddress else { return }
+                    _ = runcore_lxst_send_frame(
+                        activeHandle,
+                        1,
+                        baseAddress,
+                        Int32(frame.count)
+                    )
+                }
+            }
+        }
+    }
+
+    fileprivate func receiveLXSTState(
+        _ callStatus: LXSTCallStatus,
+        remoteIdentityHash: String
+    ) {
+        lxstCallStatus = callStatus
+        if !remoteIdentityHash.isEmpty {
+            lxstRemoteIdentityHash = remoteIdentityHash
+        }
+        if callStatus == .available {
+            lxstRemoteIdentityHash = ""
+        }
+        if callStatus == .established {
+            lxstAudioEngine.start()
+        } else if callStatus == .available
+                    || callStatus == .busy
+                    || callStatus == .rejected {
+            lxstAudioEngine.stop()
+        }
+    }
+
+    fileprivate func receiveLXSTFrame(codec: Int32, data: Data) {
+        if codec == 1 {
+            lxstAudioEngine.receiveOpusFrame(data)
+        }
+        lxstFrameHandler?(codec, data)
+    }
+
+    func connectWiFiLAN(host: String, port: UInt16) -> Bool {
         guard handle != 0,
-              PacketInterfaceManager.shared.isActive(.raspberryPi) else {
+              PacketInterfaceManager.shared.isActive(.wifiLocalNetwork) else {
             return false
         }
         let result = host.withCString {
@@ -369,12 +513,12 @@ final class ReticulumCoreBridge: ObservableObject {
         return result == 0
     }
 
-    func connectRaspberryPiAsync(
+    func connectWiFiLANAsync(
         host: String,
         port: UInt16
     ) async -> Bool {
         guard handle != 0,
-              PacketInterfaceManager.shared.isActive(.raspberryPi) else {
+              PacketInterfaceManager.shared.isActive(.wifiLocalNetwork) else {
             return false
         }
         let activeHandle = handle
@@ -392,12 +536,12 @@ final class ReticulumCoreBridge: ObservableObject {
         }
     }
 
-    func disconnectRaspberryPi() {
+    func disconnectWiFiLAN() {
         guard handle != 0 else { return }
         _ = runcore_disconnect_tcp_interface(handle)
     }
 
-    func disconnectRaspberryPiAsync() async {
+    func disconnectWiFiLANAsync() async {
         guard handle != 0 else { return }
         let activeHandle = handle
         await withCheckedContinuation { continuation in
@@ -408,9 +552,55 @@ final class ReticulumCoreBridge: ObservableObject {
         }
     }
 
-    var raspberryPiConnectionState: Int32 {
+    var wifiLANConnectionState: Int32 {
         guard handle != 0 else { return 0 }
         return runcore_tcp_interface_state(handle)
+    }
+
+    func wifiLANConnectionStateAsync() async -> Int32 {
+        guard handle != 0 else { return 0 }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                continuation.resume(
+                    returning: runcore_tcp_interface_state(activeHandle)
+                )
+            }
+        }
+    }
+
+    func connectRaspberryPiAsync(
+        host: String,
+        port: UInt16
+    ) async -> Bool {
+        guard handle != 0,
+              PacketInterfaceManager.shared.isActive(.raspberryPi) else {
+            return false
+        }
+        let activeHandle = handle
+        return await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                let result = host.withCString {
+                    runcore_connect_raspberry_pi_interface(
+                        activeHandle,
+                        $0,
+                        Int32(port)
+                    ) == 0
+                }
+                continuation.resume(returning: result)
+            }
+        }
+    }
+
+    func disconnectRaspberryPiAsync() async {
+        guard handle != 0 else { return }
+        let activeHandle = handle
+        await withCheckedContinuation { continuation in
+            outboundCoreQueue.async {
+                _ = runcore_disconnect_raspberry_pi_interface(activeHandle)
+                continuation.resume()
+            }
+        }
     }
 
     func raspberryPiConnectionStateAsync() async -> Int32 {
@@ -419,7 +609,7 @@ final class ReticulumCoreBridge: ObservableObject {
         return await withCheckedContinuation { continuation in
             outboundCoreQueue.async {
                 continuation.resume(
-                    returning: runcore_tcp_interface_state(activeHandle)
+                    returning: runcore_raspberry_pi_interface_state(activeHandle)
                 )
             }
         }

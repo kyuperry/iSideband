@@ -375,14 +375,14 @@ final class LXMFService: ObservableObject {
     }
 
     private var packetInterfaceReady: Bool {
-        switch PacketInterfaceManager.shared.activeInterface {
-        case .none:
-            return false
-        case .bluetoothRNode:
-            return bluetooth?.radioReady == true
-        case .raspberryPi:
-            return PiHaLowInterfaceManager.shared.state == .connected
-        }
+        let interfaces = PacketInterfaceManager.shared
+        let bluetoothReady = interfaces.isActive(.bluetoothRNode)
+            && bluetooth?.radioReady == true
+        let wifiLANReady = interfaces.isActive(.wifiLocalNetwork)
+            && WiFiLANInterfaceManager.shared.state == .connected
+        let raspberryPiReady = interfaces.isActive(.raspberryPi)
+            && PiHaLowInterfaceManager.shared.state == .connected
+        return bluetoothReady || wifiLANReady || raspberryPiReady
     }
 
     private func scheduleNextRetry() {

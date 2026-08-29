@@ -16,6 +16,7 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
 
     func discover(
         destinationHash: String,
+        identityHash: String? = nil,
         displayName: String?,
         announcedHops: UInt8? = nil,
         seenAt: Date = Date()
@@ -34,6 +35,7 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
             peers[index] = ReticulumDiscoveredPeer(
                 id: existing.id,
                 destinationHash: existing.destinationHash,
+                identityHash: identityHash ?? existing.identityHash,
                 displayName: displayName ?? existing.displayName,
                 announcedHops: announcedHops ?? existing.announcedHops,
                 firstSeenAt: existing.firstSeenAt,
@@ -43,6 +45,7 @@ final class ReticulumDiscoveredPeerStore: ObservableObject {
             peers.insert(
                 ReticulumDiscoveredPeer(
                     destinationHash: cleanedHash,
+                    identityHash: identityHash,
                     displayName: displayName,
                     announcedHops: announcedHops,
                     firstSeenAt: seenAt,
