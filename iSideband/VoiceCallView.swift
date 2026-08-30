@@ -233,8 +233,8 @@ struct VoiceCallView: View {
                 }
                 .frame(maxWidth: .infinity)
             case .calling:
-                Button("Answer") { startOrAcceptCall() }
-                    .buttonStyle(.borderedProminent).tint(.green)
+                Button("Hang Up") { callManager.end() }
+                    .buttonStyle(.borderedProminent).tint(.red)
                     .frame(maxWidth: .infinity).frame(minHeight: 54).font(.headline)
             case .incoming:
                 HStack(spacing: 14) {
