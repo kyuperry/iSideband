@@ -227,8 +227,9 @@ struct VoiceCallView: View {
                     startOrAcceptCall()
                 } label: {
                     Text("Call")
-                        .font(.title3.bold())
-                        .frame(width: 210, height: 58)
+                        .font(.headline.bold())
+                        .padding(.horizontal, 36)
+                        .padding(.vertical, 6)
                 }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
