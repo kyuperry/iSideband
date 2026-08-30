@@ -55,12 +55,35 @@ final class LXSTAudioEngine: @unchecked Sendable {
 
     func start() {
         report("Starting call audio…")
-        AVAudioApplication.requestRecordPermission { [weak self] granted in
-            if !granted {
-                self?.report("Microphone denied — receive audio only")
+        switch AVAudioApplication.shared.recordPermission {
+        case .granted:
+            audioQueue.async { [weak self] in
+                self?.startAudio(captureEnabled: true)
             }
-            self?.audioQueue.async {
-                self?.startAudio(captureEnabled: granted)
+        case .denied:
+            report("Microphone denied — receive audio only")
+            audioQueue.async { [weak self] in
+                self?.startAudio(captureEnabled: false)
+            }
+        case .undetermined:
+            // Playback must not wait for the system permission sheet.
+            audioQueue.async { [weak self] in
+                self?.startAudio(captureEnabled: false)
+            }
+            AVAudioApplication.requestRecordPermission { [weak self] granted in
+                guard let self else { return }
+                self.audioQueue.async {
+                    if granted {
+                        self.stopAudio()
+                        self.startAudio(captureEnabled: true)
+                    } else {
+                        self.report("Microphone denied — receive audio only")
+                    }
+                }
+            }
+        @unknown default:
+            audioQueue.async { [weak self] in
+                self?.startAudio(captureEnabled: false)
             }
         }
     }
