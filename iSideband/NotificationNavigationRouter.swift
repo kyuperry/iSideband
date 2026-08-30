@@ -4,6 +4,7 @@ import Foundation
 enum NotificationRoute: Equatable, Sendable {
     case discoveredPeer(destinationHash: String)
     case message(sourceHash: String)
+    case incomingCall(callerHash: String)
 }
 
 @MainActor
@@ -20,6 +21,13 @@ final class NotificationNavigationRouter: ObservableObject {
     }
 
     func receive(userInfo: [AnyHashable: Any]) {
+        if userInfo["incomingCall"] as? Bool == true {
+            pendingRoute = .incomingCall(
+                callerHash: userInfo["callerHash"] as? String ?? ""
+            )
+            return
+        }
+
         if let sourceHash =
                 userInfo["sourceHash"] as? String {
             pendingRoute = .message(

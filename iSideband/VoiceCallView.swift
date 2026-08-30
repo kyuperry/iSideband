@@ -67,6 +67,7 @@ final class VoiceCallManager: ObservableObject {
             return
         }
         bridge.hangupLXSTCall(reject: true)
+        IncomingCallNotificationManager.shared.clear()
         state = .idle
         statusMessage = "Call from \(peer.displayName) rejected"
     }
@@ -81,6 +82,7 @@ final class VoiceCallManager: ObservableObject {
             return
         }
         bridge.hangupLXSTCall()
+        IncomingCallNotificationManager.shared.clear()
         state = .idle
         statusMessage = "Call with \(peer.displayName) ended"
     }
@@ -93,14 +95,17 @@ final class VoiceCallManager: ObservableObject {
     private func receive(_ callStatus: LXSTCallStatus, remoteHash: String) {
         switch callStatus {
         case .busy:
+            IncomingCallNotificationManager.shared.clear()
             state = .idle
             statusMessage = "The remote Sideband device is busy."
         case .rejected:
+            IncomingCallNotificationManager.shared.clear()
             state = .idle
             statusMessage = "The remote Sideband device rejected the call."
         case .calling:
             break
         case .available:
+            IncomingCallNotificationManager.shared.clear()
             if state != .idle {
                 state = .idle
                 statusMessage = "Call ended"
@@ -116,8 +121,10 @@ final class VoiceCallManager: ObservableObject {
                 let peer = peerForIncomingIdentity(remoteHash)
                 state = .incoming(peer)
                 statusMessage = "Incoming LXST call from \(peer.displayName)"
+                IncomingCallNotificationManager.shared.notify(peer: peer)
             }
         case .established:
+            IncomingCallNotificationManager.shared.clear()
             let peer = state.peer ?? peerForIncomingIdentity(remoteHash)
             state = .active(peer)
             statusMessage = "Connected to \(peer.displayName) over LXST"

@@ -4,6 +4,7 @@ enum NotificationPreferenceKey {
     static let rnodeConnection = "notifications.rnodeConnection"
     static let nearbyNodes = "notifications.nearbyNodes"
     static let lxmfMessages = "notifications.lxmfMessages"
+    static let incomingCalls = "notifications.incomingCalls"
     static let sounds = "notifications.sounds"
 }
 
@@ -14,6 +15,7 @@ enum NotificationPreferences {
                 NotificationPreferenceKey.rnodeConnection: true,
                 NotificationPreferenceKey.nearbyNodes: true,
                 NotificationPreferenceKey.lxmfMessages: true,
+                NotificationPreferenceKey.incomingCalls: true,
                 NotificationPreferenceKey.sounds: true
             ]
         )
@@ -34,6 +36,12 @@ enum NotificationPreferences {
     static var lxmfMessagesEnabled: Bool {
         UserDefaults.standard.bool(
             forKey: NotificationPreferenceKey.lxmfMessages
+        )
+    }
+
+    static var incomingCallsEnabled: Bool {
+        UserDefaults.standard.bool(
+            forKey: NotificationPreferenceKey.incomingCalls
         )
     }
 

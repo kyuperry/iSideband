@@ -28,6 +28,7 @@ struct iSidebandApp: App {
                 )
                 .environmentObject(lxmfManager)
                 .task {
+                    _ = VoiceCallManager.shared
                     PacketInterfaceManager.shared.configure(
                         bluetooth: bluetooth
                     )

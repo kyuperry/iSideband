@@ -109,7 +109,7 @@ final class BluetoothManager:
         UNUserNotificationCenter.current().delegate = self
         
         UNUserNotificationCenter.current().requestAuthorization(
-            options: [.alert, .sound, .badge]
+            options: [.alert, .sound, .badge, .timeSensitive]
         ) { granted, error in
             if let error {
                 privacySafeLog(
@@ -156,7 +156,11 @@ final class BluetoothManager:
             response.notification.request.content.userInfo
         let route: NotificationRoute?
 
-        if let sourceHash =
+        if userInfo["incomingCall"] as? Bool == true {
+            route = .incomingCall(
+                callerHash: userInfo["callerHash"] as? String ?? ""
+            )
+        } else if let sourceHash =
                 userInfo["sourceHash"] as? String {
             route = .message(sourceHash: sourceHash)
         } else if let destinationHash =

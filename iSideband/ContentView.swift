@@ -122,15 +122,19 @@ struct ContentView: View {
             return
         }
 
-        selectedPage = .messages
-
         switch route {
+        case .incomingCall:
+            selectedPage = .voiceCall
+            navigationPath = []
+
         case .discoveredPeer(let destinationHash):
+            selectedPage = .messages
             navigationPath = [
                 .discoveredPeer(destinationHash)
             ]
 
         case .message(let sourceHash):
+            selectedPage = .messages
             navigationPath = [
                 .message(sourceHash)
             ]

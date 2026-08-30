@@ -14,7 +14,8 @@ final class AnnouncementNotificationManager {
                 options: [
                     .alert,
                     .sound,
-                    .badge
+                    .badge,
+                    .timeSensitive
                 ]
             ) { granted, error in
 

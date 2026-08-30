@@ -40,6 +40,11 @@ struct SettingsView: View {
     private var lxmfMessageNotifications = true
 
     @AppStorage(
+        NotificationPreferenceKey.incomingCalls
+    )
+    private var incomingCallNotifications = true
+
+    @AppStorage(
         NotificationPreferenceKey.sounds
     )
     private var notificationSounds = true
@@ -309,6 +314,11 @@ struct SettingsView: View {
             Toggle(
                 "LXMF Messages",
                 isOn: $lxmfMessageNotifications
+            )
+
+            Toggle(
+                "Incoming Calls",
+                isOn: $incomingCallNotifications
             )
 
             Toggle(
