@@ -172,7 +172,7 @@ struct VoiceCallView: View {
 
             HStack(spacing: 0) {
                 TextField(
-                    "Sideband Identity Hash or select Discovered Peer",
+                    "LXST identity hash or Discovered Peer",
                     text: $identityHash
                 )
                 .textInputAutocapitalization(.never)
