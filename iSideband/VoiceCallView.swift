@@ -85,25 +85,6 @@ final class VoiceCallManager: ObservableObject {
         statusMessage = "Call with \(peer.displayName) ended"
     }
 
-    func sendVoiceSegment(at url: URL) {
-        guard case .active(let peer) = state else {
-            statusMessage = "Accept or establish a call first."
-            return
-        }
-        guard LXMFManager.shared.sendAttachment(
-            at: url,
-            name: url.lastPathComponent,
-            mimeType: "audio/ogg",
-            type: .voiceNote,
-            caption: "Voice call",
-            to: peer
-        ) != nil else {
-            statusMessage = "Voice segment could not be queued."
-            return
-        }
-        statusMessage = "Voice segment queued"
-    }
-
     private var isIncoming: Bool {
         if case .incoming = state { return true }
         return false
@@ -117,8 +98,17 @@ final class VoiceCallManager: ObservableObject {
         case .rejected:
             state = .idle
             statusMessage = "The remote Sideband device rejected the call."
-        case .calling, .available, .connecting:
+        case .calling:
             break
+        case .available:
+            if state != .idle {
+                state = .idle
+                statusMessage = "Call ended"
+            }
+        case .connecting:
+            if let peer = state.peer {
+                statusMessage = "Connecting to \(peer.displayName)…"
+            }
         case .ringing:
             if case .calling(let peer) = state {
                 statusMessage = "Ringing \(peer.displayName)…"
@@ -154,7 +144,6 @@ struct VoiceCallView: View {
     private let bridge = ReticulumCoreBridge.shared
 
     @State private var identityHash = ""
-    @State private var showingVoiceRecorder = false
     @State private var validationMessage: String?
     @State private var speakerphoneEnabled = false
     @State private var microphoneMuted = false
@@ -176,7 +165,7 @@ struct VoiceCallView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Voice Call")
                     .font(.largeTitle.bold())
-                Text("Half-duplex Opus voice over the selected Reticulum interface")
+                Text("Live Opus voice over the selected Reticulum interface")
                     .font(.subheadline)
                     .foregroundStyle(secondaryColor)
             }
@@ -230,17 +219,6 @@ struct VoiceCallView: View {
 
             callStatus
 
-            if case .active = callManager.state {
-                Button {
-                    showingVoiceRecorder = true
-                } label: {
-                    Label("Push to Talk", systemImage: "mic.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .nightVisionProminentButton()
-            }
-
             Spacer()
 
             switch callManager.state {
@@ -289,11 +267,6 @@ struct VoiceCallView: View {
             if case .idle = callManager.state {
                 speakerphoneEnabled = false
                 microphoneMuted = false
-            }
-        }
-        .sheet(isPresented: $showingVoiceRecorder) {
-            VoiceNoteRecorderView(isPushToTalk: true) { url in
-                callManager.sendVoiceSegment(at: url)
             }
         }
     }
