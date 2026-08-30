@@ -44,6 +44,7 @@ type Telephone struct {
 	activeLink *rns.Link
 	incoming   bool
 	answered   bool
+	identified bool
 	profile    int
 	remoteHash string
 	closed     bool
@@ -84,7 +85,7 @@ func (t *Telephone) Call(destinationHashHex string, profile int) error {
 		return errors.New("another call is already active")
 	}
 	t.profile = normalizedLXSTProfile(profile)
-	t.incoming, t.answered = false, false
+	t.incoming, t.answered, t.identified = false, false, false
 	t.mu.Unlock()
 
 	remoteIdentity, err := t.resolveRemoteIdentity(destinationHashHex, 15*time.Second)
@@ -192,7 +193,7 @@ func (t *Telephone) Hangup(reject bool) {
 	link := t.activeLink
 	shouldReject := reject && link != nil && t.incoming && !t.answered
 	t.activeLink = nil
-	t.incoming, t.answered = false, false
+	t.incoming, t.answered, t.identified = false, false, false
 	t.mu.Unlock()
 	if link != nil {
 		if shouldReject {
@@ -264,7 +265,7 @@ func (t *Telephone) callerIdentified(link *rns.Link, identity *rns.Identity) {
 		return
 	}
 	t.activeLink = link
-	t.incoming, t.answered = true, false
+	t.incoming, t.answered, t.identified = true, false, true
 	t.profile = LXSTProfileQualityMedium
 	t.remoteHash = hex.EncodeToString(identity.Hash)
 	t.mu.Unlock()
@@ -275,6 +276,17 @@ func (t *Telephone) callerIdentified(link *rns.Link, identity *rns.Identity) {
 func (t *Telephone) outgoingLinkEstablished(link *rns.Link) {
 	link.SetPacketCallback(t.packetReceived)
 	link.SetLinkClosedCallback(t.linkClosed)
+	// Identify as soon as the encrypted link is ready. LXST receivers send an
+	// AVAILABLE signal first, but on slow interfaces that first packet can reach
+	// us while the outgoing packet callback is still being installed. Waiting
+	// exclusively for it leaves the receiver unable to identify or ring for the
+	// caller. The later AVAILABLE handler remains as a compatibility fallback.
+	link.Identify(t.node.Identity())
+	t.mu.Lock()
+	if link == t.activeLink {
+		t.identified = true
+	}
+	t.mu.Unlock()
 }
 
 func (t *Telephone) linkClosed(link *rns.Link) {
@@ -284,7 +296,7 @@ func (t *Telephone) linkClosed(link *rns.Link) {
 		return
 	}
 	t.activeLink = nil
-	t.incoming, t.answered = false, false
+	t.incoming, t.answered, t.identified = false, false, false
 	t.mu.Unlock()
 	t.emitState(LXSTStatusAvailable)
 }
@@ -321,7 +333,15 @@ func (t *Telephone) handleSignal(signal int) {
 		t.Hangup(false)
 		t.emitState(signal)
 	case LXSTStatusAvailable:
-		link.Identify(t.node.Identity())
+		t.mu.Lock()
+		alreadyIdentified := t.identified
+		if !alreadyIdentified {
+			t.identified = true
+		}
+		t.mu.Unlock()
+		if !alreadyIdentified {
+			link.Identify(t.node.Identity())
+		}
 		t.emitState(signal)
 	case LXSTStatusRinging:
 		_ = t.sendSignal(LXSTPreferredProfile+t.profile, link)
