@@ -223,15 +223,12 @@ struct VoiceCallView: View {
 
             switch callManager.state {
             case .idle:
-                HStack(spacing: 14) {
-                    Button("Reject") { callManager.reject() }
-                        .buttonStyle(.borderedProminent).tint(.blue)
-                        .frame(minWidth: 110, minHeight: 54)
-                    Button("Call") { startOrAcceptCall() }
-                        .buttonStyle(.borderedProminent).tint(.green)
-                        .frame(minWidth: 110, minHeight: 54).font(.headline)
-                }
-                .frame(maxWidth: .infinity)
+                Button("Call") { startOrAcceptCall() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.green)
+                    .font(.title3.bold())
+                    .frame(minWidth: 190, minHeight: 62)
+                    .frame(maxWidth: .infinity)
             case .calling:
                 Button("Hang Up") { callManager.end() }
                     .buttonStyle(.borderedProminent).tint(.red)
