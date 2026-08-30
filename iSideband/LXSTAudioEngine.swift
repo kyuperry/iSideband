@@ -262,7 +262,9 @@ final class LXSTAudioEngine: @unchecked Sendable {
         let status = encoder.convert(to: compressed, error: &error) {
             _, inputStatus in
             guard !supplied else {
-                inputStatus.pointee = .endOfStream
+                // This converter is reused for every live call frame. Marking
+                // end-of-stream here permanently finalizes it after one packet.
+                inputStatus.pointee = .noDataNow
                 return nil
             }
             supplied = true
@@ -316,7 +318,8 @@ final class LXSTAudioEngine: @unchecked Sendable {
         let status = decoder.convert(to: pcm, error: &error) {
             _, inputStatus in
             guard !supplied else {
-                inputStatus.pointee = .endOfStream
+                // Keep the decoder open for subsequent LXST Opus packets.
+                inputStatus.pointee = .noDataNow
                 return nil
             }
             supplied = true
