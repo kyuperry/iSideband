@@ -75,7 +75,7 @@ final class LXSTAudioEngine: @unchecked Sendable {
             try session.setCategory(
                 .playAndRecord,
                 mode: .voiceChat,
-                options: [.allowBluetooth]
+                options: [.allowBluetoothHFP]
             )
             try session.setPreferredSampleRate(48_000)
             try session.setPreferredIOBufferDuration(0.02)
