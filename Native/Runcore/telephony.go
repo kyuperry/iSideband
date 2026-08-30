@@ -183,6 +183,7 @@ func (t *Telephone) Answer() error {
 		return err
 	}
 	t.emitState(LXSTStatusEstablished)
+	t.monitorRemoteSilence(link)
 	return nil
 }
 
@@ -361,6 +362,7 @@ func (t *Telephone) handleSignal(signal int) {
 		t.answered = true
 		t.mu.Unlock()
 		t.emitState(signal)
+		t.monitorRemoteSilence(link)
 	default:
 		if signal >= LXSTPreferredProfile {
 			t.mu.Lock()
@@ -368,6 +370,28 @@ func (t *Telephone) handleSignal(signal int) {
 			t.mu.Unlock()
 		}
 	}
+}
+
+func (t *Telephone) monitorRemoteSilence(link *rns.Link) {
+	go func() {
+		ticker := time.NewTicker(250 * time.Millisecond)
+		defer ticker.Stop()
+		for range ticker.C {
+			t.mu.Lock()
+			active := sameLXSTLink(link, t.activeLink) && t.answered
+			t.mu.Unlock()
+			if !active {
+				return
+			}
+			// Sideband sends continuous audio frames during an established
+			// call. If its one-shot encrypted close packet is lost on a busy
+			// LoRa link, the absence of all traffic provides a bounded fallback.
+			if link.NoInboundFor() >= 5*time.Second {
+				t.Hangup(false)
+				return
+			}
+		}
+	}()
 }
 
 func (t *Telephone) sendSignal(signal int, link *rns.Link) error {

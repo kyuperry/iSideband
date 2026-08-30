@@ -418,6 +418,21 @@ func (l *Link) SetRemoteIdentifiedCallback(cb func(*Link, *Identity)) {
 	l.callbacks.RemoteIdentified = cb
 }
 
+// NoInboundFor reports how long the link has gone without receiving any
+// packet, including audio, signalling and keepalives.
+func (l *Link) NoInboundFor() time.Duration {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	last := l.lastInbound
+	if l.activatedAt.After(last) {
+		last = l.activatedAt
+	}
+	if last.IsZero() {
+		return 0
+	}
+	return time.Since(last)
+}
+
 // Channel returns (and lazily creates) the channel for this link.
 func (l *Link) Channel() *Channel {
 	l.mu.Lock()
