@@ -223,11 +223,15 @@ struct VoiceCallView: View {
 
             switch callManager.state {
             case .idle:
-                Button("Call") { startOrAcceptCall() }
+                Button {
+                    startOrAcceptCall()
+                } label: {
+                    Text("Call")
+                        .font(.title2.bold())
+                        .frame(width: 260, height: 72)
+                }
                     .buttonStyle(.borderedProminent)
                     .tint(.green)
-                    .font(.title3.bold())
-                    .frame(minWidth: 190, minHeight: 62)
                     .frame(maxWidth: .infinity)
             case .calling:
                 Button("Hang Up") { callManager.end() }
