@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"testing"
 
+	"github.com/svanichkin/go-reticulum/rns"
 	umsgpack "github.com/svanichkin/go-reticulum/rns/vendor"
 )
 
@@ -49,5 +50,18 @@ func TestLXSTFrameEncodingPreservesCodecAndPayload(t *testing.T) {
 func TestNormalizedLXSTProfileFallsBackToSidebandDefault(t *testing.T) {
 	if got := normalizedLXSTProfile(0x99); got != LXSTProfileQualityMedium {
 		t.Fatalf("got profile %#x, want %#x", got, LXSTProfileQualityMedium)
+	}
+}
+
+func TestSameLXSTLinkMatchesEquivalentLinkIDs(t *testing.T) {
+	first := &rns.Link{LinkID: []byte{1, 2, 3, 4}}
+	second := &rns.Link{LinkID: []byte{1, 2, 3, 4}}
+	different := &rns.Link{LinkID: []byte{4, 3, 2, 1}}
+
+	if !sameLXSTLink(first, second) {
+		t.Fatal("equivalent Reticulum link IDs should match")
+	}
+	if sameLXSTLink(first, different) {
+		t.Fatal("different Reticulum link IDs should not match")
 	}
 }

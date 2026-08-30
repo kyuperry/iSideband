@@ -1,6 +1,7 @@
 package runcore
 
 import (
+	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -291,7 +292,7 @@ func (t *Telephone) outgoingLinkEstablished(link *rns.Link) {
 
 func (t *Telephone) linkClosed(link *rns.Link) {
 	t.mu.Lock()
-	if link != t.activeLink {
+	if !sameLXSTLink(link, t.activeLink) {
 		t.mu.Unlock()
 		return
 	}
@@ -299,6 +300,13 @@ func (t *Telephone) linkClosed(link *rns.Link) {
 	t.incoming, t.answered, t.identified = false, false, false
 	t.mu.Unlock()
 	t.emitState(LXSTStatusAvailable)
+}
+
+func sameLXSTLink(left, right *rns.Link) bool {
+	if left == nil || right == nil {
+		return false
+	}
+	return left == right || bytes.Equal(left.LinkID, right.LinkID)
 }
 
 func (t *Telephone) packetReceived(data []byte, _ *rns.Packet) {
