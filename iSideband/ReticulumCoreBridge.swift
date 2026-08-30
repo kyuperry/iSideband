@@ -233,6 +233,7 @@ final class ReticulumCoreBridge: ObservableObject {
         "Reticulum core not started"
     @Published private(set) var lxstCallStatus: LXSTCallStatus = .available
     @Published private(set) var lxstRemoteIdentityHash = ""
+    @Published private(set) var lxstAudioStatus = "Audio inactive"
     @Published private(set) var remoteNodeLocations:
         [String: RemoteNodeLocation] = [:]
 
@@ -250,10 +251,16 @@ final class ReticulumCoreBridge: ObservableObject {
     private var appIsActive = true
     private var lastAutomaticAnnounce: Date?
     var lxstFrameHandler: ((Int32, Data) -> Void)?
-    private lazy var lxstAudioEngine = LXSTAudioEngine {
-        [weak self] frame in
-        self?.sendLXSTOpusFrame(frame)
-    }
+    private lazy var lxstAudioEngine = LXSTAudioEngine(
+        frameSender: { [weak self] frame in
+            self?.sendLXSTOpusFrame(frame)
+        },
+        statusHandler: { [weak self] status in
+            Task { @MainActor in
+                self?.lxstAudioStatus = status
+            }
+        }
+    )
     private let remoteNodeLocationsStorageKey =
         "isideband.reticulum.remoteNodeLocations"
 
@@ -464,12 +471,18 @@ final class ReticulumCoreBridge: ObservableObject {
                     guard let baseAddress = bytes.bindMemory(
                         to: UInt8.self
                     ).baseAddress else { return }
-                    _ = runcore_lxst_send_frame(
+                    let result = runcore_lxst_send_frame(
                         activeHandle,
                         1,
                         baseAddress,
                         Int32(frame.count)
                     )
+                    if result != 0 {
+                        Task { @MainActor [weak self] in
+                            self?.lxstAudioStatus =
+                                "LXST audio transmission failed"
+                        }
+                    }
                 }
             }
         }
@@ -492,6 +505,7 @@ final class ReticulumCoreBridge: ObservableObject {
                     || callStatus == .busy
                     || callStatus == .rejected {
             lxstAudioEngine.stop()
+            lxstAudioStatus = "Audio inactive"
         }
     }
 

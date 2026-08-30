@@ -9,6 +9,7 @@ import Foundation
 /// AVAudioConverter instances are not safe to use concurrently.
 final class LXSTAudioEngine: @unchecked Sendable {
     typealias FrameSender = @Sendable (Data) -> Void
+    typealias StatusHandler = @Sendable (String) -> Void
 
     private let audioQueue = DispatchQueue(
         label: "com.kyleperry.iSideband.lxst.audio",
@@ -17,6 +18,7 @@ final class LXSTAudioEngine: @unchecked Sendable {
     private let engine = AVAudioEngine()
     private let player = AVAudioPlayerNode()
     private let frameSender: FrameSender
+    private let statusHandler: StatusHandler
 
     private let sampleRate = 24_000.0
     private let samplesPerFrame: AVAudioFrameCount = 1_440
@@ -26,6 +28,8 @@ final class LXSTAudioEngine: @unchecked Sendable {
     private var pendingSamples = [Float]()
     private var isRunning = false
     private var isMuted = false
+    private var didReportTransmit = false
+    private var didReportReceive = false
 
     private lazy var pcmFormat = AVAudioFormat(
         commonFormat: .pcmFormatFloat32,
@@ -41,17 +45,23 @@ final class LXSTAudioEngine: @unchecked Sendable {
         AVEncoderBitRateKey: 8_000
     ])
 
-    init(frameSender: @escaping FrameSender) {
+    init(
+        frameSender: @escaping FrameSender,
+        statusHandler: @escaping StatusHandler
+    ) {
         self.frameSender = frameSender
+        self.statusHandler = statusHandler
     }
 
     func start() {
+        report("Starting call audio…")
         AVAudioApplication.requestRecordPermission { [weak self] granted in
-            guard granted else {
-                privacySafeLog("LXST microphone permission was denied")
-                return
+            if !granted {
+                self?.report("Microphone denied — receive audio only")
             }
-            self?.audioQueue.async { self?.startAudio() }
+            self?.audioQueue.async {
+                self?.startAudio(captureEnabled: granted)
+            }
         }
     }
 
@@ -68,8 +78,12 @@ final class LXSTAudioEngine: @unchecked Sendable {
         audioQueue.async { [weak self] in self?.decodeAndPlay(data) }
     }
 
-    private func startAudio() {
-        guard !isRunning, let opusFormat else { return }
+    private func startAudio(captureEnabled: Bool) {
+        guard !isRunning else { return }
+        guard let opusFormat else {
+            report("Opus audio format unavailable")
+            return
+        }
         do {
             let session = AVAudioSession.sharedInstance()
             try session.setCategory(
@@ -84,36 +98,42 @@ final class LXSTAudioEngine: @unchecked Sendable {
             engine.attach(player)
             engine.connect(player, to: engine.mainMixerNode, format: pcmFormat)
 
-            let input = engine.inputNode
-            let inputFormat = input.outputFormat(forBus: 0)
-            guard inputFormat.sampleRate > 0,
-                  inputFormat.channelCount > 0,
-                  let captureConverter = AVAudioConverter(
-                      from: inputFormat,
-                      to: pcmFormat
-                  ),
-                  let encoder = AVAudioConverter(
-                      from: pcmFormat,
-                      to: opusFormat
-                  ),
-                  let decoder = AVAudioConverter(
+            guard let decoder = AVAudioConverter(
                       from: opusFormat,
                       to: pcmFormat
                   ) else {
                 throw LXSTAudioError.converterUnavailable
             }
-            self.captureConverter = captureConverter
-            self.encoder = encoder
             self.decoder = decoder
             pendingSamples.removeAll(keepingCapacity: true)
+            didReportTransmit = false
+            didReportReceive = false
 
-            input.installTap(
-                onBus: 0,
-                bufferSize: 960,
-                format: inputFormat
-            ) { [weak self] buffer, _ in
-                self?.audioQueue.async {
-                    self?.capture(buffer, from: inputFormat)
+            if captureEnabled {
+                let input = engine.inputNode
+                let inputFormat = input.outputFormat(forBus: 0)
+                guard inputFormat.sampleRate > 0,
+                      inputFormat.channelCount > 0,
+                      let captureConverter = AVAudioConverter(
+                          from: inputFormat,
+                          to: pcmFormat
+                      ),
+                      let encoder = AVAudioConverter(
+                          from: pcmFormat,
+                          to: opusFormat
+                      ) else {
+                    throw LXSTAudioError.converterUnavailable
+                }
+                self.captureConverter = captureConverter
+                self.encoder = encoder
+                input.installTap(
+                    onBus: 0,
+                    bufferSize: 960,
+                    format: inputFormat
+                ) { [weak self] buffer, _ in
+                    self?.audioQueue.async {
+                        self?.capture(buffer, from: inputFormat)
+                    }
                 }
             }
 
@@ -121,15 +141,19 @@ final class LXSTAudioEngine: @unchecked Sendable {
             try engine.start()
             player.play()
             isRunning = true
+            report(captureEnabled ? "Call audio ready" : "Receive audio ready")
         } catch {
             privacySafeLog("LXST audio could not start", error.localizedDescription)
+            report("Audio failed: \(error.localizedDescription)")
             stopAudio()
         }
     }
 
     private func stopAudio() {
         guard isRunning || engine.isRunning else { return }
-        engine.inputNode.removeTap(onBus: 0)
+        if captureConverter != nil {
+            engine.inputNode.removeTap(onBus: 0)
+        }
         player.stop()
         engine.stop()
         engine.reset()
@@ -231,6 +255,10 @@ final class LXSTAudioEngine: @unchecked Sendable {
                 count: Int(compressed.byteLength)
             )
         )
+        if !didReportTransmit {
+            didReportTransmit = true
+            report("Sending live Opus audio")
+        }
     }
 
     private func decodeAndPlay(_ data: Data) {
@@ -277,6 +305,14 @@ final class LXSTAudioEngine: @unchecked Sendable {
               pcm.frameLength > 0 else { return }
         player.scheduleBuffer(pcm)
         if !player.isPlaying { player.play() }
+        if !didReportReceive {
+            didReportReceive = true
+            report("Receiving live Opus audio")
+        }
+    }
+
+    private func report(_ status: String) {
+        statusHandler(status)
     }
 }
 

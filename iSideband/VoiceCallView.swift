@@ -155,7 +155,7 @@ struct VoiceCallView: View {
             let contactName = contactStore.contact(for: discovered.destinationHash)?.displayName
             return LXMFPeer(
                 displayName: contactName ?? discovered.displayName ?? "Unknown Node",
-                destinationHash: discovered.identityHash ?? discovered.destinationHash
+                destinationHash: discovered.destinationHash
             )
         }
     }
@@ -281,6 +281,11 @@ struct VoiceCallView: View {
                 if let peer = callManager.state.peer {
                     Text(peer.destinationHash)
                         .font(.caption.monospaced())
+                        .foregroundStyle(secondaryColor)
+                }
+                if case .active = callManager.state {
+                    Text(bridge.lxstAudioStatus)
+                        .font(.caption)
                         .foregroundStyle(secondaryColor)
                 }
             }
