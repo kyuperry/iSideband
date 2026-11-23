@@ -56,6 +56,7 @@ final class BluetoothManager:
     @Published var codingRate: Int?
     @Published var temperature: Double?
     private(set) var radioConfigurationSession = UUID()
+    var radioStartupReplies: [UInt8: Data] = [:]
     @Published var radioReady = false
     @Published var radioLocked: Bool?
     @Published var radioErrorMessage: String?
@@ -1626,6 +1627,11 @@ extension BluetoothManager: CBPeripheralDelegate {
 
                 for frame in frames {
                     let packet = packetDecoder.decode(frame)
+                    if let command = packet.command,
+                       (0x01...0x08).contains(command) || command == 0x90,
+                       !packet.payload.isEmpty {
+                        radioStartupReplies[command] = Data(packet.payload)
+                    }
                     if packet.commandType == .batteryState {
                         privacySafeLog("RNode battery frame received:", packet.payload.map { String(format: "%02X", $0) }.joined(separator: " "))
                     }

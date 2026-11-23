@@ -23,8 +23,7 @@ enum RNodeRadioConfigurationError: LocalizedError {
     case invalidTransmitPower
     case invalidSpreadingFactor
     case invalidCodingRate
-    case radioLocked
-    case radioDidNotStart(String?)
+    case startupUnconfirmed(String, String)
 
     var errorDescription: String? {
         switch self {
@@ -46,11 +45,8 @@ enum RNodeRadioConfigurationError: LocalizedError {
         case .invalidCodingRate:
             return "Coding rate must be between 5 and 8."
 
-        case .radioLocked:
-            return "The RNode radio is locked because its modem configuration is incomplete."
-
-        case .radioDidNotStart(let detail):
-            return detail ?? "The RNode did not turn its LoRa radio on."
+        case .startupUnconfirmed(let reason, let replies):
+            return "\(reason)\n\nBluetooth replies (hex): \(replies)"
         }
     }
 }
@@ -65,6 +61,7 @@ extension BluetoothManager {
         radioReady = false
         radioLocked = nil
         radioErrorMessage = nil
+        radioStartupReplies.removeAll(keepingCapacity: true)
 
         guard connectedDeviceID != nil else {
             completion(
@@ -356,7 +353,6 @@ extension BluetoothManager {
 
             if retryCount == 0, self.radioLocked != true {
                 privacySafeLog("RNode radio stayed off; retrying startup once")
-                self.radioErrorMessage = nil
                 self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]))
                 self.verifyRadioStarted(
                     session: session,
@@ -367,14 +363,23 @@ extension BluetoothManager {
                 return
             }
 
-            let error: RNodeRadioConfigurationError
-            if self.radioLocked == true {
-                error = .radioLocked
-            } else {
-                error = .radioDidNotStart(self.radioErrorMessage)
-            }
+            let reason = self.radioLocked == true
+                ? "The RNode modem configuration is incomplete."
+                : self.radioErrorMessage ?? "The RNode did not confirm LoRa startup."
+            let commands: [(UInt8, String)] = [
+                (0x08, "Detect"), (0x01, "Freq"), (0x02, "BW"),
+                (0x03, "Power"), (0x04, "SF"), (0x05, "CR"),
+                (0x07, "Lock"), (0x06, "State"), (0x90, "Error")
+            ]
+            let replies = commands.map { command, label in
+                let reply = self.radioStartupReplies[command]?.map {
+                    String(format: "%02X", $0)
+                }.joined() ?? "—"
+                return "\(label)=\(reply)"
+            }.joined(separator: "  ")
+            let error = RNodeRadioConfigurationError.startupUnconfirmed(reason, replies)
             self.radioReady = false
-            self.setRadioConnectionMessage(error.localizedDescription)
+            self.setRadioConnectionMessage(reason)
             completion(.failure(error))
         }
     }
