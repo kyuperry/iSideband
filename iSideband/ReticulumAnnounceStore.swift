@@ -8,6 +8,60 @@ final class ReticulumAnnounceStore: ObservableObject {
     @Published private(set) var announces: [ReticulumAnnounce] = []
     @Published private(set) var history: [ReticulumAnnounce] = []
 
+    struct ListEntry: Identifiable {
+        let destinationHash: String
+        let identityHash: String?
+        var displayName: String?
+        let receivedAt: Date
+
+        var id: String { identityHash ?? destinationHash }
+    }
+
+    @Published private var nativeAnnounces: [String: ListEntry] = [:]
+
+    var listEntries: [ListEntry] {
+        let packetEntries = announces.map {
+            ListEntry(
+                destinationHash: $0.destinationHashHex,
+                identityHash: $0.identityHashHex,
+                displayName: $0.displayName,
+                receivedAt: $0.receivedAt
+            )
+        }
+        let identitiesByDestination = Dictionary(
+            announces.map { ($0.destinationHashHex, $0.identityHashHex) },
+            uniquingKeysWith: { latest, _ in latest }
+        )
+        let nativeEntries = nativeAnnounces.values.map {
+            ListEntry(
+                destinationHash: $0.destinationHash,
+                identityHash: $0.identityHash ?? identitiesByDestination[$0.destinationHash],
+                displayName: $0.displayName,
+                receivedAt: $0.receivedAt
+            )
+        }
+        let newestFirst = (packetEntries + nativeEntries).sorted {
+            $0.receivedAt > $1.receivedAt
+        }
+        var grouped: [String: ListEntry] = [:]
+        for entry in newestFirst {
+            if var newer = grouped[entry.id] {
+                newer.displayName = newer.displayName ?? entry.displayName
+                grouped[entry.id] = newer
+            } else {
+                grouped[entry.id] = entry
+            }
+        }
+        return grouped.values.sorted {
+            if $0.receivedAt == $1.receivedAt { return $0.id < $1.id }
+            return $0.receivedAt > $1.receivedAt
+        }
+    }
+
+    func recordNativeAnnounce(_ entry: ListEntry) {
+        nativeAnnounces[entry.destinationHash] = entry
+    }
+
     private let storageKey =
         "isideband.reticulum.announces"
     private var historyEventIDs = Set<Data>()
@@ -89,6 +143,7 @@ final class ReticulumAnnounceStore: ObservableObject {
     func removeAll() {
         announces.removeAll()
         history.removeAll()
+        nativeAnnounces.removeAll()
         historyEventIDs.removeAll()
         persist()
     }

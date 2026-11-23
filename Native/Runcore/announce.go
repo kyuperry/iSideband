@@ -14,6 +14,7 @@ import (
 
 type AnnounceEntry struct {
 	DestinationHashHex string `json:"destination_hash_hex"`
+	IdentityHashHex    string `json:"identity_hash_hex,omitempty"`
 	DisplayName        string `json:"display_name,omitempty"`
 	AvatarHashHex      string `json:"avatar_hash_hex,omitempty"`
 	AvatarMime         string `json:"avatar_mime,omitempty"`
@@ -46,6 +47,12 @@ func (h *announceLogger) ReceivedAnnounce(destinationHash []byte, announcedIdent
 		return
 	}
 	destHex := hex.EncodeToString(destinationHash)
+	var identityHashHex string
+	if announcedIdentity != nil {
+		if publicKey := announcedIdentity.GetPublicKey(); len(publicKey) != 0 {
+			identityHashHex = hex.EncodeToString(rns.TruncatedHash(publicKey))
+		}
+	}
 	displayName, av := parseAnnounceAppData(appData)
 	if displayName != "" {
 		h.node.renameContactFolderFromAnnounce(destHex, displayName)
@@ -58,6 +65,7 @@ func (h *announceLogger) ReceivedAnnounce(destinationHash []byte, announcedIdent
 	h.node.announceMu.Unlock()
 	h.node.recordAnnounce(AnnounceEntry{
 		DestinationHashHex: destHex,
+		IdentityHashHex:    identityHashHex,
 		DisplayName:        displayName,
 		AvatarHashHex:      strings.ToLower(strings.TrimSpace(av.HashHex)),
 		AvatarMime:         strings.TrimSpace(av.Mime),
@@ -98,9 +106,8 @@ func (n *Node) recordAnnounce(entry AnnounceEntry) {
 	for _, e := range n.announces {
 		entries = append(entries, e)
 	}
-	n.announceMu.Unlock()
-
 	n.persistAnnouncesToDisk(entries)
+	n.announceMu.Unlock()
 }
 
 func (n *Node) announceStoragePath() string {
@@ -174,7 +181,17 @@ func (n *Node) persistAnnouncesToDisk(entries []AnnounceEntry) {
 	if err != nil {
 		return
 	}
-	_ = os.WriteFile(path, data, 0o644)
+	file, err := os.CreateTemp(dir, ".announces-*")
+	if err != nil {
+		return
+	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
+	_, writeErr := file.Write(data)
+	closeErr := file.Close()
+	if writeErr == nil && closeErr == nil {
+		_ = os.Rename(tempPath, path)
+	}
 }
 
 func (n *Node) announceSnapshot() []AnnounceEntry {

@@ -5,8 +5,9 @@ struct AnnounceListView: View {
         ReticulumAnnounceStore.shared
 
     var body: some View {
+        let entries = announceStore.listEntries
         Group {
-            if announceStore.history.isEmpty {
+            if entries.isEmpty {
                 ContentUnavailableView {
                     Label(
                         "No Announcements",
@@ -21,10 +22,10 @@ struct AnnounceListView: View {
             } else {
                 List {
                     Section(
-                        "\(announceStore.history.count) Announcements"
+                        "\(entries.count) Identities"
                     ) {
                         ForEach(
-                            announceStore.history
+                            entries
                         ) { announce in
                             VStack(
                                 alignment: .leading,
@@ -37,7 +38,7 @@ struct AnnounceListView: View {
                                 .font(.headline)
 
                                 Text(
-                                    announce.destinationHashHex
+                                    announce.id
                                 )
                                 .font(.caption.monospaced())
                                 .foregroundStyle(.secondary)
