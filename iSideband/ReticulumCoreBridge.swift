@@ -248,6 +248,25 @@ final class ReticulumCoreBridge: ObservableObject {
     )
     private weak var bluetooth: BluetoothManager?
     private var routeRefreshTimer: Timer?
+    private var discoveredAnnounceTimer: Timer?
+    private var isImportingCoreAnnounces = false
+    private var importedAnnounceDates: [String: Date] = [:]
+
+    private nonisolated struct CoreAnnounceCache: Decodable, Sendable {
+        struct Entry: Decodable, Sendable {
+            let destinationHash: String
+            let displayName: String?
+            let lastSeen: TimeInterval
+
+            enum CodingKeys: String, CodingKey {
+                case destinationHash = "destination_hash_hex"
+                case displayName = "display_name"
+                case lastSeen = "last_seen"
+            }
+        }
+
+        let announces: [Entry]
+    }
     private var appIsActive = true
     private var lastAutomaticAnnounce: Date?
     var lxstFrameHandler: ((Int32, Data) -> Void)?
@@ -737,6 +756,8 @@ final class ReticulumCoreBridge: ObservableObject {
         } else {
             routeRefreshTimer?.invalidate()
             routeRefreshTimer = nil
+            discoveredAnnounceTimer?.invalidate()
+            discoveredAnnounceTimer = nil
         }
     }
 
@@ -1199,6 +1220,8 @@ final class ReticulumCoreBridge: ObservableObject {
 
     private func startRouteMaintenance() {
         routeRefreshTimer?.invalidate()
+        discoveredAnnounceTimer?.invalidate()
+        discoveredAnnounceTimer = nil
         guard appIsActive else {
             routeRefreshTimer = nil
             return
@@ -1212,7 +1235,65 @@ final class ReticulumCoreBridge: ObservableObject {
             }
         }
         routeRefreshTimer?.tolerance = 3
+        if let root = try? coreDirectory() {
+            let cache = root.appendingPathComponent("storage/announces.json")
+            discoveredAnnounceTimer = Timer.scheduledTimer(
+                withTimeInterval: 2,
+                repeats: true
+            ) { [weak self] _ in
+                Task { @MainActor in
+                    await self?.importCoreAnnounces(from: cache)
+                }
+            }
+            discoveredAnnounceTimer?.tolerance = 0.5
+        }
         checkScheduledAutomaticAnnounce()
+    }
+
+    private func importCoreAnnounces(from cache: URL) async {
+        guard appIsActive, handle != 0, !isImportingCoreAnnounces else { return }
+        isImportingCoreAnnounces = true
+        defer { isImportingCoreAnnounces = false }
+
+        // RunCore writes announces received through its native interfaces
+        // to this cache, including TCP packets that bypass the BLE decoder.
+        let entries = await Task.detached(priority: .utility) {
+            guard let data = try? Data(contentsOf: cache) else {
+                return [CoreAnnounceCache.Entry]()
+            }
+            let decoder = JSONDecoder()
+            if let snapshot = try? decoder.decode(CoreAnnounceCache.self, from: data) {
+                return snapshot.announces
+            }
+            return (try? decoder.decode([CoreAnnounceCache.Entry].self, from: data)) ?? []
+        }.value
+
+        guard appIsActive, handle != 0 else { return }
+        let store = ReticulumDiscoveredPeerStore.shared
+        let existingDates = Dictionary(
+            store.peers.map { ($0.destinationHash, $0.lastSeenAt) },
+            uniquingKeysWith: max
+        )
+        for entry in entries {
+            let hash = entry.destinationHash.lowercased()
+            guard hash != destinationHash.lowercased(),
+                  Data(hex: hash)?.count == 16,
+                  entry.lastSeen > 0 else { continue }
+
+            let seenAt = Date(timeIntervalSince1970: entry.lastSeen)
+            if let lastImported = importedAnnounceDates[hash], seenAt <= lastImported {
+                continue
+            }
+            importedAnnounceDates[hash] = seenAt
+            if let existing = existingDates[hash], seenAt <= existing {
+                continue
+            }
+            store.discover(
+                destinationHash: hash,
+                displayName: entry.displayName,
+                seenAt: seenAt
+            )
+        }
     }
 
     private func checkScheduledAutomaticAnnounce() {
