@@ -56,6 +56,7 @@ final class BluetoothManager:
     @Published var codingRate: Int?
     @Published var temperature: Double?
     private(set) var radioConfigurationSession = UUID()
+    var rnodeBLEWriteError: String?
     var radioStartupReplies: [UInt8: Data] = [:]
     @Published var radioReady = false
     @Published var radioLocked: Bool?
@@ -89,7 +90,8 @@ final class BluetoothManager:
     private var batteryLevelCharacteristic: CBCharacteristic?
     private var batteryTelemetryTimer: Timer?
     private var batteryCapabilityTask: Task<Void, Never>?
-    private var pendingRNodeWriteChunks: [Data] = []
+    private var pendingRNodeWriteChunks: [(data: Data, type: CBCharacteristicWriteType)] = []
+    private var awaitingRNodeWriteResponse = false
     private var pendingRNodeWriteHead = 0
     private let maximumPendingRNodeWriteChunks = 4_096
     private let maximumRNodeWritesPerDrain = 32
@@ -271,7 +273,7 @@ final class BluetoothManager:
         }
     }
     
-    func sendToRNode(_ data: Data)
+    func sendToRNode(_ data: Data, acknowledgeWrite: Bool = false)
     {
         guard PacketInterfaceManager.shared.isActive(.bluetoothRNode) else {
             connectionMessage = "Bluetooth RNode interface is not selected"
@@ -287,8 +289,17 @@ final class BluetoothManager:
         }
         
         let escaped = escapeKISSFrame(data)
-        let writeType: CBCharacteristicWriteType =
-            .withoutResponse
+        let properties = rnodeWriteCharacteristic.properties
+        let writeType: CBCharacteristicWriteType
+        if properties.contains(.write),
+           acknowledgeWrite || !properties.contains(.writeWithoutResponse) {
+            writeType = .withResponse
+        } else if properties.contains(.writeWithoutResponse) {
+            writeType = .withoutResponse
+        } else {
+            rnodeBLEWriteError = "The RNode UART characteristic does not support writes."
+            return
+        }
         let maximumLength =
             connectedPeripheral.maximumWriteValueLength(
                 for: writeType
@@ -327,7 +338,7 @@ final class BluetoothManager:
                 in: offset..<end
             )
 
-            pendingRNodeWriteChunks.append(chunk)
+            pendingRNodeWriteChunks.append((chunk, writeType))
             offset = end
         }
         drainRNodeWriteQueue()
@@ -378,7 +389,8 @@ final class BluetoothManager:
     }
 
     private func drainRNodeWriteQueue() {
-        guard pendingRNodeWriteHead < pendingRNodeWriteChunks.count,
+        guard !awaitingRNodeWriteResponse,
+              pendingRNodeWriteHead < pendingRNodeWriteChunks.count,
               let connectedPeripheral,
               let rnodeWriteCharacteristic,
               connectedPeripheral.state == .connected
@@ -388,17 +400,22 @@ final class BluetoothManager:
 
         var writesRemaining = maximumRNodeWritesPerDrain
         while writesRemaining > 0,
-              connectedPeripheral.canSendWriteWithoutResponse,
               pendingRNodeWriteHead < pendingRNodeWriteChunks.count {
             let chunk = pendingRNodeWriteChunks[pendingRNodeWriteHead]
+            if chunk.type == .withoutResponse && !connectedPeripheral.canSendWriteWithoutResponse {
+                break
+            }
+
             pendingRNodeWriteHead += 1
+            awaitingRNodeWriteResponse = chunk.type == .withResponse
             connectedPeripheral.writeValue(
-                chunk,
+                chunk.data,
                 for: rnodeWriteCharacteristic,
-                type: .withoutResponse
+                type: chunk.type
             )
-            bluetoothBytesWritten += chunk.count
+            bluetoothBytesWritten += chunk.data.count
             writesRemaining -= 1
+            if awaitingRNodeWriteResponse { break }
         }
 
         if pendingRNodeWriteHead == pendingRNodeWriteChunks.count {
@@ -411,7 +428,7 @@ final class BluetoothManager:
         }
 
         if writesRemaining == 0,
-           connectedPeripheral.canSendWriteWithoutResponse,
+           !awaitingRNodeWriteResponse,
            pendingRNodeWriteHead < pendingRNodeWriteChunks.count {
             Task { @MainActor [weak self] in
                 await Task.yield()
@@ -516,6 +533,8 @@ final class BluetoothManager:
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
         batteryLevelCharacteristic = nil
+        awaitingRNodeWriteResponse = false
+        rnodeBLEWriteError = nil
         pendingRNodeWriteChunks.removeAll()
         pendingRNodeWriteHead = 0
         batteryPercent = nil
@@ -2045,13 +2064,15 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral === peripheral,
+                  characteristic === rnodeWriteCharacteristic else { return }
+
+            awaitingRNodeWriteResponse = false
             if let error {
-                connectionMessage =
-                    "RNode write failed: \(error.localizedDescription)"
-            } else {
-                privacySafeLog("Successfully wrote data to \(characteristic.uuid)"
-                )
+                rnodeBLEWriteError = error.localizedDescription
+                connectionMessage = "RNode write failed: \(error.localizedDescription)"
             }
+            drainRNodeWriteQueue()
         }
     }
     nonisolated func peripheral(

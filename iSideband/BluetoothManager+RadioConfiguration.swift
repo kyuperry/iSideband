@@ -62,6 +62,7 @@ extension BluetoothManager {
         radioLocked = nil
         radioErrorMessage = nil
         radioStartupReplies.removeAll(keepingCapacity: true)
+        rnodeBLEWriteError = nil
 
         guard connectedDeviceID != nil else {
             completion(
@@ -293,7 +294,7 @@ extension BluetoothManager {
             return
         }
 
-        sendToRNode(frames[index])
+        sendToRNode(frames[index], acknowledgeWrite: true)
 
         DispatchQueue.main.asyncAfter(
             deadline: .now() + 0.25
@@ -323,8 +324,8 @@ extension BluetoothManager {
                 completion(.failure(RNodeRadioConfigurationError.rnodeNotConnected))
                 return
             }
-            self.sendToRNode(Data([0xC0, 0x07, 0xFF, 0xC0]))
-            self.sendToRNode(Data([0xC0, 0x06, 0xFF, 0xC0]))
+            self.sendToRNode(Data([0xC0, 0x07, 0xFF, 0xC0]), acknowledgeWrite: true)
+            self.sendToRNode(Data([0xC0, 0x06, 0xFF, 0xC0]), acknowledgeWrite: true)
             self.finishRadioStartupCheck(
                 session: session, configuration: configuration,
                 retryCount: retryCount, completion: completion
@@ -353,7 +354,7 @@ extension BluetoothManager {
 
             if retryCount == 0, self.radioLocked != true {
                 privacySafeLog("RNode radio stayed off; retrying startup once")
-                self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]))
+                self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]), acknowledgeWrite: true)
                 self.verifyRadioStarted(
                     session: session,
                     configuration: configuration,
@@ -363,9 +364,14 @@ extension BluetoothManager {
                 return
             }
 
-            let reason = self.radioLocked == true
-                ? "The RNode modem configuration is incomplete."
-                : self.radioErrorMessage ?? "The RNode did not confirm LoRa startup."
+            let reason: String
+            if let writeError = self.rnodeBLEWriteError {
+                reason = "The RNode Bluetooth write failed: \(writeError)"
+            } else if self.radioLocked == true {
+                reason = "The RNode modem configuration is incomplete."
+            } else {
+                reason = self.radioErrorMessage ?? "The RNode did not confirm LoRa startup."
+            }
             let commands: [(UInt8, String)] = [
                 (0x08, "Detect"), (0x01, "Freq"), (0x02, "BW"),
                 (0x03, "Power"), (0x04, "SF"), (0x05, "CR"),
