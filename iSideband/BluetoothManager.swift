@@ -23,6 +23,10 @@ final class BluetoothManager: NSObject, ObservableObject {
     @Published private(set) var serviceCount = 0
     @Published private(set) var receivedData = Data()
 
+    private static let uartService = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+    private static let uartWrite = CBUUID(string: "6E400002-B5A3-F393-E0A9-E50E24DCCA9E")
+    private static let uartNotify = CBUUID(string: "6E400003-B5A3-F393-E0A9-E50E24DCCA9E")
+
     private var centralManager: CBCentralManager!
     private var connectedPeripheral: CBPeripheral?
 
@@ -66,6 +70,10 @@ final class BluetoothManager: NSObject, ObservableObject {
     }
 
     func connect(to device: DiscoveredDevice) {
+        guard connectingDeviceID == nil, connectedPeripheral == nil else {
+            return
+        }
+
         stopScanning()
 
         connectingDeviceID = device.id
@@ -90,7 +98,8 @@ final class BluetoothManager: NSObject, ObservableObject {
     func sendToRNode(_ data: Data) {
         guard
             let connectedPeripheral,
-            let rnodeWriteCharacteristic
+            let rnodeWriteCharacteristic,
+            rnodeNotifyCharacteristic?.isNotifying == true
         else {
             connectionMessage = "RNode data channel is not ready"
             return
@@ -180,10 +189,18 @@ extension BluetoothManager: CBCentralManagerDelegate {
     ) {
         Task { @MainActor in
 
-            let name = peripheral.name ?? ""
+            let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+            let names = [advertisedName, peripheral.name].compactMap { $0 }
+            let serviceUUIDs = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+            let overflowUUIDs = advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? []
+            let hasKnownName = names.contains {
+                $0.localizedCaseInsensitiveContains("RNode") ||
+                $0.localizedCaseInsensitiveContains("Heltec")
+            }
 
-            // Only show devices that advertise themselves as RNodes
-            guard name.localizedCaseInsensitiveContains("RNode") else {
+            guard hasKnownName ||
+                    serviceUUIDs.contains(Self.uartService) ||
+                    overflowUUIDs.contains(Self.uartService) else {
                 return
             }
 
@@ -251,30 +268,26 @@ extension BluetoothManager: CBPeripheralDelegate {
         didDiscoverServices error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral === peripheral else {
+                return
+            }
+
             if let error {
                 connectionMessage =
                     "Service discovery failed: \(error.localizedDescription)"
                 return
             }
 
-            guard let services = peripheral.services else {
-                connectionMessage =
-                    "Connected, but no BLE services were found"
+            let services = peripheral.services ?? []
+            serviceCount = services.count
+
+            guard let service = services.first(where: { $0.uuid == Self.uartService }) else {
+                connectionMessage = "RNode Bluetooth service unavailable. Check the board firmware."
                 return
             }
 
-            serviceCount = services.count
-            connectionMessage =
-                "Found \(services.count) BLE service(s)"
-
-            for service in services {
-                print("RNode service UUID: \(service.uuid)")
-
-                peripheral.discoverCharacteristics(
-                    nil,
-                    for: service
-                )
-            }
+            connectionMessage = "Checking RNode data channel…"
+            peripheral.discoverCharacteristics([Self.uartWrite, Self.uartNotify], for: service)
         }
     }
 
@@ -284,51 +297,33 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral === peripheral, service.uuid == Self.uartService else {
+                return
+            }
+
             if let error {
-                print(
-                    "Characteristic discovery error: " +
-                    error.localizedDescription
-                )
+                connectionMessage = "RNode characteristic discovery failed: \(error.localizedDescription)"
                 return
             }
 
-            guard let characteristics =
-                    service.characteristics else {
+            let characteristics = service.characteristics ?? []
+            guard
+                let write = characteristics.first(where: {
+                    $0.uuid == Self.uartWrite &&
+                    ($0.properties.contains(.write) || $0.properties.contains(.writeWithoutResponse))
+                }),
+                let notify = characteristics.first(where: {
+                    $0.uuid == Self.uartNotify &&
+                    ($0.properties.contains(.notify) || $0.properties.contains(.indicate))
+                })
+            else {
+                connectionMessage = "RNode data channel unavailable"
                 return
             }
 
-            for characteristic in characteristics {
-                print(
-                    "Characteristic \(characteristic.uuid), " +
-                    "properties: \(characteristic.properties)"
-                )
-
-                let uuid =
-                    characteristic.uuid.uuidString.uppercased()
-
-                switch uuid {
-                case "6E400002-B5A3-F393-E0A9-E50E24DCCA9E":
-                    rnodeWriteCharacteristic = characteristic
-                    print("Saved RNode write characteristic")
-
-                case "6E400003-B5A3-F393-E0A9-E50E24DCCA9E":
-                    rnodeNotifyCharacteristic = characteristic
-
-                    peripheral.setNotifyValue(
-                        true,
-                        for: characteristic
-                    )
-
-                    print("Subscribed to RNode notifications")
-
-                default:
-                    if characteristic.properties.contains(.read) {
-                        peripheral.readValue(
-                            for: characteristic
-                        )
-                    }
-                }
-            }
+            rnodeWriteCharacteristic = write
+            rnodeNotifyCharacteristic = notify
+            peripheral.setNotifyValue(true, for: notify)
         }
     }
 
@@ -338,17 +333,17 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
-            if let error {
-                print(
-                    "Notification subscription failed: " +
-                    error.localizedDescription
-                )
+            guard connectedPeripheral === peripheral,
+                  characteristic === rnodeNotifyCharacteristic else {
                 return
             }
 
-            if characteristic.isNotifying {
-                connectionMessage = "RNode data channel ready"
-                print("RNode notification channel is active")
+            if let error {
+                connectionMessage = "RNode notification subscription failed: \(error.localizedDescription)"
+            } else {
+                connectionMessage = characteristic.isNotifying
+                    ? "RNode data channel ready"
+                    : "RNode data channel unavailable"
             }
         }
     }
@@ -359,39 +354,18 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral === peripheral,
+                  characteristic === rnodeNotifyCharacteristic else {
+                return
+            }
+
             if let error {
-                print(
-                    "Characteristic read failed: " +
-                    error.localizedDescription
-                )
+                print("RNode notification failed: \(error.localizedDescription)")
                 return
             }
 
-            guard let data = characteristic.value else {
-                return
-            }
-
-            if characteristic.uuid ==
-                rnodeNotifyCharacteristic?.uuid {
+            if let data = characteristic.value {
                 receivedData.append(data)
-
-                print(
-                    "Received \(data.count) byte(s) from RNode: " +
-                    data.map {
-                        String(format: "%02X", $0)
-                    }.joined(separator: " ")
-                )
-            } else if let text = String(
-                data: data,
-                encoding: .utf8
-            ) {
-                print(
-                    "\(characteristic.uuid): \(text)"
-                )
-            } else {
-                print(
-                    "\(characteristic.uuid): \(data as NSData)"
-                )
             }
         }
     }
@@ -402,6 +376,11 @@ extension BluetoothManager: CBPeripheralDelegate {
         error: Error?
     ) {
         Task { @MainActor in
+            guard connectedPeripheral === peripheral,
+                  characteristic === rnodeWriteCharacteristic else {
+                return
+            }
+
             if let error {
                 connectionMessage =
                     "RNode write failed: \(error.localizedDescription)"

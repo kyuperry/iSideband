@@ -84,6 +84,10 @@ struct ContentView: View {
                 }
             }
             .buttonStyle(.plain)
+            .disabled(
+                bluetooth.connectingDeviceID != nil ||
+                (bluetooth.connectedDeviceID != nil && bluetooth.connectedDeviceID != device.id)
+            )
         }
         .listStyle(.plain)
     }
