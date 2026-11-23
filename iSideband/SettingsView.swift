@@ -76,7 +76,7 @@ struct SettingsView: View {
     @State private var transmitPowerDBm = "22"
     @State private var spreadingFactor = "7"
     @State private var codingRate = "5"
-    @State private var rnodeDisplayName = "KPU5-1"
+    @State private var rnodeDisplayName = "RNode"
 
     @State private var showRestartConfirmation = false
     @State private var showRadioOffConfirmation = false
@@ -648,7 +648,7 @@ struct SettingsView: View {
                 Spacer()
 
                 TextField(
-                    "KPU5-1",
+                    "RNode",
                     text: $rnodeDisplayName
                 )
                 .textInputAutocapitalization(.characters)
@@ -862,7 +862,12 @@ struct SettingsView: View {
         rnodeDisplayName =
             defaults.string(
                 forKey: RNodePreferenceKey.displayName
-            ) ?? "KPU5-1"
+            ) ?? "RNode"
+
+        if rnodeDisplayName == "KPU5-1" {
+            rnodeDisplayName = "RNode"
+            defaults.set(rnodeDisplayName, forKey: RNodePreferenceKey.displayName)
+        }
 
         hasLoadedSettings = true
 

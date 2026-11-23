@@ -55,6 +55,7 @@ final class BluetoothManager:
     @Published var spreadingFactor: Int?
     @Published var codingRate: Int?
     @Published var temperature: Double?
+    private(set) var radioConfigurationSession = UUID()
     @Published var radioReady = false
     @Published var radioLocked: Bool?
     @Published var radioErrorMessage: String?
@@ -508,6 +509,8 @@ final class BluetoothManager:
         connectingDeviceID = nil
         connectedDeviceID = nil
         connectedPeripheral = nil
+        connectedDeviceName = nil
+        invalidateRadioConfiguration()
         
         rnodeWriteCharacteristic = nil
         rnodeNotifyCharacteristic = nil
@@ -535,6 +538,10 @@ final class BluetoothManager:
         lastBatteryNotificationPercent = nil
         
         serviceCount = 0
+    }
+
+    func invalidateRadioConfiguration() {
+        radioConfigurationSession = UUID()
     }
 
     func setRadioConnectionMessage(_ message: String) {
@@ -758,10 +765,14 @@ final class BluetoothManager:
             0xC0
         ])
         
+        invalidateRadioConfiguration()
+        radioReady = false
         sendToRNode(frame)
     }
     
     func turnRadioOff() {
+        invalidateRadioConfiguration()
+        radioReady = false
         let frame = Data([
             0xC0,
             0x06,
@@ -858,9 +869,11 @@ final class BluetoothManager:
         connectionMessage =
             "Applying saved LoRa configuration…"
 
+        let session = radioConfigurationSession
         applyRadioConfiguration(
             configuration
         ) { result in
+            guard self.radioConfigurationSession == session else { return }
             switch result {
             case .success:
                 self.connectionMessage =
@@ -1264,8 +1277,7 @@ final class BluetoothManager:
             smoothedConnectedRSSI = nil
             lastRSSI = nil
             connectedDeviceID = peripheral.identifier
-            connectedDeviceName =
-                peripheral.name ?? "RNode"
+            connectedDeviceName = "RNode"
             // Restoration resumes an existing connection rather than
             // creating a new connection transition. Seed the gate so a
             // repeated callback cannot produce a duplicate alert.
@@ -1350,8 +1362,7 @@ final class BluetoothManager:
             lastRSSI = nil
             connectingDeviceID = nil
             connectedDeviceID = peripheral.identifier
-            connectedDeviceName =
-                peripheral.name ?? "RNode"
+            connectedDeviceName = "RNode"
 
             connectionMessage =
                 "Connected to \(peripheral.name ?? "RNode")"
@@ -1566,12 +1577,17 @@ extension BluetoothManager: CBPeripheralDelegate {
             if characteristic.isNotifying,
                characteristic.uuid ==
                     rnodeNotifyCharacteristic?.uuid {
-                connectionMessage = "RNode data channel ready"
+                guard connectedPeripheral === peripheral,
+                      characteristic === rnodeNotifyCharacteristic,
+                      rnodeWriteCharacteristic != nil else { return }
+                let session = radioConfigurationSession
+                connectionMessage = "Configuring RNode LoRa radio…"
                 privacySafeLog("RNode notification channel is active")
 
                 DispatchQueue.main.asyncAfter(
                     deadline: .now() + 0.5
                 ) {
+                    guard self.radioConfigurationSession == session else { return }
                     self.requestRNodeDetails()
                 }
             }

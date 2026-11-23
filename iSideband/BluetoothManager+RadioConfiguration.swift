@@ -227,6 +227,7 @@ extension BluetoothManager {
 
         sendRadioConfigurationFrames(
             frames,
+            session: radioConfigurationSession,
             index: 0,
             configuration: configuration,
             retryCount: 0,
@@ -236,6 +237,7 @@ extension BluetoothManager {
 
     private func sendRadioConfigurationFrames(
         _ frames: [Data],
+        session: UUID,
         index: Int,
         configuration: RNodeRadioConfiguration,
         retryCount: Int,
@@ -243,7 +245,7 @@ extension BluetoothManager {
             Result<RNodeRadioConfiguration, Error>
         ) -> Void
     ) {
-        guard connectedDeviceID != nil else {
+        guard connectedDeviceID != nil, radioConfigurationSession == session else {
             completion(
                 .failure(
                     RNodeRadioConfigurationError
@@ -285,6 +287,7 @@ extension BluetoothManager {
             )
 
             verifyRadioStarted(
+                session: session,
                 configuration: configuration,
                 retryCount: retryCount,
                 completion: completion
@@ -300,6 +303,7 @@ extension BluetoothManager {
         ) {
             self.sendRadioConfigurationFrames(
                 frames,
+                session: session,
                 index: index + 1,
                 configuration: configuration,
                 retryCount: retryCount,
@@ -309,22 +313,37 @@ extension BluetoothManager {
     }
 
     private func verifyRadioStarted(
+        session: UUID,
         configuration: RNodeRadioConfiguration,
         retryCount: Int,
         completion: @escaping (
             Result<RNodeRadioConfiguration, Error>
         ) -> Void
     ) {
-        // Ask for both the lock and state after the firmware has had time to
-        // initialize the modem. These responses are authoritative.
-        sendToRNode(Data([0xC0, 0x07, 0xFF, 0xC0]))
-        sendToRNode(Data([0xC0, 0x06, 0xFF, 0xC0]))
-
+        // Let the modem finish starting before querying its state.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
-            guard self.connectedDeviceID != nil else {
-                completion(
-                    .failure(RNodeRadioConfigurationError.rnodeNotConnected)
-                )
+            guard self.connectedDeviceID != nil, self.radioConfigurationSession == session else {
+                completion(.failure(RNodeRadioConfigurationError.rnodeNotConnected))
+                return
+            }
+            self.sendToRNode(Data([0xC0, 0x07, 0xFF, 0xC0]))
+            self.sendToRNode(Data([0xC0, 0x06, 0xFF, 0xC0]))
+            self.finishRadioStartupCheck(
+                session: session, configuration: configuration,
+                retryCount: retryCount, completion: completion
+            )
+        }
+    }
+
+    private func finishRadioStartupCheck(
+        session: UUID,
+        configuration: RNodeRadioConfiguration,
+        retryCount: Int,
+        completion: @escaping (Result<RNodeRadioConfiguration, Error>) -> Void
+    ) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            guard self.connectedDeviceID != nil, self.radioConfigurationSession == session else {
+                completion(.failure(RNodeRadioConfigurationError.rnodeNotConnected))
                 return
             }
 
@@ -340,6 +359,7 @@ extension BluetoothManager {
                 self.radioErrorMessage = nil
                 self.sendToRNode(Data([0xC0, 0x06, 0x01, 0xC0]))
                 self.verifyRadioStarted(
+                    session: session,
                     configuration: configuration,
                     retryCount: 1,
                     completion: completion

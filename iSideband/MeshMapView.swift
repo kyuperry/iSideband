@@ -180,7 +180,11 @@ struct GeographicMeshMapView: View {
         GeographicMapStyle = .standard
 
     @AppStorage(RNodePreferenceKey.displayName)
-    private var connectedRNodeLabel = "KPU5-1"
+    private var savedRNodeLabel = "RNode"
+
+    private var connectedRNodeLabel: String {
+        savedRNodeLabel == "KPU5-1" ? "RNode" : savedRNodeLabel
+    }
 
     @StateObject private var locationManager =
         MeshMapLocationManager()
@@ -637,7 +641,11 @@ final class MeshMapLocationManager:
 
 struct TopologyMeshMapView: View {
     @AppStorage(RNodePreferenceKey.displayName)
-    private var connectedRNodeLabel = "KPU5-1"
+    private var savedRNodeLabel = "RNode"
+
+    private var connectedRNodeLabel: String {
+        savedRNodeLabel == "KPU5-1" ? "RNode" : savedRNodeLabel
+    }
 
     @ObservedObject private var discoveredStore =
         ReticulumDiscoveredPeerStore.shared
