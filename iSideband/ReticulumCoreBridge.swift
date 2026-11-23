@@ -256,11 +256,13 @@ final class ReticulumCoreBridge: ObservableObject {
         struct Entry: Decodable, Sendable {
             let destinationHash: String
             let displayName: String?
+            let identityHash: String?
             let lastSeen: TimeInterval
 
             enum CodingKeys: String, CodingKey {
                 case destinationHash = "destination_hash_hex"
                 case displayName = "display_name"
+                case identityHash = "identity_hash_hex"
                 case lastSeen = "last_seen"
             }
         }
@@ -1285,11 +1287,23 @@ final class ReticulumCoreBridge: ObservableObject {
                 continue
             }
             importedAnnounceDates[hash] = seenAt
+            let identityHash = entry.identityHash.map { $0.lowercased() }.flatMap {
+                Data(hex: $0)?.count == 16 ? $0 : nil
+            }
+            ReticulumAnnounceStore.shared.recordNativeAnnounce(
+                .init(
+                    destinationHash: hash,
+                    identityHash: identityHash,
+                    displayName: entry.displayName,
+                    receivedAt: seenAt
+                )
+            )
             if let existing = existingDates[hash], seenAt <= existing {
                 continue
             }
             store.discover(
                 destinationHash: hash,
+                identityHash: identityHash,
                 displayName: entry.displayName,
                 seenAt: seenAt
             )
