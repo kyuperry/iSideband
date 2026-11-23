@@ -1308,13 +1308,18 @@ final class BluetoothManager:
                 ""
             privacySafeLog("DISCOVERED:", name.isEmpty ? "Unnamed" : name, peripheral.identifier, RSSI)
             
-            //guard name.localizedCaseInsensitiveContains("RNode") else {
-            //return
-            //}
-// Only show devices that advertise themselves as RNodes
-            guard name.localizedCaseInsensitiveContains("RNode") else {
-             return
+            let names = [advertisedName, peripheral.name].compactMap { $0 }
+            let uartService = CBUUID(string: "6E400001-B5A3-F393-E0A9-E50E24DCCA9E")
+            let services = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+            let overflowServices = advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? []
+
+            guard names.contains(where: {
+                $0.localizedCaseInsensitiveContains("RNode") ||
+                $0.localizedCaseInsensitiveContains("Heltec")
+            }) || services.contains(uartService) || overflowServices.contains(uartService) else {
+                return
             }
+
             lastRSSI = RSSI.intValue
 
             addOrUpdateDevice(
